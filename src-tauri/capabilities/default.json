@@ -1,0 +1,24 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "default",
+  "description": "Minimal capability set for the main window (least-privilege).",
+  "windows": ["main"],
+  "permissions": [
+    "core:default",
+    "core:window:default",
+    "opener:default",
+    "dialog:default",
+    {
+      "identifier": "sql:allow-load",
+      "allow": [{ "path": "sqlite:projectpilot.db" }]
+    },
+    {
+      "identifier": "sql:allow-select",
+      "allow": [{ "path": "sqlite:projectpilot.db" }]
+    },
+    {
+      "identifier": "sql:allow-execute",
+      "allow": [{ "path": "sqlite:projectpilot.db" }]
+    }
+  ]
+}
