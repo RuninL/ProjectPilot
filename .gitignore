@@ -1,0 +1,44 @@
+# Node
+node_modules/
+dist/
+dist-ssr/
+*.local
+.vite/
+
+# Tauri / Rust
+src-tauri/target/
+src-tauri/gen/schemas/
+
+# Test & coverage
+coverage/
+.nyc_output/
+
+# Logs
+logs/
+*.log
+npm-debug.log*
+pnpm-debug.log*
+
+# Editor / OS
+.vscode/*
+!.vscode/extensions.json
+.idea/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+.DS_Store
+Thumbs.db
+
+# Env（本项目第一版无密钥，仍防误提交）
+.env
+.env.*
+
+# Local databases / backups（数据库应在 app data 目录，此处兜底）
+*.db
+*.db-journal
+*.db-wal
+*.db-shm
+*.sqlite
+*.sqlite3
+backups/
