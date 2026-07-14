@@ -5,13 +5,13 @@
 | 阶段 | 目标 | 关键交付 | 出口条件 |
 |---|---|---|---|
 | **0（当前）** | 产品与架构规划 | 本仓库全部 docs；无代码、无依赖 | 用户确认规划 |
-| **1** | 工程骨架与持久层地基 | Tauri 2 + Vite + React + TS strict + Tailwind + shadcn/ui 初始化；DB 单例 + `PRAGMA foreign_keys` 断言；migration 0001（8 表 + 索引 + 触发器）；Rust `execute_batch` 原子命令与备份/恢复/打开目录命令桩；repository 层 + Zod row schemas；`lib/date.ts`；capabilities 最小授权；CI（lint + test） | 空应用可启动，DB 落在 app data 目录，全部 repo 单测通过 |
+| **1** | 工程骨架与持久层地基 | Tauri 2 + Vite + React + TS strict + Tailwind + shadcn/ui 初始化；DB 单例 + `PRAGMA foreign_keys` 断言；migration 0001（8 表 + 索引 + 触发器）；Rust `execute_batch` 原子命令与备份/恢复/打开目录命令桩；repository 层 + Zod row schemas；`lib/date.ts`；capabilities 最小授权（lint、类型检查、测试均在本地验证，CI 延后至发布阶段） | 空应用可启动，DB 落在 app data 目录，全部 repo 单测通过 |
 | **2** | 项目 + 任务核心 | 项目 CRUD/归档/恢复/永久删除（级联事务）；任务 CRUD、两层父子、筛选/搜索/排序/批量修改；done→100 / cancelled 规则；空/加载/错误态；示例数据种子与清除 | 流程 A/B 可走通（除 Gantt） |
 | **3** | 依赖 + Gantt（自研 SVG） | task_dependencies CRUD + 加边防环；dependencyGraph.ts（Kahn/冲突/跨项目/blocked 传导）；GanttViewModel + SvgRenderer（周/月/季轴、时间条、菱形、依赖线、今日线、冲突高亮、图例） | Gantt 稳定正确，检测全通过单测 |
 | **4** | 会议 + 行动项 + Milestone + 日历 | 会议 CRUD；行动项 CRUD + 一键转任务（原子、防重复、双向关联）；milestone 倒计时/提示（不自动改）；日历月视图 | 流程 C 闭环走通 |
 | **5** | Dashboard + 风险 | 今日/本周/逾期、30 天 milestone、项目完成率、四类风险卡 | 风险规则与 product-spec §5.2 完全一致 |
 | **6** | 数据口 + 设置 | JSON 全量导入导出（原子）；单项目 CSV（UTF-8 BOM）；SQLite 备份/恢复（自动预备份 + 二次确认）；主题三态；数据目录；关于页 | 流程 D 走通；JSON 往返无损 |
-| **7** | 打磨与发布 | 全量验收清单过检；性能（千级任务）；Windows 安装包（NSIS/MSI）；README 使用说明 | acceptance-checklist 全绿 |
+| **7** | 打磨与发布 | 全量验收清单过检；性能（千级任务）；GitHub Actions CI 与 Windows 安装包构建（NSIS/MSI）；README 使用说明 | acceptance-checklist 全绿 |
 | **8+（后续版本）** | Gantt 拖拽（切 SVAR 适配器）、AI 建议层（见 architecture.md §10 边界） | — | — |
 
 依赖关系：2 依赖 1；3 依赖 2；4/5 依赖 2（5 的 blocked 传导依赖 3）；6 依赖 1–5 数据全形态。

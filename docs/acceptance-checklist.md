@@ -11,7 +11,7 @@
 - [ ] execute_batch 命令：批内任一语句失败 → 全部回滚（集成测试）
 - [ ] 所有 SQL 仅存在于 repositories/（grep 校验 pages/components 无 SQL 字符串）
 - [ ] TypeScript strict 编译零错误；ESLint 禁 any 规则生效
-- [ ] Vitest 与 RTL 跑通示例测试；CI 绿
+- [ ] Vitest 与 RTL 跑通示例测试
 
 ## 阶段 2：项目与任务
 
