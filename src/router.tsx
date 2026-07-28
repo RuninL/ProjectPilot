@@ -3,7 +3,8 @@ import { AppLayout } from '@/components/AppLayout';
 import { CalendarPage } from '@/features/calendar/pages/CalendarPage';
 import { DashboardPage } from '@/features/dashboard/pages/DashboardPage';
 import { MeetingsPage } from '@/features/meetings/pages/MeetingsPage';
-import { ProjectsPage } from '@/features/projects/pages/ProjectsPage';
+import { ProjectDetailPage } from '@/features/projects/pages/ProjectDetailPage';
+import { ProjectListPage } from '@/features/projects/pages/ProjectListPage';
 import { SettingsPage } from '@/features/settings/pages/SettingsPage';
 import { MyTasksPage } from '@/features/tasks/pages/MyTasksPage';
 
@@ -14,7 +15,8 @@ export const router = createHashRouter([
     element: <AppLayout />,
     children: [
       { index: true, element: <DashboardPage /> },
-      { path: 'projects', element: <ProjectsPage /> },
+      { path: 'projects', element: <ProjectListPage /> },
+      { path: 'projects/:projectId', element: <ProjectDetailPage /> },
       { path: 'tasks', element: <MyTasksPage /> },
       { path: 'calendar', element: <CalendarPage /> },
       { path: 'meetings', element: <MeetingsPage /> },

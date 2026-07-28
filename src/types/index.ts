@@ -15,11 +15,13 @@ import type {
   taskPriorityEnum,
   taskRowSchema,
   taskStatusEnum,
+  taskWithProjectRowSchema,
 } from '@/db/schemas';
 
 /** Domain row types, inferred from the Zod row schemas (single source of truth). */
 export type Project = z.infer<typeof projectRowSchema>;
 export type Task = z.infer<typeof taskRowSchema>;
+export type TaskWithProject = z.infer<typeof taskWithProjectRowSchema>;
 export type TaskDependency = z.infer<typeof taskDependencyRowSchema>;
 export type Milestone = z.infer<typeof milestoneRowSchema>;
 export type Meeting = z.infer<typeof meetingRowSchema>;

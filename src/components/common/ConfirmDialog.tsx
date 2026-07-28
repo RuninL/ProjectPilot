@@ -1,5 +1,13 @@
 import type { ReactNode } from 'react';
 import { Button } from '@/components/ui/button';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
 
 interface ConfirmDialogProps {
   open: boolean;
@@ -8,15 +16,15 @@ interface ConfirmDialogProps {
   confirmLabel?: string;
   cancelLabel?: string;
   destructive?: boolean;
+  busy?: boolean;
   onConfirm: () => void;
   onCancel: () => void;
 }
 
 /**
- * Minimal second-confirmation dialog for dangerous operations. Cancel must
- * produce no side effects (see acceptance-checklist global quality gate).
- * A full accessible dialog (focus trap, portal) lands with the shadcn dialog
- * primitive in a later phase; this keeps the confirmation contract stable now.
+ * Second-confirmation dialog for dangerous operations. Every dismissal path
+ * (Esc, overlay click, close button, cancel) routes through onCancel so that
+ * cancelling can never produce a side effect.
  */
 export function ConfirmDialog({
   open,
@@ -25,31 +33,39 @@ export function ConfirmDialog({
   confirmLabel = '确认',
   cancelLabel = '取消',
   destructive = false,
+  busy = false,
   onConfirm,
   onCancel,
 }: ConfirmDialogProps) {
-  if (!open) {
-    return null;
-  }
   return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/50"
-      role="dialog"
-      aria-modal="true"
-      aria-label={title}
+    <Dialog
+      open={open}
+      onOpenChange={(next) => {
+        if (!next) {
+          onCancel();
+        }
+      }}
     >
-      <div className="mx-4 w-full max-w-md rounded-lg border bg-card p-6 shadow-lg">
-        <h2 className="text-lg font-semibold">{title}</h2>
-        <div className="mt-2 text-sm text-muted-foreground">{description}</div>
-        <div className="mt-6 flex justify-end gap-2">
-          <Button variant="outline" onClick={onCancel}>
+      <DialogContent className="max-w-md">
+        <DialogHeader>
+          <DialogTitle>{title}</DialogTitle>
+          <DialogDescription asChild>
+            <div>{description}</div>
+          </DialogDescription>
+        </DialogHeader>
+        <DialogFooter>
+          <Button variant="outline" onClick={onCancel} disabled={busy}>
             {cancelLabel}
           </Button>
-          <Button variant={destructive ? 'destructive' : 'default'} onClick={onConfirm}>
+          <Button
+            variant={destructive ? 'destructive' : 'default'}
+            onClick={onConfirm}
+            disabled={busy}
+          >
             {confirmLabel}
           </Button>
-        </div>
-      </div>
-    </div>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }

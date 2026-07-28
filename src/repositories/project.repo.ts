@@ -1,8 +1,16 @@
 import { projectRowSchema } from '@/db/schemas';
 import type { BatchStatement } from '@/lib/commands';
 import type { SqlExecutor } from '@/lib/db';
-import type { Project } from '@/types';
-import { buildUpdate, parseOptional, parseRows, runUpdate } from './_shared';
+import type { Project, ProjectStatus } from '@/types';
+import {
+  buildUpdate,
+  composeWhere,
+  likeParam,
+  parseOptional,
+  parseRows,
+  runUpdate,
+  type SqlFragment,
+} from './_shared';
 
 const UPDATABLE = [
   'name',
@@ -35,6 +43,47 @@ function insertParams(project: Project): unknown[] {
   ];
 }
 
+/** Archive state selector; `archived_at IS NULL` is the single source of truth. */
+export type ProjectScope = 'active' | 'archived' | 'all';
+export type ProjectSort = 'updated_at' | 'name' | 'target_end_date';
+
+export interface ProjectQuery {
+  search?: string;
+  status?: ProjectStatus;
+  scope?: ProjectScope;
+  sort?: ProjectSort;
+}
+
+// Fixed whitelist: the caller picks a key, never the ORDER BY text itself.
+// NULL target dates are pinned last, since SQLite orders NULL first by default.
+const PROJECT_ORDER_BY: Record<ProjectSort, string> = {
+  updated_at: 'updated_at DESC',
+  name: 'name ASC',
+  target_end_date: 'target_end_date IS NULL, target_end_date ASC, name ASC',
+};
+
+const SCOPE_CONDITION: Record<ProjectScope, string> = {
+  active: 'archived_at IS NULL',
+  archived: 'archived_at IS NOT NULL',
+  all: '',
+};
+
+function projectConditions(query: ProjectQuery): SqlFragment[] {
+  const search = query.search?.trim() ?? '';
+  return [
+    { sql: SCOPE_CONDITION[query.scope ?? 'active'], params: [] },
+    query.status === undefined
+      ? { sql: '', params: [] }
+      : { sql: 'status = ?', params: [query.status] },
+    search === ''
+      ? { sql: '', params: [] }
+      : {
+          sql: "(name LIKE ? ESCAPE '\\' OR description LIKE ? ESCAPE '\\')",
+          params: [likeParam(search), likeParam(search)],
+        },
+  ];
+}
+
 export function createProjectRepository(db: SqlExecutor) {
   return {
     async findAll(): Promise<Project[]> {
@@ -52,6 +101,16 @@ export function createProjectRepository(db: SqlExecutor) {
     async findById(id: string): Promise<Project | null> {
       const rows = await db.select('SELECT * FROM projects WHERE id = ?', [id]);
       return parseOptional(projectRowSchema, rows);
+    },
+
+    async findByQuery(query: ProjectQuery = {}): Promise<Project[]> {
+      const where = composeWhere(projectConditions(query));
+      const orderBy = PROJECT_ORDER_BY[query.sort ?? 'updated_at'];
+      const rows = await db.select(
+        `SELECT * FROM projects${where.sql} ORDER BY ${orderBy}`,
+        where.params,
+      );
+      return parseRows(projectRowSchema, rows);
     },
 
     async insert(project: Project): Promise<void> {

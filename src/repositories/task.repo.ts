@@ -1,8 +1,17 @@
-import { taskRowSchema } from '@/db/schemas';
+import { taskRowSchema, taskWithProjectRowSchema } from '@/db/schemas';
 import type { BatchStatement } from '@/lib/commands';
 import type { SqlExecutor } from '@/lib/db';
-import type { Task } from '@/types';
-import { buildUpdate, parseOptional, parseRows, runUpdate } from './_shared';
+import type { Task, TaskPriority, TaskStatus, TaskWithProject } from '@/types';
+import {
+  buildUpdate,
+  composeWhere,
+  inClause,
+  likeParam,
+  parseOptional,
+  parseRows,
+  runUpdate,
+  type SqlFragment,
+} from './_shared';
 
 const UPDATABLE = [
   'parent_task_id',
@@ -15,13 +24,17 @@ const UPDATABLE = [
   'progress',
   'estimated_hours',
   'actual_hours',
+  'completed_at',
+  'archived_at',
+  'source_meeting_id',
 ] as const;
 
 const INSERT_SQL = `INSERT INTO tasks
     (id, project_id, parent_task_id, title, description, status, priority,
      start_date, due_date, progress, estimated_hours, actual_hours,
+     completed_at, archived_at, source_meeting_id,
      is_sample, created_at, updated_at)
-   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`;
+   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`;
 
 function insertParams(task: Task): unknown[] {
   return [
@@ -37,9 +50,61 @@ function insertParams(task: Task): unknown[] {
     task.progress,
     task.estimated_hours,
     task.actual_hours,
+    task.completed_at,
+    task.archived_at,
+    task.source_meeting_id,
     task.is_sample,
     task.created_at,
     task.updated_at,
+  ];
+}
+
+export type TaskSort = 'due_date' | 'priority' | 'created_at' | 'title';
+
+export interface TaskQuery {
+  projectIds?: readonly string[];
+  statuses?: readonly TaskStatus[];
+  priorities?: readonly TaskPriority[];
+  search?: string;
+  dueFrom?: string;
+  dueTo?: string;
+  /** Archived tasks are hidden everywhere unless explicitly requested. */
+  includeArchived?: boolean;
+  sort?: TaskSort;
+}
+
+// Fixed whitelist: callers choose a key, never the ORDER BY text.
+// `due_date IS NULL` first keeps undated tasks at the end — SQLite sorts NULL first.
+const TASK_ORDER_BY: Record<TaskSort, string> = {
+  due_date: 't.due_date IS NULL, t.due_date ASC, t.created_at ASC',
+  priority:
+    "CASE t.priority WHEN 'urgent' THEN 0 WHEN 'high' THEN 1 WHEN 'medium' THEN 2 ELSE 3 END," +
+    ' t.due_date IS NULL, t.due_date ASC',
+  created_at: 't.created_at DESC',
+  title: 't.title ASC',
+};
+
+function taskConditions(query: TaskQuery): SqlFragment[] {
+  const search = query.search?.trim() ?? '';
+  return [
+    query.includeArchived === true
+      ? { sql: '', params: [] }
+      : { sql: 't.archived_at IS NULL', params: [] },
+    inClause('t.project_id', query.projectIds ?? []),
+    inClause('t.status', query.statuses ?? []),
+    inClause('t.priority', query.priorities ?? []),
+    query.dueFrom === undefined
+      ? { sql: '', params: [] }
+      : { sql: 't.due_date IS NOT NULL AND t.due_date >= ?', params: [query.dueFrom] },
+    query.dueTo === undefined
+      ? { sql: '', params: [] }
+      : { sql: 't.due_date IS NOT NULL AND t.due_date <= ?', params: [query.dueTo] },
+    search === ''
+      ? { sql: '', params: [] }
+      : {
+          sql: "(t.title LIKE ? ESCAPE '\\' OR t.description LIKE ? ESCAPE '\\')",
+          params: [likeParam(search), likeParam(search)],
+        },
   ];
 }
 
@@ -53,6 +118,15 @@ export function createTaskRepository(db: SqlExecutor) {
       return parseRows(taskRowSchema, rows);
     },
 
+    /** Non-archived tasks of a project used for the completion rate. */
+    async findActiveByProject(projectId: string): Promise<Task[]> {
+      const rows = await db.select(
+        'SELECT * FROM tasks WHERE project_id = ? AND archived_at IS NULL ORDER BY created_at ASC',
+        [projectId],
+      );
+      return parseRows(taskRowSchema, rows);
+    },
+
     async findChildren(parentTaskId: string): Promise<Task[]> {
       const rows = await db.select(
         'SELECT * FROM tasks WHERE parent_task_id = ? ORDER BY created_at ASC',
@@ -61,9 +135,38 @@ export function createTaskRepository(db: SqlExecutor) {
       return parseRows(taskRowSchema, rows);
     },
 
+    /** Direct child count, including archived children — used to block deletion. */
+    async countChildren(parentTaskId: string): Promise<number> {
+      const rows = await db.select('SELECT COUNT(*) AS n FROM tasks WHERE parent_task_id = ?', [
+        parentTaskId,
+      ]);
+      return readCount(rows);
+    },
+
+    async countByProject(projectId: string): Promise<number> {
+      const rows = await db.select('SELECT COUNT(*) AS n FROM tasks WHERE project_id = ?', [
+        projectId,
+      ]);
+      return readCount(rows);
+    },
+
     async findById(id: string): Promise<Task | null> {
       const rows = await db.select('SELECT * FROM tasks WHERE id = ?', [id]);
       return parseOptional(taskRowSchema, rows);
+    },
+
+    /** Cross-project task list joined with the project name/color for display. */
+    async findByQuery(query: TaskQuery = {}): Promise<TaskWithProject[]> {
+      const where = composeWhere(taskConditions(query));
+      const orderBy = TASK_ORDER_BY[query.sort ?? 'due_date'];
+      const rows = await db.select(
+        `SELECT t.*, p.name AS project_name, p.color AS project_color
+           FROM tasks t
+           JOIN projects p ON p.id = t.project_id${where.sql}
+          ORDER BY ${orderBy}`,
+        where.params,
+      );
+      return parseRows(taskWithProjectRowSchema, rows);
     },
 
     async insert(task: Task): Promise<void> {
@@ -79,11 +182,21 @@ export function createTaskRepository(db: SqlExecutor) {
       return runUpdate(db, buildUpdate('tasks', UPDATABLE, patch, id, now));
     },
 
+    /** Same update, as a statement so a bulk edit is one transaction. */
+    buildUpdateStatement(id: string, patch: Partial<Task>, now: string): BatchStatement | null {
+      return buildUpdate('tasks', UPDATABLE, patch, id, now);
+    },
+
     async deleteById(id: string): Promise<number> {
       const result = await db.execute('DELETE FROM tasks WHERE id = ?', [id]);
       return result.rowsAffected;
     },
   };
+}
+
+function readCount(rows: unknown): number {
+  const first = (rows as { n?: unknown }[])[0];
+  return typeof first?.n === 'number' ? first.n : 0;
 }
 
 export type TaskRepository = ReturnType<typeof createTaskRepository>;

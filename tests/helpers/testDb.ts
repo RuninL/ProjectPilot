@@ -4,13 +4,15 @@ import BetterSqlite3, { type Database as RawDb } from 'better-sqlite3';
 import type { QueryResult, SqlExecutor } from '@/lib/db';
 import type { BatchStatement } from '@/lib/commands';
 
-// Vitest runs from the project root; resolve the real migration file from there.
-const MIGRATION_PATH = join(process.cwd(), 'src-tauri/migrations/0001_init.sql');
+// Vitest runs from the project root; resolve the real migration files from there.
+// Listed in version order so the harness applies exactly what the app applies.
+const MIGRATION_DIR = join(process.cwd(), 'src-tauri/migrations');
+const MIGRATION_FILES = ['0001_init.sql', '0002_task_lifecycle.sql'] as const;
 
 /**
  * Integration-style test harness: repositories are exercised against a real
  * in-memory SQLite (better-sqlite3, a devDependency) running the actual
- * migration 0001 SQL. This validates the schema, constraints, triggers and
+ * migration SQL. This validates the schema, constraints, triggers and
  * cascade rules — not just mocked call shapes.
  */
 export class BetterSqliteExecutor implements SqlExecutor {
@@ -41,7 +43,9 @@ export interface TestDb {
 export function createTestDb(): TestDb {
   const raw = new BetterSqlite3(':memory:');
   raw.pragma('foreign_keys = ON');
-  raw.exec(readFileSync(MIGRATION_PATH, 'utf8'));
+  for (const file of MIGRATION_FILES) {
+    raw.exec(readFileSync(join(MIGRATION_DIR, file), 'utf8'));
+  }
 
   const runBatch = (statements: BatchStatement[]): number => {
     let affected = 0;

@@ -10,8 +10,8 @@ import {
   SAMPLE_SEEDED_KEY,
   type SampleDataService,
 } from '@/services/sampleData.service';
-import type { Project, Task } from '@/types';
-import { createTestDb, NOW, type TestDb } from '../helpers/testDb';
+import { makeProject, makeTask } from '../helpers/fixtures';
+import { createTestDb, type TestDb } from '../helpers/testDb';
 
 let db: TestDb;
 let service: SampleDataService;
@@ -38,41 +38,13 @@ function countRows(table: string, where = '1 = 1'): number {
 }
 
 async function insertUserProject(id: string): Promise<void> {
-  const project: Project = {
-    id,
-    name: '用户项目',
-    description: '',
-    status: 'active',
-    color: '#2563EB',
-    start_date: null,
-    target_end_date: null,
-    archived_at: null,
-    is_sample: 0,
-    created_at: NOW,
-    updated_at: NOW,
-  };
-  await createProjectRepository(db.executor).insert(project);
+  await createProjectRepository(db.executor).insert(makeProject({ id, name: '用户项目' }));
 }
 
 async function insertUserTask(id: string, projectId: string): Promise<void> {
-  const task: Task = {
-    id,
-    project_id: projectId,
-    parent_task_id: null,
-    title: '用户任务',
-    description: '',
-    status: 'todo',
-    priority: 'medium',
-    start_date: null,
-    due_date: null,
-    progress: 0,
-    estimated_hours: null,
-    actual_hours: null,
-    is_sample: 0,
-    created_at: NOW,
-    updated_at: NOW,
-  };
-  await createTaskRepository(db.executor).insert(task);
+  await createTaskRepository(db.executor).insert(
+    makeTask({ id, project_id: projectId, title: '用户任务' }),
+  );
 }
 
 describe('seedSampleData', () => {

@@ -58,8 +58,18 @@ export const taskRowSchema = z.object({
   progress: z.number().int().min(0).max(100),
   estimated_hours: z.number().min(0).nullable(),
   actual_hours: z.number().min(0).nullable(),
+  // Added by migration 0002. Audit timestamps, not business dates.
+  completed_at: z.string().nullable(),
+  archived_at: z.string().nullable(),
+  source_meeting_id: z.string().nullable(),
   is_sample: sqliteBool,
   ...auditColumns,
+});
+
+/** A task joined with its project's display fields, for the cross-project task view. */
+export const taskWithProjectRowSchema = taskRowSchema.extend({
+  project_name: z.string(),
+  project_color: z.string(),
 });
 
 export const taskDependencyRowSchema = z.object({

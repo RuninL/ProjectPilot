@@ -34,26 +34,30 @@
 
 ### 2.2 tasks
 
-| 字段                    | 类型    | 约束                                                                                          |
-| ----------------------- | ------- | --------------------------------------------------------------------------------------------- |
-| id                      | TEXT    | PK                                                                                            |
-| project_id              | TEXT    | NOT NULL, FK→projects(id) **ON DELETE CASCADE**                                               |
-| parent_task_id          | TEXT    | NULL, FK→tasks(id) **ON DELETE CASCADE**（删父删子，两层语义一致）                            |
-| title                   | TEXT    | NOT NULL, CHECK(length(trim(title)) BETWEEN 1 AND 160)                                        |
-| description             | TEXT    | NOT NULL DEFAULT ''                                                                           |
-| status                  | TEXT    | NOT NULL DEFAULT 'todo', CHECK(status IN ('todo','in_progress','blocked','done','cancelled')) |
-| priority                | TEXT    | NOT NULL DEFAULT 'medium', CHECK(priority IN ('low','medium','high','urgent'))                |
-| start_date              | TEXT    | NULL, 日期格式 CHECK                                                                          |
-| due_date                | TEXT    | NULL, 日期格式 CHECK；CHECK(start_date IS NULL OR due_date IS NULL OR start_date <= due_date) |
-| progress                | INTEGER | NOT NULL DEFAULT 0, CHECK(progress BETWEEN 0 AND 100)                                         |
-| estimated_hours         | REAL    | NULL, CHECK(estimated_hours IS NULL OR estimated_hours >= 0)                                  |
-| actual_hours            | REAL    | NULL, CHECK(actual_hours IS NULL OR actual_hours >= 0)                                        |
-| is_sample               | INTEGER | NOT NULL DEFAULT 0                                                                            |
-| created_at / updated_at | TEXT    | NOT NULL                                                                                      |
+| 字段                    | 类型    | 约束                                                                                                 |
+| ----------------------- | ------- | ---------------------------------------------------------------------------------------------------- |
+| id                      | TEXT    | PK                                                                                                   |
+| project_id              | TEXT    | NOT NULL, FK→projects(id) **ON DELETE CASCADE**                                                      |
+| parent_task_id          | TEXT    | NULL, FK→tasks(id) **ON DELETE CASCADE**（删父删子，两层语义一致）                                   |
+| title                   | TEXT    | NOT NULL, CHECK(length(trim(title)) BETWEEN 1 AND 160)                                               |
+| description             | TEXT    | NOT NULL DEFAULT ''                                                                                  |
+| status                  | TEXT    | NOT NULL DEFAULT 'todo', CHECK(status IN ('todo','in_progress','blocked','done','cancelled'))        |
+| priority                | TEXT    | NOT NULL DEFAULT 'medium', CHECK(priority IN ('low','medium','high','urgent'))                       |
+| start_date              | TEXT    | NULL, 日期格式 CHECK                                                                                 |
+| due_date                | TEXT    | NULL, 日期格式 CHECK；CHECK(start_date IS NULL OR due_date IS NULL OR start_date <= due_date)        |
+| progress                | INTEGER | NOT NULL DEFAULT 0, CHECK(progress BETWEEN 0 AND 100)                                                |
+| estimated_hours         | REAL    | NULL, CHECK(estimated_hours IS NULL OR estimated_hours >= 0)                                         |
+| actual_hours            | REAL    | NULL, CHECK(actual_hours IS NULL OR actual_hours >= 0)                                               |
+| completed_at            | TEXT    | NULL（migration 0002；状态进入 done 的 UTC 时间戳，离开 done 时清空）                                |
+| archived_at             | TEXT    | NULL（migration 0002；任务归档时间。本阶段仅参与查询过滤与完成率，无归档 UI）                        |
+| source_meeting_id       | TEXT    | NULL, FK→meetings(id) **ON DELETE SET NULL**（migration 0002；会议行动项转任务时写入，后续阶段启用） |
+| is_sample               | INTEGER | NOT NULL DEFAULT 0                                                                                   |
+| created_at / updated_at | TEXT    | NOT NULL                                                                                             |
 
 索引：`idx_tasks_project_status(project_id, status)`、`idx_tasks_project_due(project_id, due_date)`、`idx_tasks_parent(parent_task_id)`、`idx_tasks_dashboard(status, due_date, progress)`（Dashboard 今日/本周/逾期/临期低进度均命中）
+migration 0002 追加：`idx_tasks_archived(archived_at)`（列表与完成率排除归档任务）、`idx_tasks_due_status(due_date, status)`（跨项目「我的任务」按截止日期排序 + 状态筛选）
 
-**两层父子限制（触发器兜底 + service 校验）**：
+**两层父子限制（0001，触发器兜底 + service 校验）**：
 
 ```sql
 CREATE TRIGGER trg_tasks_max_two_levels
@@ -68,7 +72,27 @@ END;
 -- 另建触发器禁止"已有子任务的任务"再获得父任务
 ```
 
-业务规则（service 层，不在 DB）：done→progress=100；cancelled 不计入完成率。
+**层级防护补全（migration 0002，INSERT 与 UPDATE 双路径）**：0001 留下两个缺口——
+自引用父任务（`BEFORE INSERT` 子查询在 `tasks` 中找不到尚未插入的行，返回 NULL 从而放行）与跨项目父任务（0001 完全没有约束）。
+0002 为两者各建 INSERT / UPDATE 两条触发器，共 4 条，raw SQL 也无法绕过：
+
+```sql
+-- 自引用：trg_tasks_no_self_parent_insert / trg_tasks_no_self_parent_update
+WHEN NEW.parent_task_id IS NOT NULL AND NEW.parent_task_id = NEW.id
+  → RAISE(ABORT, 'SELF_PARENT')
+
+-- 跨项目：trg_tasks_same_project_parent_insert / trg_tasks_same_project_parent_update
+WHEN NEW.parent_task_id IS NOT NULL AND EXISTS (
+  SELECT 1 FROM tasks WHERE id = NEW.parent_task_id AND project_id <> NEW.project_id
+) → RAISE(ABORT, 'CROSS_PROJECT_PARENT')
+```
+
+`EXISTS` 而非直接比较：父任务不存在时仍应报外键错误，不能被误判为跨项目。
+UPDATE 触发器不限定 `OF parent_task_id`：把子任务改到别的项目同样破坏该不变式。
+触发器是兜底：`task.service.ts` 的 `validateParent` 先行校验同样的不变式并抛出中文提示，
+用户正常操作看不到 `SELF_PARENT` / `CROSS_PROJECT_PARENT` / `MAX_TWO_LEVELS` 这类原始 abort 文本。
+
+业务规则（service 层，不在 DB）：done→progress=100 且写 `completed_at`；离开 done 清空 `completed_at` 但保留 progress；cancelled 不计入完成率分母；归档任务不计入分子与分母。
 
 ### 2.3 task_dependencies（finish-to-start）
 
@@ -178,7 +202,8 @@ erDiagram
   projects ||--o{ milestones : "owns (CASCADE)"
   projects |o--o{ meetings : "optional (CASCADE)"
   projects ||--o{ project_links : "owns (CASCADE)"
-  tasks |o--o{ tasks : "parent_of (CASCADE, max 2 levels)"
+  tasks |o--o{ tasks : "parent_of (CASCADE, max 2 levels, same project)"
+  meetings |o--o{ tasks : "source_of (SET NULL)"
   tasks ||--o{ task_dependencies : "predecessor (CASCADE)"
   tasks ||--o{ task_dependencies : "successor (CASCADE)"
   tasks |o--o{ milestones : "linked (SET NULL)"
@@ -206,6 +231,9 @@ erDiagram
     INTEGER progress
     REAL estimated_hours
     REAL actual_hours
+    TEXT completed_at
+    TEXT archived_at
+    TEXT source_meeting_id FK
   }
   task_dependencies {
     TEXT id PK
@@ -254,21 +282,26 @@ erDiagram
 
 ## 4. 删除 / 归档规则总表
 
-| 操作                   | 行为                                                                                                                                      | 确认                             |
-| ---------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------- |
-| 项目归档               | `archived_at = now`；可恢复；数据全保留                                                                                                   | 单次确认                         |
-| 项目恢复               | `archived_at = NULL`                                                                                                                      | 无需确认                         |
-| 项目永久删除           | Rust 原子事务：级联删 tasks（含子任务与依赖边）、milestones、meetings（含 action_items）、project_links                                   | **二次确认**（明示各表将删数量） |
-| 任务删除               | 级联删子任务 + 相关依赖边；关联 action_item 的 converted_task_id SET NULL（converted_at 保留）；关联 milestone 的 linked_task_id SET NULL | 有子任务/依赖时二次确认          |
-| 会议删除               | 级联删 action_items（已转换任务不受影响）                                                                                                 | 二次确认                         |
-| 里程碑/链接/行动项删除 | 直接删除                                                                                                                                  | 单次确认                         |
-| 清除示例数据           | 单事务删除所有 is_sample=1 行                                                                                                             | 二次确认                         |
-| 恢复数据库             | 自动备份当前库 → 二次确认 → 替换文件 → 重建连接                                                                                           | **二次确认**                     |
-| JSON 导入              | Zod 校验 → 预览统计 → 单事务全量替换，失败回滚                                                                                            | **二次确认**                     |
+| 操作                   | 行为                                                                                                                                                                                                                      | 确认                                 |
+| ---------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------ |
+| 项目归档               | `archived_at = now`；可恢复；数据全保留                                                                                                                                                                                   | 单次确认                             |
+| 项目恢复               | `archived_at = NULL`                                                                                                                                                                                                      | 无需确认                             |
+| 项目永久删除           | **仅允许已归档项目**；单条 `DELETE FROM projects` 由 schema 的 ON DELETE CASCADE 级联删 tasks（含子任务与依赖边）、milestones、meetings（含 action_items）、project_links                                                 | **二次确认**（读库显示真实任务数量） |
+| 任务删除               | service 与 UI 均**拦截仍有子任务的任务**（提示真实子任务数量，要求先处理子任务）；DB 的 CASCADE 仅作兜底。删除后关联 action_item 的 converted_task_id SET NULL（converted_at 保留）、milestone 的 linked_task_id SET NULL | 二次确认；有子任务时禁止删除         |
+| 任务批量修改           | 通过 Rust `execute_batch` 单事务提交（状态 / 优先级 / 截止日期），任一条失败整批回滚                                                                                                                                      | **二次确认**（列出将执行的修改）     |
+| 会议删除               | 级联删 action_items（已转换任务不受影响）                                                                                                                                                                                 | 二次确认                             |
+| 里程碑/链接/行动项删除 | 直接删除                                                                                                                                                                                                                  | 单次确认                             |
+| 清除示例数据           | 单事务删除所有 is_sample=1 行                                                                                                                                                                                             | 二次确认                             |
+| 恢复数据库             | 自动备份当前库 → 二次确认 → 替换文件 → 重建连接                                                                                                                                                                           | **二次确认**                         |
+| JSON 导入              | Zod 校验 → 预览统计 → 单事务全量替换，失败回滚                                                                                                                                                                            | **二次确认**                         |
 
 ## 5. Migration 策略
 
 - `src-tauri/migrations/0001_init.sql`：8 张表 + 索引 + 触发器（一次性建全）
+- `src-tauri/migrations/0002_task_lifecycle.sql`：**纯增量**——3 个 `ALTER TABLE tasks ADD COLUMN`、2 个 `CREATE INDEX`、4 个 `CREATE TRIGGER`。
+  不重建 tasks 表、不 DROP 任何对象、不复制或删除任何既有行，因此对已有用户数据零风险。
+  受 SQLite 限制：`ALTER TABLE` 无法追加 CHECK 约束，且带 `REFERENCES` 的新列必须可空且无非空默认值——
+  所以 0002 的新不变式全部用触发器表达，而非表级约束。
 - 每个 migration 幂等（CREATE TABLE IF NOT EXISTS 风格不用于变更，版本号单调递增，插件按 version 执行一次）
 - Down SQL 仅用于开发期回滚；发布后只前进不后退
 - schema 版本随 JSON 导出携带，导入时校验兼容性

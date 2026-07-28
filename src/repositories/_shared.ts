@@ -53,6 +53,47 @@ export function buildUpdate(
   };
 }
 
+/** A parameterized SQL fragment: text from in-code constants, values always bound. */
+export interface SqlFragment {
+  sql: string;
+  params: unknown[];
+}
+
+/** AND-join the non-empty fragments into a `WHERE` clause (empty string when none). */
+export function composeWhere(conditions: readonly SqlFragment[]): SqlFragment {
+  const active = conditions.filter((condition) => condition.sql !== '');
+  if (active.length === 0) {
+    return { sql: '', params: [] };
+  }
+  return {
+    sql: ` WHERE ${active.map((condition) => condition.sql).join(' AND ')}`,
+    params: active.flatMap((condition) => condition.params),
+  };
+}
+
+/**
+ * `column IN (?, ?, …)` with one placeholder per value. `column` must be an
+ * in-code constant; an empty list yields an empty fragment (no filtering).
+ */
+export function inClause(column: string, values: readonly string[]): SqlFragment {
+  if (values.length === 0) {
+    return { sql: '', params: [] };
+  }
+  return {
+    sql: `${column} IN (${values.map(() => '?').join(', ')})`,
+    params: [...values],
+  };
+}
+
+/**
+ * Escape the LIKE wildcards in a user search term so `%` and `_` match
+ * literally. Pair with `ESCAPE '\'` in the statement.
+ */
+export function likeParam(term: string): string {
+  const escaped = term.replace(/[\\%_]/g, (char) => `\\${char}`);
+  return `%${escaped}%`;
+}
+
 /** Execute a whitelisted UPDATE, returning affected row count. */
 export async function runUpdate(
   db: SqlExecutor,

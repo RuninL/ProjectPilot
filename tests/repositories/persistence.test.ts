@@ -7,7 +7,8 @@ import {
   createProjectRepository,
   createTaskRepository,
 } from '@/repositories';
-import type { ActionItem, Meeting, Milestone, Project, Task } from '@/types';
+import type { ActionItem, Meeting, Milestone } from '@/types';
+import { makeProject, makeTask } from '../helpers/fixtures';
 import { createTestDb, NOW, type TestDb } from '../helpers/testDb';
 
 let db: TestDb;
@@ -19,44 +20,6 @@ beforeEach(() => {
 afterEach(() => {
   db.close();
 });
-
-function makeProject(overrides: Partial<Project> = {}): Project {
-  return {
-    id: 'p1',
-    name: '示例项目',
-    description: '',
-    status: 'active',
-    color: '#2563EB',
-    start_date: null,
-    target_end_date: null,
-    archived_at: null,
-    is_sample: 0,
-    created_at: NOW,
-    updated_at: NOW,
-    ...overrides,
-  };
-}
-
-function makeTask(overrides: Partial<Task> = {}): Task {
-  return {
-    id: 't1',
-    project_id: 'p1',
-    parent_task_id: null,
-    title: '任务',
-    description: '',
-    status: 'todo',
-    priority: 'medium',
-    start_date: null,
-    due_date: null,
-    progress: 0,
-    estimated_hours: null,
-    actual_hours: null,
-    is_sample: 0,
-    created_at: NOW,
-    updated_at: NOW,
-    ...overrides,
-  };
-}
 
 function makeMeeting(overrides: Partial<Meeting> = {}): Meeting {
   return {
