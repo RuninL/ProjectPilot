@@ -62,6 +62,15 @@
 
 - 每张表一个 repository（`task.repo.ts` 等），方法输入输出均为强类型领域对象
 - 插件 select 返回值在 repository 内立即经 **Zod row schema `.parse()`** 收窄——这是全项目唯一允许出现 unknown→类型转换的边界，从而满足 strict + 禁 any
+- **驱动形状归一化**（`src/db/rowNormalization.ts`，在 `parseRows`/`parseOptional` 内于 Zod 校验之前执行）：
+  row schema 描述的是 SQLite 规范形状（TEXT 列为字符串、INTEGER/REAL 列为数字），但驱动的 JSON 映射口径不同——
+  better-sqlite3（测试）原样返回存储值，而 tauri-plugin-sql 经 sqlx 按**运行时存储类**映射
+  （`plugins/sql/src/decode/sqlite.rs` 的 `to_json`：TEXT→字符串、INTEGER/REAL→数字、BLOB→字节数组、NULL→null）。
+  因此某一列可能以数字 / 布尔 / 数组的形态抵达 TEXT 列，单列不符即让整页抛 ZodError
+  （Windows 上 `/meetings` 报 `attendees` expected string, received array）。归一化**由 schema 驱动**：
+  仅当该字段自己的 schema 接受候选值时才替换（数组/对象→`JSON.stringify`、数字/布尔→字符串或 0/1），
+  所以数值列（`progress`、`estimated_hours`、`lag_days`、`is_sample`）保持数字、NULL 永远保持 NULL；
+  已符合 schema 的行按原引用返回，better-sqlite3 路径行为完全不变
 - service 持有业务不变式：done→progress=100、cancelled 剔除完成率、两层父子校验、milestone 只提示不自动改、转任务防重复
 - 所有写操作 service 先 Zod 校验再落库；错误统一映射为 `AppError`（用户可读文案 + 可重试标记）
 

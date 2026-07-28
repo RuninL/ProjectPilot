@@ -1,4 +1,5 @@
 import type { z } from 'zod';
+import { normalizeRow } from '@/db/rowNormalization';
 import type { SqlExecutor } from '@/lib/db';
 
 /**
@@ -7,17 +8,30 @@ import type { SqlExecutor } from '@/lib/db';
  * allowlists (never user-supplied identifiers), so there is no injection surface.
  */
 
+/**
+ * Validate one raw row. Rows that already match the schema are parsed directly;
+ * only a mismatch pays for driver-shape normalization (see `normalizeRow`), and a
+ * row that is still invalid afterwards throws the ZodError as before.
+ */
+function parseRow<S extends z.ZodTypeAny>(schema: S, row: unknown): z.infer<S> {
+  const direct = schema.safeParse(row);
+  if (direct.success) {
+    return direct.data as z.infer<S>;
+  }
+  return schema.parse(normalizeRow(schema, row)) as z.infer<S>;
+}
+
 /** Narrow an untyped `select` result array to a typed row array. */
 export function parseRows<S extends z.ZodTypeAny>(schema: S, rows: unknown): z.infer<S>[] {
   const array = rows as unknown[];
-  return array.map((row) => schema.parse(row) as z.infer<S>);
+  return array.map((row) => parseRow(schema, row));
 }
 
 /** Narrow a single row, or `null` when the result set is empty. */
 export function parseOptional<S extends z.ZodTypeAny>(schema: S, rows: unknown): z.infer<S> | null {
   const array = rows as unknown[];
   const first = array[0];
-  return first === undefined ? null : (schema.parse(first) as z.infer<S>);
+  return first === undefined ? null : parseRow(schema, first);
 }
 
 /**
