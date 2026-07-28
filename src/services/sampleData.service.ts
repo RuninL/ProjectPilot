@@ -1,7 +1,6 @@
 import type { BatchStatement } from '@/lib/commands';
 import { executeBatch } from '@/lib/commands';
 import { nowIso, todayHK } from '@/lib/date';
-import { newId } from '@/lib/uuid';
 import type {
   AppSettingRepository,
   ProjectRepository,
@@ -27,6 +26,7 @@ export interface SampleDataDeps {
 }
 
 interface SampleTaskSeed {
+  id: string;
   title: string;
   description: string;
   status: Task['status'];
@@ -37,11 +37,22 @@ interface SampleTaskSeed {
 const SAMPLE_PROJECT_NAME = '示例项目：新版官网上线';
 
 /**
+ * Sample rows use fixed ids rather than `newId()`. They are the database-level
+ * backstop against concurrent seeding: if two seed batches ever run at once,
+ * the second collides on the primary key and — because a batch is one
+ * transaction — rolls back whole instead of inserting a duplicate sample
+ * project. `ensureSampleDataSeeded` prevents the race in the first place; this
+ * makes a duplicate unrepresentable even if it slips through.
+ */
+export const SAMPLE_PROJECT_ID = '5f9b1e00-0000-4000-8000-000000000001';
+
+/**
  * Tasks carry no dates on purpose: the sample must never look overdue and must
  * not depend on the machine clock beyond the project's start date.
  */
 const SAMPLE_TASKS: SampleTaskSeed[] = [
   {
+    id: '5f9b1e00-0000-4000-8000-000000000011',
     title: '梳理页面结构与信息架构',
     description: '确认首页、产品页与联系页的层级关系。',
     status: 'done',
@@ -49,6 +60,7 @@ const SAMPLE_TASKS: SampleTaskSeed[] = [
     progress: 100,
   },
   {
+    id: '5f9b1e00-0000-4000-8000-000000000012',
     title: '完成视觉稿评审',
     description: '与设计确认配色、字体与暗色主题细节。',
     status: 'in_progress',
@@ -56,6 +68,7 @@ const SAMPLE_TASKS: SampleTaskSeed[] = [
     progress: 40,
   },
   {
+    id: '5f9b1e00-0000-4000-8000-000000000013',
     title: '接入内容管理后台',
     description: '打通文章与产品数据的录入流程。',
     status: 'todo',
@@ -66,7 +79,7 @@ const SAMPLE_TASKS: SampleTaskSeed[] = [
 
 function buildSampleProject(now: string): Project {
   return {
-    id: newId(),
+    id: SAMPLE_PROJECT_ID,
     name: SAMPLE_PROJECT_NAME,
     description: '首次启动自动创建的示例项目，可在设置中一键清除。',
     status: 'active',
@@ -82,7 +95,7 @@ function buildSampleProject(now: string): Project {
 
 function buildSampleTask(seed: SampleTaskSeed, projectId: string, now: string): Task {
   return {
-    id: newId(),
+    id: seed.id,
     project_id: projectId,
     parent_task_id: null,
     title: seed.title,
@@ -161,4 +174,27 @@ export async function getSampleDataService(): Promise<SampleDataService> {
     sample: repos.sample,
     runBatch: executeBatch,
   });
+}
+
+let bootstrapSeed: Promise<boolean> | null = null;
+
+/**
+ * Bootstrap seeding, at most once per process.
+ *
+ * `seedSampleData` guards itself by reading `sample_seeded` first, but that is
+ * check-then-insert: React 18 StrictMode mounts the bootstrap effect twice in
+ * development, and both calls read the flag as absent before either writes it,
+ * so both seed. Sharing one promise collapses the concurrent callers into a
+ * single seed; the second caller awaits the first's result instead of starting
+ * its own. Aborting the effect cannot help here — it only gates state updates,
+ * not the transaction already in flight.
+ */
+export function ensureSampleDataSeeded(): Promise<boolean> {
+  bootstrapSeed ??= getSampleDataService().then((service) => service.seedSampleData());
+  return bootstrapSeed;
+}
+
+/** Clears the process-lifetime guard so each test starts from a cold bootstrap. */
+export function resetSampleSeedGuardForTesting(): void {
+  bootstrapSeed = null;
 }

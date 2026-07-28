@@ -6,7 +6,7 @@ import { getDb } from '@/lib/db';
 import { toAppError } from '@/lib/errors';
 import { applyTheme, subscribeToSystemTheme } from '@/lib/theme';
 import { router } from '@/router';
-import { getSampleDataService } from '@/services/sampleData.service';
+import { ensureSampleDataSeeded } from '@/services/sampleData.service';
 import { useAppStore } from '@/stores/useAppStore';
 
 /**
@@ -41,10 +41,11 @@ export function App() {
         return;
       }
       // Seeding is awaited before the app renders so the Dashboard cannot read
-      // the database mid-seed, but a seed failure must not block startup.
+      // the database mid-seed, but a seed failure must not block startup. The
+      // shared promise is what keeps StrictMode's second mount from seeding a
+      // duplicate — abort only gates the state updates below.
       try {
-        const service = await getSampleDataService();
-        await service.seedSampleData();
+        await ensureSampleDataSeeded();
       } catch (caught) {
         if (!controller.signal.aborted) {
           setGlobalError(toAppError(caught));
