@@ -90,6 +90,17 @@ export const bulkTaskUpdateSchema = z
     message: '请至少选择一项要修改的内容',
   });
 
+/**
+ * A finish-to-start edge to create. Direction is fixed: the successor waits for
+ * the predecessor. Everything beyond shape — same project, not archived, no
+ * cycle — needs the graph and so is checked in the service.
+ */
+export const dependencyInputSchema = z.object({
+  predecessor_id: z.string().min(1, '请选择前驱任务'),
+  successor_id: z.string().min(1, '请选择后继任务'),
+});
+
 export type ProjectInput = z.infer<typeof projectInputSchema>;
 export type TaskInput = z.infer<typeof taskInputSchema>;
 export type BulkTaskUpdate = z.infer<typeof bulkTaskUpdateSchema>;
+export type DependencyInput = z.infer<typeof dependencyInputSchema>;

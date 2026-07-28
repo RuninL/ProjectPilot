@@ -1,12 +1,21 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
+  addDays,
   daysUntil,
+  formatDayLabel,
   formatDisplay,
+  formatMonthLabel,
+  formatQuarterLabel,
+  inclusiveDays,
   isDueToday,
   isOverdue,
   isThisWeek,
   isValidDateStr,
   parseInput,
+  startOfMonthStr,
+  startOfNextMonthStr,
+  startOfQuarterStr,
+  startOfWeekStr,
   todayHK,
 } from '@/lib/date';
 
@@ -101,5 +110,45 @@ describe('formatDisplay / parseInput', () => {
     expect(parseInput('   ')).toBeNull();
     expect(parseInput('2026-07-14')).toBe('2026-07-14');
     expect(() => parseInput('2026-02-30')).toThrow();
+  });
+});
+
+describe('gantt date helpers', () => {
+  it('shifts dates across month and year boundaries', () => {
+    expect(addDays('2026-08-30', 3)).toBe('2026-09-02');
+    expect(addDays('2027-01-01', -1)).toBe('2026-12-31');
+    expect(addDays('2028-02-28', 1)).toBe('2028-02-29');
+  });
+
+  it('counts days inclusively and never negatively', () => {
+    expect(inclusiveDays('2026-08-03', '2026-08-03')).toBe(1);
+    expect(inclusiveDays('2026-08-03', '2026-08-05')).toBe(3);
+    expect(inclusiveDays('2026-08-05', '2026-08-03')).toBe(0);
+  });
+
+  it('finds Monday-based week starts', () => {
+    // 2026-08-12 is a Wednesday.
+    expect(startOfWeekStr('2026-08-12')).toBe('2026-08-10');
+    expect(startOfWeekStr('2026-08-10')).toBe('2026-08-10');
+    expect(startOfWeekStr('2026-08-16')).toBe('2026-08-10');
+  });
+
+  it('finds month and quarter starts', () => {
+    expect(startOfMonthStr('2026-08-12')).toBe('2026-08-01');
+    expect(startOfQuarterStr('2026-08-12')).toBe('2026-07-01');
+    expect(startOfQuarterStr('2026-01-31')).toBe('2026-01-01');
+    expect(startOfQuarterStr('2026-12-01')).toBe('2026-10-01');
+  });
+
+  it('steps to the next month start across a year boundary', () => {
+    expect(startOfNextMonthStr('2026-08-12')).toBe('2026-09-01');
+    expect(startOfNextMonthStr('2026-12-31')).toBe('2027-01-01');
+  });
+
+  it('formats Chinese axis labels', () => {
+    expect(formatMonthLabel('2026-08-01')).toBe('2026年8月');
+    expect(formatDayLabel('2026-08-03')).toBe('8月3日');
+    expect(formatQuarterLabel('2026-08-01')).toBe('2026 Q3');
+    expect(formatQuarterLabel('2026-01-01')).toBe('2026 Q1');
   });
 });

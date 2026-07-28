@@ -80,6 +80,11 @@ GanttData（纯领域数据: bars[], milestones[], links[], conflicts[]）
 - 第一版只需"正确稳定"的只读时间轴 + 日期编辑，自研 SVG 约 400–600 行，零运行时依赖、零许可证风险、可快照测试
 - 循环/冲突/跨项目检测是业务逻辑，永远由自己的 `dependencyGraph.ts` 持有，与渲染库解耦——"Gantt 是领域模型的投影，而不是让 Gantt 库成为领域模型"
 
+阶段 3 落地形态：`src/features/gantt/ganttViewModel.ts`（纯函数，日期进、像素出）+
+`src/features/gantt/components/GanttChart.tsx`（无状态 SVG 渲染 + 图例）+
+`GanttSection.tsx`（档位切换与加载/空/错误态）。milestone 菱形留到阶段 4，
+本阶段只保留标记为「后续阶段」的占位，不伪造图元。
+
 ### 3.2 升级与降级路径
 
 | 路径                        | 选择                                   | 条件与注意                                                                                                                                                  |
@@ -93,14 +98,14 @@ GanttData（纯领域数据: bars[], milestones[], links[], conflicts[]）
 
 **位置：前端 TypeScript 内存图**（三模型共识）。SQLite 只负责持久化边与外键；个人量级（千级任务）内存 O(V+E) 足够，纯函数便于 Vitest 覆盖。
 
-| 检测                 | 算法                                                          | 时机                                      |
-| -------------------- | ------------------------------------------------------------- | ----------------------------------------- |
-| 循环依赖（全图）     | Kahn 拓扑排序（同时产出合法顺序，供未来自动排期）             | 载入 Gantt、导入数据时                    |
-| 加边即时防环         | 从 successor 出发 DFS/BFS 判断 predecessor 可达性，可达则拒绝 | 创建/编辑依赖时（阻止保存）               |
-| 排期冲突（FS 语义）  | 对每条边 A→B：`A.due_date > B.start_date` 即冲突              | Gantt 渲染时黄色警示                      |
-| 跨项目依赖           | 遍历边比较两端 project_id                                     | UI 禁止创建；对导入产生的存量数据警示标记 |
-| blocked 传导         | 从 status=blocked 节点正向可达集合                            | Dashboard 风险区                          |
-| Milestone 前置未完成 | milestone 关联任务的前驱链存在非 done 任务且 14 天内          | Dashboard 风险区                          |
+| 检测                 | 算法                                                                                                               | 时机                                                  |
+| -------------------- | ------------------------------------------------------------------------------------------------------------------ | ----------------------------------------------------- |
+| 循环依赖（全图）     | Kahn 拓扑排序（同时产出合法顺序，供未来自动排期）                                                                  | 载入 Gantt、导入数据时                                |
+| 加边即时防环         | 从 successor 出发 DFS/BFS 判断 predecessor 可达性，可达则拒绝                                                      | 创建/编辑依赖时（阻止保存）                           |
+| 排期冲突（FS 语义）  | 对每条边 A→B：两端日期齐全且 `A.due_date > B.start_date` 即冲突（缺日期不产生伪冲突）                              | Gantt 与依赖列表红色虚线 + 文字说明                   |
+| 跨项目依赖           | 遍历边比较两端 project_id；migration 0003 触发器在 DB 层兜底                                                       | UI 禁止创建；对导入产生的存量数据警示标记             |
+| blocked 传导         | 从 status=blocked 节点正向可达集合（跳过已归档前驱，忽略 done/cancelled/archived 后继）；纯派生，不写 tasks.status | 依赖列表与 Gantt 的「受阻风险」提示、Dashboard 风险区 |
+| Milestone 前置未完成 | milestone 关联任务的前驱链存在非 done 任务且 14 天内                                                               | Dashboard 风险区                                      |
 
 ## 5. 日期与时区策略
 

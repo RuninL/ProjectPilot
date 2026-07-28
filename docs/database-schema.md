@@ -107,7 +107,38 @@ UPDATE 触发器不限定 `OF parent_task_id`：把子任务改到别的项目�
 
 约束：`UNIQUE(predecessor_id, successor_id)`（禁重复边）、`CHECK(predecessor_id <> successor_id)`（禁自环）
 索引：UNIQUE 自带 + `idx_deps_successor(successor_id)`（反向遍历）
-循环检测在前端（Kahn/DFS），加边前防环；跨项目依赖 UI 禁止创建，检测层对存量警示。
+
+边方向：`predecessor_id -> successor_id`，语义为**后继任务必须等待前驱任务完成**，
+即前驱的 `due_date` 不应晚于后继的 `start_date`。列名 `predecessor_id` / `successor_id`
+与规格中的 `predecessor_task_id` / `successor_task_id` 等价；改名需要重建表（0003 禁止的操作），
+因此保留 0001 的原始列名。
+
+跨项目与反向边防护（migration 0003，INSERT 与 UPDATE 双路径共 4 个触发器）：
+
+```sql
+-- trg_deps_same_project_insert / _update
+WHEN EXISTS (
+  SELECT 1 FROM tasks p, tasks s
+  WHERE p.id = NEW.predecessor_id AND s.id = NEW.successor_id
+    AND p.project_id <> s.project_id
+) → RAISE(ABORT, 'CROSS_PROJECT_DEPENDENCY')
+
+-- trg_deps_no_reverse_insert / _update
+WHEN EXISTS (
+  SELECT 1 FROM task_dependencies d
+  WHERE d.predecessor_id = NEW.successor_id AND d.successor_id = NEW.predecessor_id
+) → RAISE(ABORT, 'REVERSE_DEPENDENCY')
+```
+
+**DB 只防到两条边为止。** 自环（CHECK）、重复边（UNIQUE）、无效任务（FK）、跨项目和直接反向边
+（0003 触发器）都由 DB 拒绝；但长度 ≥ 3 的环无法用 SQLite 触发器可靠检测（递归触发器不可靠且
+`recursive_triggers` 默认关闭），所以本文档**不声称 "DB 已完整防环"**。任意深度的成环检测位于
+`src/services/dependencyGraph.ts` 的 `wouldCreateCycle`：新增 A -> B 前先从 B 反向可达性搜索是否
+到达 A，由 `dependency.service.ts` 在写入前调用。`tests/repositories/migration0003.test.ts` 用一个
+显式用例锁定这条限制（三节点环会被 DB 接受）。
+
+0003 不新增索引：`successor_id` 已有 `idx_deps_successor`，`predecessor_id` 由
+`UNIQUE(predecessor_id, successor_id)` 自动索引的最左列覆盖。
 
 ### 2.4 milestones
 
@@ -302,6 +333,11 @@ erDiagram
   不重建 tasks 表、不 DROP 任何对象、不复制或删除任何既有行，因此对已有用户数据零风险。
   受 SQLite 限制：`ALTER TABLE` 无法追加 CHECK 约束，且带 `REFERENCES` 的新列必须可空且无非空默认值——
   所以 0002 的新不变式全部用触发器表达，而非表级约束。
+- `src-tauri/migrations/0003_task_dependencies.sql`：**纯增量**——只有 4 个 `CREATE TRIGGER`
+  （同项目校验与反向边校验各覆盖 INSERT / UPDATE）。不新增列、不新增表、不新增索引、
+  不 DROP 任何对象、不重建 `task_dependencies`、不复制或删除任何既有行。
+  0001 已提供的自环 CHECK、重复边 UNIQUE、任务 FK CASCADE 与 `dep_type IN ('FS')` 保持原样。
+  详见 [§2.3](#23-task_dependenciesfinish-to-start)。
 - 每个 migration 幂等（CREATE TABLE IF NOT EXISTS 风格不用于变更，版本号单调递增，插件按 version 执行一次）
 - Down SQL 仅用于开发期回滚；发布后只前进不后退
 - schema 版本随 JSON 导出携带，导入时校验兼容性

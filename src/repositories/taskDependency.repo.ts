@@ -5,12 +5,32 @@ import { parseOptional, parseRows } from './_shared';
 
 export function createTaskDependencyRepository(db: SqlExecutor) {
   return {
+    /**
+     * Edges with *both* endpoints inside the project. Joining only the successor
+     * would leak an inbound cross-project edge into a project-scoped graph,
+     * where the missing predecessor node makes traversal silently incomplete.
+     * Ordered so graph building — and therefore topological tie-breaks — is
+     * reproducible across reads.
+     */
     async findByProject(projectId: string): Promise<TaskDependency[]> {
       const rows = await db.select(
         `SELECT d.* FROM task_dependencies d
-         JOIN tasks t ON t.id = d.successor_id
-         WHERE t.project_id = ?`,
-        [projectId],
+         JOIN tasks p ON p.id = d.predecessor_id
+         JOIN tasks s ON s.id = d.successor_id
+         WHERE p.project_id = ? AND s.project_id = ?
+         ORDER BY d.created_at ASC, d.id ASC`,
+        [projectId, projectId],
+      );
+      return parseRows(taskDependencyRowSchema, rows);
+    },
+
+    /** All edges touching `taskId` in either direction, for the task's own panel. */
+    async findByTask(taskId: string): Promise<TaskDependency[]> {
+      const rows = await db.select(
+        `SELECT * FROM task_dependencies
+         WHERE predecessor_id = ? OR successor_id = ?
+         ORDER BY created_at ASC, id ASC`,
+        [taskId, taskId],
       );
       return parseRows(taskDependencyRowSchema, rows);
     },

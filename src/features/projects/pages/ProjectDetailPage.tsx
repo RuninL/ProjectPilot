@@ -7,11 +7,14 @@ import { LoadingState } from '@/components/common/LoadingState';
 import { SampleBadge } from '@/components/common/SampleBadge';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { DependencySection } from '@/features/dependencies/components/DependencySection';
+import { GanttSection } from '@/features/gantt/components/GanttSection';
 import { TaskWorkspace } from '@/features/tasks/components/TaskWorkspace';
 import { formatDisplay, isOverdue } from '@/lib/date';
 import { toAppError } from '@/lib/errors';
 import { PROJECT_STATUS_LABELS } from '@/lib/labels';
 import { computeProjectProgress, formatProgress } from '@/services/projectProgress';
+import { useDependencyStore } from '@/stores/useDependencyStore';
 import { useProjectStore } from '@/stores/useProjectStore';
 import { useTaskStore } from '@/stores/useTaskStore';
 import type { Project, TaskWithProject } from '@/types';
@@ -19,9 +22,8 @@ import { ProjectForm } from '../components/ProjectForm';
 
 /** Capabilities that arrive in a later phase — listed, never clickable, never faked. */
 const LATER_PHASE_SECTIONS = [
-  { title: '甘特图', description: '任务时间线与拖拽排期' },
   { title: '里程碑', description: '关键节点与倒计时' },
-  { title: '任务依赖', description: 'FS 依赖与关键路径' },
+  { title: '关键路径与拖拽排期', description: '甘特图上的自动排程' },
   { title: '会议与行动项', description: '会议记录转任务' },
   { title: '项目链接', description: '关联文档与本地文件' },
 ];
@@ -54,6 +56,12 @@ export function ProjectDetailPage() {
   const restoreProject = useProjectStore((state) => state.restoreProject);
   const listByProject = useTaskStore((state) => state.listByProject);
   const taskVersion = useTaskStore((state) => state.tasks);
+  const analysis = useDependencyStore((state) => state.analysis);
+  const dependencyLoading = useDependencyStore((state) => state.loading);
+  const dependencyError = useDependencyStore((state) => state.error);
+  const loadDependencies = useDependencyStore((state) => state.loadProject);
+  const createDependency = useDependencyStore((state) => state.createDependency);
+  const deleteDependency = useDependencyStore((state) => state.deleteDependency);
 
   const [project, setProject] = useState<Project | null>(null);
   const [projectTasks, setProjectTasks] = useState<TaskWithProject[]>([]);
@@ -91,6 +99,12 @@ export function ProjectDetailPage() {
       active = false;
     };
   }, [listByProject, projectId, taskVersion]);
+
+  // Re-analyzed whenever a task changes: blocked risk and schedule conflicts are
+  // projections of the task rows, so a date edit must be reflected here too.
+  useEffect(() => {
+    void loadDependencies(projectId);
+  }, [loadDependencies, projectId, taskVersion]);
 
   if (loading) {
     return (
@@ -230,6 +244,39 @@ export function ProjectDetailPage() {
           projectId={project.id}
           canCreate={!archived}
           createHint={archived ? '项目已归档，无法新建任务' : null}
+        />
+      </section>
+
+      <section className="mb-6" id="project-gantt">
+        <h2 className="mb-3 text-lg font-medium">甘特图</h2>
+        <GanttSection
+          analysis={analysis}
+          loading={dependencyLoading}
+          error={dependencyError}
+          onRetry={() => {
+            void loadDependencies(project.id);
+          }}
+        />
+      </section>
+
+      <section className="mb-6" id="project-dependencies">
+        <h2 className="mb-3 text-lg font-medium">任务依赖</h2>
+        <DependencySection
+          analysis={analysis}
+          loading={dependencyLoading}
+          error={dependencyError}
+          canEdit={!archived}
+          editHint={archived ? '项目已归档，无法新建任务依赖' : null}
+          onCreate={(predecessorId, successorId) =>
+            createDependency(
+              { predecessor_id: predecessorId, successor_id: successorId },
+              project.id,
+            )
+          }
+          onDelete={(dependencyId) => deleteDependency(dependencyId, project.id)}
+          onRetry={() => {
+            void loadDependencies(project.id);
+          }}
         />
       </section>
 

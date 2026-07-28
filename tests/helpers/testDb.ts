@@ -7,7 +7,11 @@ import type { BatchStatement } from '@/lib/commands';
 // Vitest runs from the project root; resolve the real migration files from there.
 // Listed in version order so the harness applies exactly what the app applies.
 const MIGRATION_DIR = join(process.cwd(), 'src-tauri/migrations');
-const MIGRATION_FILES = ['0001_init.sql', '0002_task_lifecycle.sql'] as const;
+const MIGRATION_FILES = [
+  '0001_init.sql',
+  '0002_task_lifecycle.sql',
+  '0003_task_dependencies.sql',
+] as const;
 
 /**
  * Integration-style test harness: repositories are exercised against a real

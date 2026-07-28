@@ -1,4 +1,11 @@
-import { differenceInCalendarDays, endOfWeek, format, startOfWeek } from 'date-fns';
+import {
+  addDays as addCalendarDays,
+  addMonths,
+  differenceInCalendarDays,
+  endOfWeek,
+  format,
+  startOfWeek,
+} from 'date-fns';
 
 /**
  * Business dates are calendar days (date-only) in the Asia/Hong_Kong timezone,
@@ -89,6 +96,52 @@ export function isThisWeek(date: string | null, today: string = todayHK()): bool
  */
 export function daysUntil(date: string, from: string = todayHK()): number {
   return differenceInCalendarDays(toDate(date), toDate(from));
+}
+
+/** `date` shifted by `days` calendar days, back as 'YYYY-MM-DD'. */
+export function addDays(date: string, days: number): string {
+  return format(addCalendarDays(toDate(date), days), 'yyyy-MM-dd');
+}
+
+/** Inclusive day count from `from` to `to`; 1 for a single day, 0 when reversed. */
+export function inclusiveDays(from: string, to: string): number {
+  return Math.max(0, differenceInCalendarDays(toDate(to), toDate(from)) + 1);
+}
+
+/** Monday of the week containing `date` (matching `isThisWeek`). */
+export function startOfWeekStr(date: string): string {
+  return format(startOfWeek(toDate(date), { weekStartsOn: 1 }), 'yyyy-MM-dd');
+}
+
+/** First day of the month containing `date`. */
+export function startOfMonthStr(date: string): string {
+  return `${date.slice(0, 7)}-01`;
+}
+
+/** First day of the calendar quarter containing `date`. */
+export function startOfQuarterStr(date: string): string {
+  const month = Number(date.slice(5, 7));
+  const firstMonth = Math.floor((month - 1) / 3) * 3 + 1;
+  return `${date.slice(0, 4)}-${String(firstMonth).padStart(2, '0')}-01`;
+}
+
+/** First day of the month after the one containing `date`. */
+export function startOfNextMonthStr(date: string): string {
+  return format(addMonths(toDate(startOfMonthStr(date)), 1), 'yyyy-MM-dd');
+}
+
+/** Simplified-Chinese labels for the Gantt axis: '2026年8月', '8月3日', '2026 Q3'. */
+export function formatMonthLabel(date: string): string {
+  return `${date.slice(0, 4)}年${String(Number(date.slice(5, 7)))}月`;
+}
+
+export function formatDayLabel(date: string): string {
+  return `${String(Number(date.slice(5, 7)))}月${String(Number(date.slice(8, 10)))}日`;
+}
+
+export function formatQuarterLabel(date: string): string {
+  const quarter = Math.floor((Number(date.slice(5, 7)) - 1) / 3) + 1;
+  return `${date.slice(0, 4)} Q${String(quarter)}`;
 }
 
 /** Display a date, or the Simplified-Chinese placeholder for a missing one. */

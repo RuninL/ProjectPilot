@@ -16,5 +16,11 @@ pub fn migrations() -> Vec<Migration> {
             sql: include_str!("../migrations/0002_task_lifecycle.sql"),
             kind: MigrationKind::Up,
         },
+        Migration {
+            version: 3,
+            description: "finish-to-start dependency guards: same-project and reverse-edge",
+            sql: include_str!("../migrations/0003_task_dependencies.sql"),
+            kind: MigrationKind::Up,
+        },
     ]
 }
