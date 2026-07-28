@@ -73,6 +73,12 @@
   已符合 schema 的行按原引用返回，better-sqlite3 路径行为完全不变
 - service 持有业务不变式：done→progress=100、cancelled 剔除完成率、两层父子校验、milestone 只提示不自动改、转任务防重复
 - 所有写操作 service 先 Zod 校验再落库；错误统一映射为 `AppError`（用户可读文案 + 可重试标记）
+- **input schema 必须幂等**：表单先 `parse` 一次再交给 store，service 收到后还会再 `parse` 一次
+  （防止绕过表单的调用者写入非法行），因此每个字段都必须接受自己的输出。
+  `optionalDate/optionalTime/optionalId/optionalHours` 靠 `.nullable()` + `?? null` 做到；
+  会改变类型的 `attendees`（自由文本 → `string[]`）先把列表折回每行一个姓名的文本再校验。
+  违反此不变式会让写入在 service 处抛 ZodError（曾导致会议永远保存不了、
+  列表页因表为空而显示「无法加载会议」）；回归测试见 `tests/services/inputSchemaIdempotence.test.ts`
 
 ## 3. Gantt 架构（关键决策）
 

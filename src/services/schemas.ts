@@ -15,6 +15,12 @@ import {
  * The same schema backs the React Hook Form resolver and the service-level
  * re-validation, so a caller bypassing the form cannot write an invalid row.
  * All messages are user-facing and therefore Simplified Chinese.
+ *
+ * Because the form parses and the service then parses that result, **every field
+ * must accept its own output** — see `tests/services/inputSchemaIdempotence`.
+ * The optional helpers below get this from `.nullable()` plus a `?? null` pass;
+ * a field whose transform changes the type (`attendees`) folds the output back
+ * to its input form first.
  */
 
 /** Empty string from an untouched `<input type="date">` means "not set". */
@@ -133,6 +139,17 @@ export const dependencyInputSchema = z.object({
 });
 
 /**
+ * Fold an already-normalized attendee list back into the one-name-per-line text
+ * the field is written for, so the schema accepts its own output. The form parses
+ * before calling the store and the service parses again; without this, the second
+ * parse of a saved meeting failed with `attendees: expected string, received array`
+ * and no meeting could ever be written.
+ */
+function foldAttendeeList(value: unknown): unknown {
+  return Array.isArray(value) ? (value as unknown[]).map((name) => String(name)).join('\n') : value;
+}
+
+/**
  * A meeting. `project_id` is nullable on purpose: a meeting may stand on its own
  * (a 1:1, a cross-project review) and must not be forced under a project.
  * Attendees arrive as free text — one name per line or comma-separated — and are
@@ -143,16 +160,19 @@ export const meetingInputSchema = z.object({
   topic: z.string().trim().min(1, '会议主题不能为空').max(160, '会议主题不能超过 160 个字符'),
   date: requiredDate,
   start_time: optionalTime,
-  attendees: z
-    .string()
-    .max(2000, '参与者不能超过 2000 个字符')
-    .default('')
-    .transform((value) =>
-      value
-        .split(/[,，\n]/)
-        .map((name) => name.trim())
-        .filter((name) => name !== ''),
-    ),
+  attendees: z.preprocess(
+    foldAttendeeList,
+    z
+      .string()
+      .max(2000, '参与者不能超过 2000 个字符')
+      .default('')
+      .transform((value) =>
+        value
+          .split(/[,，\n]/)
+          .map((name) => name.trim())
+          .filter((name) => name !== ''),
+      ),
+  ),
   agenda: z.string().trim().max(4000, '议程不能超过 4000 个字符').default(''),
   notes: z.string().trim().max(8000, '会议纪要不能超过 8000 个字符').default(''),
   decisions: z.string().trim().max(4000, '决议不能超过 4000 个字符').default(''),

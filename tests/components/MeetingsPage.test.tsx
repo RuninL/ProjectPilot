@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
@@ -100,6 +100,37 @@ describe('MeetingsPage', () => {
     expect(screen.getByText('内网门户重构')).toBeInTheDocument();
     expect(screen.getByText('独立会议')).toBeInTheDocument();
     expect(screen.getByText('09:30')).toBeInTheDocument();
+  });
+
+  /**
+   * The whole create path — form → store → service → repository → SQLite — with
+   * an empty meetings table, which is exactly the state the Windows machine was
+   * left in: the save threw a ZodError at ["attendees"] (the form had already
+   * normalized the free text into a list), nothing was written, and the page
+   * turned into 「无法加载会议」 because the list was still empty.
+   */
+  it('creates a meeting from the dialog instead of failing with a validation error', async () => {
+    const user = userEvent.setup();
+    useRealDb();
+    const repos = await getRepositories();
+
+    renderPage();
+    await screen.findByText('还没有会议记录');
+
+    // Both the header and the empty state offer the button; either opens the dialog.
+    await user.click(screen.getAllByRole('button', { name: '新建会议' })[0] as HTMLElement);
+    await user.type(screen.getByLabelText('会议主题'), '双周评审');
+    fireEvent.change(screen.getByLabelText('会议日期'), { target: { value: '2026-07-20' } });
+    await user.type(screen.getByLabelText('参与者'), '张三\n李四，王五');
+    await user.click(screen.getByRole('button', { name: '保存' }));
+
+    expect(await screen.findByRole('link', { name: '双周评审' })).toBeInTheDocument();
+    expect(screen.queryByText('无法加载会议')).toBeNull();
+
+    const stored = await repos.meetings.findAll();
+    expect(stored).toHaveLength(1);
+    expect(stored[0]?.attendees).toBe('["张三","李四","王五"]');
+    expect(stored[0]?.project_id).toBeNull();
   });
 
   it('shows the real action item count before deleting and cancels without writing', async () => {
