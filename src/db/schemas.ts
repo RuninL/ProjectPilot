@@ -94,11 +94,18 @@ export const milestoneRowSchema = z.object({
   ...auditColumns,
 });
 
+/** Wall-clock 'HH:MM' with a real hour and minute. Deliberately timezone-free. */
+export const timeString = z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/, {
+  message: '时间必须为有效的 HH:MM',
+});
+
 export const meetingRowSchema = z.object({
   id: z.string(),
   project_id: z.string().nullable(),
   topic: z.string(),
   date: dateString,
+  // Added by migration 0004. A label on the calendar day, not an instant.
+  start_time: timeString.nullable(),
   attendees: z.string(),
   agenda: z.string(),
   notes: z.string(),

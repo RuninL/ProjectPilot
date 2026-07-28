@@ -1,6 +1,12 @@
 import { z } from 'zod';
 import { isValidDateStr } from '@/lib/date';
-import { projectStatusEnum, taskPriorityEnum, taskStatusEnum } from '@/db/schemas';
+import {
+  actionItemStatusEnum,
+  milestoneStatusEnum,
+  projectStatusEnum,
+  taskPriorityEnum,
+  taskStatusEnum,
+} from '@/db/schemas';
 
 /**
  * Input schemas for user-supplied data — deliberately separate from the row
@@ -18,6 +24,32 @@ const optionalDate = z
   .refine((value) => value === '' || isValidDateStr(value), {
     message: '日期必须为有效的 YYYY-MM-DD',
   })
+  .transform((value) => (value === '' ? null : value))
+  .nullable()
+  .transform((value) => value ?? null);
+
+/** Required business date — an empty `<input type="date">` is a validation error. */
+const requiredDate = z
+  .string()
+  .trim()
+  .min(1, '日期不能为空')
+  .refine(isValidDateStr, { message: '日期必须为有效的 YYYY-MM-DD' });
+
+/** Optional wall-clock time; empty means "not set". */
+const optionalTime = z
+  .string()
+  .trim()
+  .refine((value) => value === '' || /^([01]\d|2[0-3]):[0-5]\d$/.test(value), {
+    message: '时间必须为有效的 HH:MM（24 小时制）',
+  })
+  .transform((value) => (value === '' ? null : value))
+  .nullable()
+  .transform((value) => value ?? null);
+
+/** Optional foreign key from a `<select>`; the empty option means "not set". */
+const optionalId = z
+  .string()
+  .trim()
   .transform((value) => (value === '' ? null : value))
   .nullable()
   .transform((value) => value ?? null);
@@ -100,7 +132,63 @@ export const dependencyInputSchema = z.object({
   successor_id: z.string().min(1, '请选择后继任务'),
 });
 
+/**
+ * A meeting. `project_id` is nullable on purpose: a meeting may stand on its own
+ * (a 1:1, a cross-project review) and must not be forced under a project.
+ * Attendees arrive as free text — one name per line or comma-separated — and are
+ * normalized to a list here so the service only ever serializes a clean array.
+ */
+export const meetingInputSchema = z.object({
+  project_id: optionalId,
+  topic: z.string().trim().min(1, '会议主题不能为空').max(160, '会议主题不能超过 160 个字符'),
+  date: requiredDate,
+  start_time: optionalTime,
+  attendees: z
+    .string()
+    .max(2000, '参与者不能超过 2000 个字符')
+    .default('')
+    .transform((value) =>
+      value
+        .split(/[,，\n]/)
+        .map((name) => name.trim())
+        .filter((name) => name !== ''),
+    ),
+  agenda: z.string().trim().max(4000, '议程不能超过 4000 个字符').default(''),
+  notes: z.string().trim().max(8000, '会议纪要不能超过 8000 个字符').default(''),
+  decisions: z.string().trim().max(4000, '决议不能超过 4000 个字符').default(''),
+  risks: z.string().trim().max(4000, '风险不能超过 4000 个字符').default(''),
+});
+
+export const actionItemInputSchema = z.object({
+  content: z.string().trim().min(1, '行动项内容不能为空').max(300, '行动项内容不能超过 300 个字符'),
+  owner: z.string().trim().max(120, '负责人不能超过 120 个字符').default(''),
+  due_date: optionalDate,
+  status: actionItemStatusEnum.default('open'),
+});
+
+/**
+ * Target project for a conversion. Empty is legal in the schema and rejected by
+ * the service only when the meeting has no project of its own — that is where
+ * the meeting is known, and silently creating an unowned task is not an option.
+ */
+export const convertActionItemSchema = z.object({
+  project_id: optionalId,
+});
+
+export const milestoneInputSchema = z.object({
+  project_id: z.string().min(1, '必须选择所属项目'),
+  linked_task_id: optionalId,
+  name: z.string().trim().min(1, '里程碑名称不能为空').max(120, '里程碑名称不能超过 120 个字符'),
+  description: z.string().trim().max(2000, '里程碑描述不能超过 2000 个字符').default(''),
+  date: requiredDate,
+  status: milestoneStatusEnum.default('upcoming'),
+});
+
 export type ProjectInput = z.infer<typeof projectInputSchema>;
 export type TaskInput = z.infer<typeof taskInputSchema>;
 export type BulkTaskUpdate = z.infer<typeof bulkTaskUpdateSchema>;
 export type DependencyInput = z.infer<typeof dependencyInputSchema>;
+export type MeetingInput = z.infer<typeof meetingInputSchema>;
+export type ActionItemInput = z.infer<typeof actionItemInputSchema>;
+export type ConvertActionItemInput = z.infer<typeof convertActionItemSchema>;
+export type MilestoneInput = z.infer<typeof milestoneInputSchema>;

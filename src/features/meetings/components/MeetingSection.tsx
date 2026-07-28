@@ -2,25 +2,29 @@ import { CalendarDays, Clock, Pencil, Plus, Trash2 } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { ConfirmDialog } from '@/components/common/ConfirmDialog';
-import { EmptyState } from '@/components/common/EmptyState';
 import { ErrorState } from '@/components/common/ErrorState';
 import { LoadingState } from '@/components/common/LoadingState';
-import { SampleBadge } from '@/components/common/SampleBadge';
-import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { toAppError } from '@/lib/errors';
 import { useMeetingStore } from '@/stores/useMeetingStore';
-import { useProjectStore } from '@/stores/useProjectStore';
-import type { Meeting } from '@/types';
-import { MeetingForm } from '../components/MeetingForm';
+import type { Meeting, Project } from '@/types';
+import { MeetingForm } from './MeetingForm';
 
 interface PendingDelete {
   meeting: Meeting;
-  /** Real number of action items the cascade would remove, read from the database. */
   actionItemCount: number;
 }
 
-export function MeetingsPage() {
+interface MeetingSectionProps {
+  project: Project;
+}
+
+/**
+ * One project's meetings. Archiving a project does not close its meetings — a
+ * retrospective about finished work is still worth recording — so this section
+ * stays editable; what the archive blocks is creating tasks from an action item.
+ */
+export function MeetingSection({ project }: MeetingSectionProps) {
   const meetings = useMeetingStore((state) => state.meetings);
   const loading = useMeetingStore((state) => state.loading);
   const error = useMeetingStore((state) => state.error);
@@ -30,34 +34,30 @@ export function MeetingsPage() {
   const deleteMeeting = useMeetingStore((state) => state.deleteMeeting);
   const countActionItems = useMeetingStore((state) => state.countActionItems);
 
-  const projectOptions = useProjectStore((state) => state.options);
-  const loadOptions = useProjectStore((state) => state.loadOptions);
-
   const [formOpen, setFormOpen] = useState(false);
   const [editing, setEditing] = useState<Meeting | null>(null);
   const [pendingDelete, setPendingDelete] = useState<PendingDelete | null>(null);
   const [busy, setBusy] = useState(false);
-  const [actionError, setActionError] = useState<string | null>(null);
+  const [sectionError, setSectionError] = useState<string | null>(null);
 
   useEffect(() => {
     void loadMeetings();
-    void loadOptions();
-  }, [loadMeetings, loadOptions]);
+  }, [loadMeetings]);
 
-  const projectName = useMemo(() => {
-    const byId = new Map(projectOptions.map((project) => [project.id, project.name]));
-    return (id: string | null): string => (id === null ? '独立会议' : (byId.get(id) ?? '所属项目'));
-  }, [projectOptions]);
+  const projectMeetings = useMemo(
+    () => meetings.filter((meeting) => meeting.project_id === project.id),
+    [meetings, project.id],
+  );
 
   const askDelete = useCallback(
     (meeting: Meeting): void => {
-      setActionError(null);
+      setSectionError(null);
       void countActionItems(meeting.id)
         .then((actionItemCount) => {
           setPendingDelete({ meeting, actionItemCount });
         })
         .catch((caught: unknown) => {
-          setActionError(toAppError(caught).message);
+          setSectionError(toAppError(caught).message);
         });
     },
     [countActionItems],
@@ -72,7 +72,7 @@ export function MeetingsPage() {
     setBusy(true);
     void deleteMeeting(target.meeting.id)
       .catch((caught: unknown) => {
-        setActionError(toAppError(caught).message);
+        setSectionError(toAppError(caught).message);
       })
       .finally(() => {
         setBusy(false);
@@ -80,37 +80,29 @@ export function MeetingsPage() {
   };
 
   if (loading && meetings.length === 0) {
-    return (
-      <div className="p-6">
-        <LoadingState label="正在加载会议…" />
-      </div>
-    );
+    return <LoadingState label="正在加载会议…" />;
   }
 
   if (error !== null && meetings.length === 0) {
     return (
-      <div className="p-6">
-        <ErrorState
-          title="无法加载会议"
-          message={error}
-          onRetry={() => {
-            void loadMeetings();
-          }}
-        />
-      </div>
+      <ErrorState
+        title="无法加载会议"
+        message={error}
+        onRetry={() => {
+          void loadMeetings();
+        }}
+      />
     );
   }
 
   return (
-    <div className="p-6">
-      <header className="mb-6 flex items-start justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-semibold">会议</h1>
-          <p className="mt-1 text-sm text-muted-foreground">
-            记录会议纪要与决议，并把行动项转成任务。
-          </p>
-        </div>
+    <div className="space-y-3">
+      <div className="flex items-center justify-between gap-3">
+        <p className="text-xs text-muted-foreground">
+          会议纪要与行动项归属本项目；行动项可转为本项目的任务。
+        </p>
         <Button
+          size="sm"
           onClick={() => {
             setEditing(null);
             setFormOpen(true);
@@ -119,40 +111,25 @@ export function MeetingsPage() {
           <Plus className="h-4 w-4" aria-hidden />
           新建会议
         </Button>
-      </header>
+      </div>
 
-      {actionError !== null && <p className="mb-4 text-sm text-destructive">{actionError}</p>}
+      {sectionError !== null && <p className="text-sm text-destructive">{sectionError}</p>}
 
-      {meetings.length === 0 ? (
-        <EmptyState
-          title="还没有会议记录"
-          description="新建会议后可以记录议程、纪要、决议与行动项。"
-          action={
-            <Button
-              onClick={() => {
-                setEditing(null);
-                setFormOpen(true);
-              }}
-            >
-              新建会议
-            </Button>
-          }
-        />
+      {projectMeetings.length === 0 ? (
+        <p className="rounded-lg border border-dashed bg-muted/30 p-6 text-center text-sm text-muted-foreground">
+          该项目暂无会议记录。新建会议后可以记录纪要、决议与行动项。
+        </p>
       ) : (
         <ul className="divide-y rounded-lg border bg-card">
-          {meetings.map((meeting) => (
-            <li key={meeting.id} className="flex flex-wrap items-center justify-between gap-3 p-4">
+          {projectMeetings.map((meeting) => (
+            <li key={meeting.id} className="flex flex-wrap items-center justify-between gap-3 p-3">
               <div className="min-w-0">
-                <div className="flex flex-wrap items-center gap-2">
-                  <Link
-                    to={`/meetings/${meeting.id}`}
-                    className="text-sm font-medium hover:underline"
-                  >
-                    {meeting.topic}
-                  </Link>
-                  <Badge variant="outline">{projectName(meeting.project_id)}</Badge>
-                  {meeting.is_sample === 1 && <SampleBadge />}
-                </div>
+                <Link
+                  to={`/meetings/${meeting.id}`}
+                  className="text-sm font-medium hover:underline"
+                >
+                  {meeting.topic}
+                </Link>
                 <div className="mt-1 flex flex-wrap items-center gap-3 text-xs text-muted-foreground">
                   <span className="inline-flex items-center gap-1">
                     <CalendarDays className="h-3.5 w-3.5" aria-hidden />
@@ -174,6 +151,7 @@ export function MeetingsPage() {
                   size="sm"
                   variant="ghost"
                   aria-label={`编辑会议：${meeting.topic}`}
+                  disabled={busy}
                   onClick={() => {
                     setEditing(meeting);
                     setFormOpen(true);
@@ -201,9 +179,9 @@ export function MeetingsPage() {
       <MeetingForm
         open={formOpen}
         meeting={editing}
-        projects={projectOptions}
-        defaultProjectId={null}
-        lockProject={false}
+        projects={[project]}
+        defaultProjectId={project.id}
+        lockProject
         onSubmit={async (input) => {
           if (editing === null) {
             await createMeeting(input);

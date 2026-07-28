@@ -2,6 +2,7 @@ import { createHashRouter } from 'react-router-dom';
 import { AppLayout } from '@/components/AppLayout';
 import { CalendarPage } from '@/features/calendar/pages/CalendarPage';
 import { DashboardPage } from '@/features/dashboard/pages/DashboardPage';
+import { MeetingDetailPage } from '@/features/meetings/pages/MeetingDetailPage';
 import { MeetingsPage } from '@/features/meetings/pages/MeetingsPage';
 import { ProjectDetailPage } from '@/features/projects/pages/ProjectDetailPage';
 import { ProjectListPage } from '@/features/projects/pages/ProjectListPage';
@@ -20,6 +21,7 @@ export const router = createHashRouter([
       { path: 'tasks', element: <MyTasksPage /> },
       { path: 'calendar', element: <CalendarPage /> },
       { path: 'meetings', element: <MeetingsPage /> },
+      { path: 'meetings/:meetingId', element: <MeetingDetailPage /> },
       { path: 'settings', element: <SettingsPage /> },
     ],
   },

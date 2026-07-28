@@ -82,8 +82,9 @@ GanttData（纯领域数据: bars[], milestones[], links[], conflicts[]）
 
 阶段 3 落地形态：`src/features/gantt/ganttViewModel.ts`（纯函数，日期进、像素出）+
 `src/features/gantt/components/GanttChart.tsx`（无状态 SVG 渲染 + 图例）+
-`GanttSection.tsx`（档位切换与加载/空/错误态）。milestone 菱形留到阶段 4，
-本阶段只保留标记为「后续阶段」的占位，不伪造图元。
+`GanttSection.tsx`（档位切换与加载/空/错误态）。milestone 菱形未包含在阶段 4 的
+执行清单内，仍推迟到后续阶段——阶段 4 的里程碑可视化落在项目详情的里程碑区与日历月视图，
+甘特图内不伪造图元。
 
 ### 3.2 升级与降级路径
 
@@ -119,6 +120,11 @@ GanttData（纯领域数据: bars[], milestones[], links[], conflicts[]）
   - 倒计时：`differenceInCalendarDays`
 - 统一入口 `lib/date.ts`：`todayHK() / isOverdue() / isDueToday() / formatDisplay() / parseInput()`；**全应用禁止裸用 new Date() 做业务日期**（ESLint 约定强制）
 - 无效日期由 Zod 在表单层拦截（格式 regex + 真实日期校验）；null 日期渲染"未设置"
+- 日历月份为 `'YYYY-MM'` 字符串，月份加减与六周网格生成都在 `features/calendar/calendarModel.ts`
+  的纯函数内完成（`shiftMonth` / `monthOf` / 周一为首日的网格），跨年由字符串运算保证正确，
+  不引入任何日历库
+- 会议 `start_time` 是"本地墙钟"文本 `'HH:MM'`，不参与时区换算、不与日期拼接成时间戳；
+  仅用于排序与展示
 
 ## 6. 状态管理（Zustand 分域）
 
@@ -129,6 +135,9 @@ GanttData（纯领域数据: bars[], milestones[], links[], conflicts[]）
 | `useTaskFilterStore` | 筛选/搜索/排序/批量选择（UI 态，不含数据本体） |
 | `useGanttStore`      | 视图档位、可见范围、选中任务、冲突覆盖层       |
 | `useDashboardStore`  | 风险卡缓存 + 失效标记                          |
+| `useMeetingStore`    | 会议列表/当前会议 + 行动项缓存、加载与错误态   |
+| `useMilestoneStore`  | 单项目里程碑缓存、加载与错误态                 |
+| `useCalendarStore`   | 当前月份 `YYYY-MM` + 该月条目缓存、加载/错误态 |
 
 原则：store 存"UI 状态与轻缓存"；写操作走 service→repository→DB，成功后失效重查。表单草稿由 React Hook Form 管理，不进 store。禁止最终保留 mock 数据。
 

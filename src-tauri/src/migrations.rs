@@ -22,5 +22,11 @@ pub fn migrations() -> Vec<Migration> {
             sql: include_str!("../migrations/0003_task_dependencies.sql"),
             kind: MigrationKind::Up,
         },
+        Migration {
+            version: 4,
+            description: "meeting start time, action item conversion guards, milestone date index",
+            sql: include_str!("../migrations/0004_meetings_action_items.sql"),
+            kind: MigrationKind::Up,
+        },
     ]
 }

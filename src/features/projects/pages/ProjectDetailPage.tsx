@@ -9,6 +9,8 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { DependencySection } from '@/features/dependencies/components/DependencySection';
 import { GanttSection } from '@/features/gantt/components/GanttSection';
+import { MeetingSection } from '@/features/meetings/components/MeetingSection';
+import { MilestoneSection } from '@/features/milestones/components/MilestoneSection';
 import { TaskWorkspace } from '@/features/tasks/components/TaskWorkspace';
 import { formatDisplay, isOverdue } from '@/lib/date';
 import { toAppError } from '@/lib/errors';
@@ -22,9 +24,7 @@ import { ProjectForm } from '../components/ProjectForm';
 
 /** Capabilities that arrive in a later phase — listed, never clickable, never faked. */
 const LATER_PHASE_SECTIONS = [
-  { title: '里程碑', description: '关键节点与倒计时' },
   { title: '关键路径与拖拽排期', description: '甘特图上的自动排程' },
-  { title: '会议与行动项', description: '会议记录转任务' },
   { title: '项目链接', description: '关联文档与本地文件' },
 ];
 
@@ -245,6 +245,20 @@ export function ProjectDetailPage() {
           canCreate={!archived}
           createHint={archived ? '项目已归档，无法新建任务' : null}
         />
+      </section>
+
+      <section className="mb-6" id="project-milestones">
+        <h2 className="mb-3 text-lg font-medium">里程碑</h2>
+        <MilestoneSection
+          projectId={project.id}
+          canEdit={!archived}
+          editHint={archived ? '项目已归档，无法新建或修改里程碑' : null}
+        />
+      </section>
+
+      <section className="mb-6" id="project-meetings">
+        <h2 className="mb-3 text-lg font-medium">会议与行动项</h2>
+        <MeetingSection project={project} />
       </section>
 
       <section className="mb-6" id="project-gantt">

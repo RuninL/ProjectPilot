@@ -16,8 +16,17 @@ export function createMilestoneRepository(db: SqlExecutor) {
   return {
     async findByProject(projectId: string): Promise<Milestone[]> {
       const rows = await db.select(
-        'SELECT * FROM milestones WHERE project_id = ? ORDER BY date ASC',
+        'SELECT * FROM milestones WHERE project_id = ? ORDER BY date ASC, created_at ASC',
         [projectId],
+      );
+      return parseRows(milestoneRowSchema, rows);
+    },
+
+    /** Milestones dated inside `[from, to]`, across every project (calendar window). */
+    async findByDateRange(from: string, to: string): Promise<Milestone[]> {
+      const rows = await db.select(
+        'SELECT * FROM milestones WHERE date BETWEEN ? AND ? ORDER BY date ASC, created_at ASC',
+        [from, to],
       );
       return parseRows(milestoneRowSchema, rows);
     },

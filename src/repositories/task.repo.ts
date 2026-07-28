@@ -29,12 +29,25 @@ const UPDATABLE = [
   'source_meeting_id',
 ] as const;
 
-const INSERT_SQL = `INSERT INTO tasks
-    (id, project_id, parent_task_id, title, description, status, priority,
+const INSERT_COLUMNS = `(id, project_id, parent_task_id, title, description, status, priority,
      start_date, due_date, progress, estimated_hours, actual_hours,
      completed_at, archived_at, source_meeting_id,
-     is_sample, created_at, updated_at)
+     is_sample, created_at, updated_at)`;
+
+const INSERT_SQL = `INSERT INTO tasks ${INSERT_COLUMNS}
    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`;
+
+/**
+ * Same insert, but it inserts nothing unless the source action item is still
+ * unconverted. This is what makes a duplicate conversion orphan-free rather than
+ * merely detectable: the guard is evaluated inside the same transaction as the
+ * matching `action_items` update, so a second concurrent attempt writes zero rows
+ * instead of committing a task nobody points at. Checking an affected-row count
+ * after the fact could not achieve this — by then the batch has committed.
+ */
+const CONVERSION_INSERT_SQL = `INSERT INTO tasks ${INSERT_COLUMNS}
+   SELECT ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
+    WHERE EXISTS (SELECT 1 FROM action_items WHERE id = ? AND converted_at IS NULL)`;
 
 function insertParams(task: Task): unknown[] {
   return [
@@ -169,6 +182,25 @@ export function createTaskRepository(db: SqlExecutor) {
       return parseRows(taskWithProjectRowSchema, rows);
     },
 
+    /**
+     * Tasks touching `[from, to]` through either endpoint, for the calendar.
+     * Archived tasks are excluded, matching every other read path. A task with
+     * only one of the two dates still appears on the date it does have.
+     */
+    async findInDateRange(from: string, to: string): Promise<TaskWithProject[]> {
+      const rows = await db.select(
+        `SELECT t.*, p.name AS project_name, p.color AS project_color
+           FROM tasks t
+           JOIN projects p ON p.id = t.project_id
+          WHERE t.archived_at IS NULL
+            AND ((t.start_date IS NOT NULL AND t.start_date BETWEEN ? AND ?)
+              OR (t.due_date IS NOT NULL AND t.due_date BETWEEN ? AND ?))
+          ORDER BY t.due_date IS NULL, t.due_date ASC, t.created_at ASC`,
+        [from, to, from, to],
+      );
+      return parseRows(taskWithProjectRowSchema, rows);
+    },
+
     async insert(task: Task): Promise<void> {
       await db.execute(INSERT_SQL, insertParams(task));
     },
@@ -176,6 +208,11 @@ export function createTaskRepository(db: SqlExecutor) {
     /** Same insert, as a statement for an atomic multi-row batch. */
     buildInsert(task: Task): BatchStatement {
       return { sql: INSERT_SQL, params: insertParams(task) };
+    },
+
+    /** Insert conditional on `actionItemId` still being unconverted. */
+    buildInsertForConversion(task: Task, actionItemId: string): BatchStatement {
+      return { sql: CONVERSION_INSERT_SQL, params: [...insertParams(task), actionItemId] };
     },
 
     async update(id: string, patch: Partial<Task>, now: string): Promise<number> {

@@ -155,7 +155,7 @@ WHEN EXISTS (
 | is_sample               | INTEGER | NOT NULL DEFAULT 0                                                                         |
 | created_at / updated_at | TEXT    | NOT NULL                                                                                   |
 
-索引：`idx_milestones_project_date(project_id, date)`、`idx_milestones_status_date(status, date)`、`idx_milestones_task(linked_task_id)`
+索引：`idx_milestones_project_date(project_id, date)`、`idx_milestones_status_date(status, date)`、`idx_milestones_task(linked_task_id)`、`idx_milestones_date(date)`（0004 新增，供日历按月跨项目查询）
 规则：关联任务完成时仅提示，状态永不自动改（service 层保证）。若未来需要多任务关联，新增 `milestone_task_links` 关联表迁移，不破坏现有字段。
 
 ### 2.5 meetings
@@ -166,6 +166,7 @@ WHEN EXISTS (
 | project_id              | TEXT    | NULL, FK→projects(id) **ON DELETE CASCADE**（可独立存在→可空；随项目永久删除级联，删除确认框中明示） |
 | topic                   | TEXT    | NOT NULL, CHECK(length(trim(topic)) BETWEEN 1 AND 160)                                               |
 | date                    | TEXT    | NOT NULL, 日期格式 CHECK                                                                             |
+| start_time              | TEXT    | NULL DEFAULT NULL（0004 新增；`'HH:MM'` 本地墙钟文本，无时区；格式与 0–23 时范围由触发器校验）       |
 | attendees               | TEXT    | NOT NULL DEFAULT '[]'（JSON 字符串数组）                                                             |
 | agenda                  | TEXT    | NOT NULL DEFAULT ''                                                                                  |
 | notes                   | TEXT    | NOT NULL DEFAULT ''（讨论记录）                                                                      |
@@ -175,6 +176,8 @@ WHEN EXISTS (
 | created_at / updated_at | TEXT    | NOT NULL                                                                                             |
 
 索引：`idx_meetings_project_date(project_id, date)`、`idx_meetings_date(date)`
+
+触发器（0004）：`trg_meetings_start_time_insert` / `trg_meetings_start_time_update` 在 `start_time IS NOT NULL` 时校验 `[0-2][0-9]:[0-5][0-9]` 且小时 ≤ 23，违规 `RAISE(ABORT, 'INVALID_MEETING_TIME')`。ALTER TABLE 无法追加 CHECK，故用触发器表达。
 
 ### 2.6 action_items
 
@@ -192,11 +195,18 @@ WHEN EXISTS (
 
 索引：`idx_action_items_meeting(meeting_id)`、UNIQUE(converted_task_id) 自带索引
 
-**防重复转换（三层防御）**：
+**防重复转换（0004 落地后的四层防御）**：
 
-1. `UNIQUE(converted_task_id)`：一个任务只能对应一个行动项
+1. `UNIQUE(converted_task_id)`（0001）：一个任务只能对应一个行动项。**但它挡不住同一行动项被转换两次**——两次并发转换插入的是两个不同任务，第二次 UPDATE 的 `converted_task_id` 并不重复。
 2. 判定"已转换" = `converted_at IS NOT NULL`（即使任务被删 SET NULL 也不重开转换）
-3. 转换 = Rust 原子命令单事务：`INSERT tasks` → `UPDATE action_items SET converted_task_id=?, converted_at=? WHERE id=? AND converted_at IS NULL`；rowsAffected=0 则整体回滚并提示"已转换"
+3. 转换 = 单个 `execute_batch` 事务，两条语句都带同一条件：
+   `INSERT INTO tasks ... SELECT ... WHERE EXISTS(SELECT 1 FROM action_items WHERE id=? AND converted_at IS NULL)`
+   → `UPDATE action_items SET converted_task_id=?, converted_at=? WHERE id=? AND converted_at IS NULL`；
+   受影响行数 ≠ 2 则整体回滚并提示"已转换"。**任务插入本身也是条件式的**，所以重复转换写入 0 行，而不是留下一个孤儿任务。
+4. `trg_action_items_no_reconvert`（0004）：`OLD.converted_at IS NOT NULL` 且 `NEW.converted_task_id IS NOT OLD.converted_task_id` 时 `RAISE(ABORT, 'ALREADY_CONVERTED')`。空安全的 `IS NOT` 同时放行 `ON DELETE SET NULL`（NEW 为 NULL）与幂等重写同一 task id，只拦"改指向另一个任务"——这正是"任务已删除"不重开转换的 DB 层保证。
+   `trg_action_items_conversion_audit_insert` / `_update`（0004）：写入 `converted_task_id` 却不写 `converted_at` 时 `RAISE(ABORT, 'CONVERSION_AUDIT_REQUIRED')`，保证两列同写、"任务已删除"与"从未转换"永远可区分。
+
+**DB 层边界（如实说明）**：SQLite 无法在一次插入前就知道"这个行动项稍后会被转换"，因此"行动项转任务只能发生一次"的**原子性**由 `execute_batch` 的单事务 + 条件式写入保证，触发器只保证**结果状态**不被破坏；归档项目不得新建任务、会议存在性、目标项目必填等业务前置条件在 service 层拦截，DB 无对应约束。测试 `tests/repositories/migration0004.test.ts` 直接用原始 SQL 绕过 service 验证触发器边界（哪些写入被 ABORT、哪些被放行）。
 
 **双向关联**：正向 `action_items.converted_task_id`；反向查询 `SELECT * FROM action_items WHERE converted_task_id = ?`。单向可写、双向可查，杜绝双写不一致（不加 `tasks.source_action_item_id` 冗余列，YAGNI）。
 
@@ -338,6 +348,11 @@ erDiagram
   不 DROP 任何对象、不重建 `task_dependencies`、不复制或删除任何既有行。
   0001 已提供的自环 CHECK、重复边 UNIQUE、任务 FK CASCADE 与 `dep_type IN ('FS')` 保持原样。
   详见 [§2.3](#23-task_dependenciesfinish-to-start)。
+- `src-tauri/migrations/0004_meetings_action_items.sql`：**纯增量**——1 个 `ALTER TABLE meetings ADD COLUMN start_time`、
+  1 个 `CREATE INDEX idx_milestones_date`、5 个 `CREATE TRIGGER`（会议时间格式 ×2、防重复转换 ×1、转换审计列 ×2）。
+  不新增表、不 DROP 任何对象、不重建任何表、不复制或删除任何既有行，0001/0002/0003 保持原样。
+  会议、行动项、milestones 三张表在 0001 就已建好，阶段 4 只补齐 0001 未能表达的不变式与一个可选列。
+  详见 [§2.5](#25-meetings)、[§2.6](#26-action_items)。
 - 每个 migration 幂等（CREATE TABLE IF NOT EXISTS 风格不用于变更，版本号单调递增，插件按 version 执行一次）
 - Down SQL 仅用于开发期回滚；发布后只前进不后退
 - schema 版本随 JSON 导出携带，导入时校验兼容性

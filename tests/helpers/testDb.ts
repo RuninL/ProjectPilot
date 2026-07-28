@@ -11,6 +11,7 @@ const MIGRATION_FILES = [
   '0001_init.sql',
   '0002_task_lifecycle.sql',
   '0003_task_dependencies.sql',
+  '0004_meetings_action_items.sql',
 ] as const;
 
 /**

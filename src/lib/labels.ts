@@ -1,5 +1,11 @@
 import type { BadgeProps } from '@/components/ui/badge';
-import type { ProjectStatus, TaskPriority, TaskStatus } from '@/types';
+import type {
+  ActionItemStatus,
+  MilestoneStatus,
+  ProjectStatus,
+  TaskPriority,
+  TaskStatus,
+} from '@/types';
 
 /** Display text for enum columns. Stored values stay English; only labels are Chinese. */
 
@@ -41,6 +47,42 @@ export const TASK_PRIORITY_VARIANTS: Record<TaskPriority, BadgeVariant> = {
   high: 'default',
   urgent: 'destructive',
 };
+
+export const MILESTONE_STATUS_LABELS: Record<MilestoneStatus, string> = {
+  upcoming: '待达成',
+  achieved: '已达成',
+  missed: '已错过',
+  cancelled: '已取消',
+};
+
+export const ACTION_ITEM_STATUS_LABELS: Record<ActionItemStatus, string> = {
+  open: '待处理',
+  in_progress: '进行中',
+  done: '已完成',
+  cancelled: '已取消',
+};
+
+export const MILESTONE_STATUS_VARIANTS: Record<MilestoneStatus, BadgeVariant> = {
+  upcoming: 'secondary',
+  achieved: 'default',
+  missed: 'destructive',
+  cancelled: 'outline',
+};
+
+export const ACTION_ITEM_STATUS_VARIANTS: Record<ActionItemStatus, BadgeVariant> = {
+  open: 'secondary',
+  in_progress: 'default',
+  done: 'outline',
+  cancelled: 'outline',
+};
+
+export const MILESTONE_STATUS_OPTIONS = Object.entries(MILESTONE_STATUS_LABELS).map(
+  ([value, label]) => ({ value: value as MilestoneStatus, label }),
+);
+
+export const ACTION_ITEM_STATUS_OPTIONS = Object.entries(ACTION_ITEM_STATUS_LABELS).map(
+  ([value, label]) => ({ value: value as ActionItemStatus, label }),
+);
 
 export const PROJECT_STATUS_OPTIONS = Object.entries(PROJECT_STATUS_LABELS).map(
   ([value, label]) => ({ value: value as ProjectStatus, label }),
