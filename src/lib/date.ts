@@ -25,6 +25,14 @@ export function todayHK(): string {
   }).format(new Date());
 }
 
+/**
+ * Current instant as a UTC ISO-8601 timestamp, for `created_at`/`updated_at`
+ * audit columns only. Business dates must come from `todayHK()`.
+ */
+export function nowIso(): string {
+  return new Date().toISOString();
+}
+
 /** True when `value` is a real 'YYYY-MM-DD' calendar date (rejects 2026-02-30 etc.). */
 export function isValidDateStr(value: string): boolean {
   if (!DATE_RE.test(value)) {

@@ -27,26 +27,27 @@
 
 ### 2.1 已核实的插件能力边界
 
-| 能力 | 现状 | 来源 |
-|---|---|---|
-| Migration | 支持（Rust 端 Migration{version, description, sql, kind}） | [Tauri SQL 插件文档](https://v2.tauri.app/plugin/sql/) |
-| execute/select | 支持，`$1..$n` 参数绑定 | 同上 |
-| 事务 | **无一等公民封装**；issue #886 自 2024 年起 Open | [Issue #886](https://github.com/tauri-apps/plugins-workspace/issues/886) |
-| 类型安全 | select 返回无类型，需前端收窄 | 插件 guest-js 源码 |
-| 权限 | 默认只含读取/load/close；`execute` 需显式 `sql:allow-execute` | [Tauri SQL 插件文档](https://v2.tauri.app/plugin/sql/) |
+| 能力           | 现状                                                          | 来源                                                                     |
+| -------------- | ------------------------------------------------------------- | ------------------------------------------------------------------------ |
+| Migration      | 支持（Rust 端 Migration{version, description, sql, kind}）    | [Tauri SQL 插件文档](https://v2.tauri.app/plugin/sql/)                   |
+| execute/select | 支持，`$1..$n` 参数绑定                                       | 同上                                                                     |
+| 事务           | **无一等公民封装**；issue #886 自 2024 年起 Open              | [Issue #886](https://github.com/tauri-apps/plugins-workspace/issues/886) |
+| 类型安全       | select 返回无类型，需前端收窄                                 | 插件 guest-js 源码                                                       |
+| 权限           | 默认只含读取/load/close；`execute` 需显式 `sql:allow-execute` | [Tauri SQL 插件文档](https://v2.tauri.app/plugin/sql/)                   |
 
 **核心陷阱**：插件底层是 sqlx 连接池，前端裸发 `BEGIN`/`COMMIT` 可能被分派到不同物理连接，事务边界失效、回滚不可靠（#886 报告的现象）。因此任何多语句写操作都不能依赖前端拼事务。
 
 ### 2.2 决策：混合持久层
 
-| 场景 | 通道 | 理由 |
-|---|---|---|
-| 单表 CRUD、查询、Dashboard 聚合 | tauri-plugin-sql `select/execute` | 官方维护、样板少 |
-| **必须原子的多语句写** | 自写 Rust `#[tauri::command] execute_batch(statements)`：单连接内 BEGIN…COMMIT，出错整体回滚 | 绕开连接池事务陷阱 |
-| Schema migration | 插件 Migration（Up/Down，幂等） | 官方机制 |
-| 备份/恢复/打开数据目录 | 自写 Rust command（文件操作 + 连接管理） | 需要文件锁与关闭连接 |
+| 场景                            | 通道                                                                                         | 理由                 |
+| ------------------------------- | -------------------------------------------------------------------------------------------- | -------------------- |
+| 单表 CRUD、查询、Dashboard 聚合 | tauri-plugin-sql `select/execute`                                                            | 官方维护、样板少     |
+| **必须原子的多语句写**          | 自写 Rust `#[tauri::command] execute_batch(statements)`：单连接内 BEGIN…COMMIT，出错整体回滚 | 绕开连接池事务陷阱   |
+| Schema migration                | 插件 Migration（Up/Down，幂等）                                                              | 官方机制             |
+| 备份/恢复/打开数据目录          | 自写 Rust command（文件操作 + 连接管理）                                                     | 需要文件锁与关闭连接 |
 
 必须走原子命令的操作（白名单）：
+
 1. 行动项转任务（INSERT task + UPDATE action_item）
 2. 项目永久删除的级联清理
 3. 全量 JSON 导入（清空 + 重建 8 张表）
@@ -75,30 +76,31 @@ GanttData（纯领域数据: bars[], milestones[], links[], conflicts[]）
 ```
 
 理由（三模型共识）：
+
 - 第一版只需"正确稳定"的只读时间轴 + 日期编辑，自研 SVG 约 400–600 行，零运行时依赖、零许可证风险、可快照测试
 - 循环/冲突/跨项目检测是业务逻辑，永远由自己的 `dependencyGraph.ts` 持有，与渲染库解耦——"Gantt 是领域模型的投影，而不是让 Gantt 库成为领域模型"
 
 ### 3.2 升级与降级路径
 
-| 路径 | 选择 | 条件与注意 |
-|---|---|---|
+| 路径                        | 选择                                   | 条件与注意                                                                                                                                                  |
+| --------------------------- | -------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | 升级（需要拖拽/自动排期时） | SVAR React Gantt（npm 包 2.4+ 为 MIT） | 只依赖 npm 包，**不得复制其 GPLv3 demo 仓库代码**；不得依赖 PRO-only 功能（auto-scheduling、critical path、baselines、export、undo/redo）；使用前复核许可证 |
-| 降级（自研遇性能/工期瓶颈） | frappe-gantt（MIT，稳定但节奏慢） | 需自写 React wrapper；milestone 菱形需叠层实现 |
-| 排除 | gantt-task-react | 2022 年后停止维护，弃养风险 |
-| 极限降级 | Tailwind 绝对定位进度条（无依赖线） | 保底可视化，不阻塞发布 |
+| 降级（自研遇性能/工期瓶颈） | frappe-gantt（MIT，稳定但节奏慢）      | 需自写 React wrapper；milestone 菱形需叠层实现                                                                                                              |
+| 排除                        | gantt-task-react                       | 2022 年后停止维护，弃养风险                                                                                                                                 |
+| 极限降级                    | Tailwind 绝对定位进度条（无依赖线）    | 保底可视化，不阻塞发布                                                                                                                                      |
 
 ## 4. 依赖图与检测算法
 
 **位置：前端 TypeScript 内存图**（三模型共识）。SQLite 只负责持久化边与外键；个人量级（千级任务）内存 O(V+E) 足够，纯函数便于 Vitest 覆盖。
 
-| 检测 | 算法 | 时机 |
-|---|---|---|
-| 循环依赖（全图） | Kahn 拓扑排序（同时产出合法顺序，供未来自动排期） | 载入 Gantt、导入数据时 |
-| 加边即时防环 | 从 successor 出发 DFS/BFS 判断 predecessor 可达性，可达则拒绝 | 创建/编辑依赖时（阻止保存） |
-| 排期冲突（FS 语义） | 对每条边 A→B：`A.due_date > B.start_date` 即冲突 | Gantt 渲染时黄色警示 |
-| 跨项目依赖 | 遍历边比较两端 project_id | UI 禁止创建；对导入产生的存量数据警示标记 |
-| blocked 传导 | 从 status=blocked 节点正向可达集合 | Dashboard 风险区 |
-| Milestone 前置未完成 | milestone 关联任务的前驱链存在非 done 任务且 14 天内 | Dashboard 风险区 |
+| 检测                 | 算法                                                          | 时机                                      |
+| -------------------- | ------------------------------------------------------------- | ----------------------------------------- |
+| 循环依赖（全图）     | Kahn 拓扑排序（同时产出合法顺序，供未来自动排期）             | 载入 Gantt、导入数据时                    |
+| 加边即时防环         | 从 successor 出发 DFS/BFS 判断 predecessor 可达性，可达则拒绝 | 创建/编辑依赖时（阻止保存）               |
+| 排期冲突（FS 语义）  | 对每条边 A→B：`A.due_date > B.start_date` 即冲突              | Gantt 渲染时黄色警示                      |
+| 跨项目依赖           | 遍历边比较两端 project_id                                     | UI 禁止创建；对导入产生的存量数据警示标记 |
+| blocked 传导         | 从 status=blocked 节点正向可达集合                            | Dashboard 风险区                          |
+| Milestone 前置未完成 | milestone 关联任务的前驱链存在非 done 任务且 14 天内          | Dashboard 风险区                          |
 
 ## 5. 日期与时区策略
 
@@ -115,13 +117,13 @@ GanttData（纯领域数据: bars[], milestones[], links[], conflicts[]）
 
 ## 6. 状态管理（Zustand 分域）
 
-| Store | 内容 |
-|---|---|
-| `useAppStore` | 主题、侧栏、全局错误、dbReady |
-| `useProjectStore` | 项目列表缓存、activeProjectId、归档过滤 |
+| Store                | 内容                                           |
+| -------------------- | ---------------------------------------------- |
+| `useAppStore`        | 主题、侧栏、全局错误、dbReady                  |
+| `useProjectStore`    | 项目列表缓存、activeProjectId、归档过滤        |
 | `useTaskFilterStore` | 筛选/搜索/排序/批量选择（UI 态，不含数据本体） |
-| `useGanttStore` | 视图档位、可见范围、选中任务、冲突覆盖层 |
-| `useDashboardStore` | 风险卡缓存 + 失效标记 |
+| `useGanttStore`      | 视图档位、可见范围、选中任务、冲突覆盖层       |
+| `useDashboardStore`  | 风险卡缓存 + 失效标记                          |
 
 原则：store 存"UI 状态与轻缓存"；写操作走 service→repository→DB，成功后失效重查。表单草稿由 React Hook Form 管理，不进 store。禁止最终保留 mock 数据。
 
@@ -165,18 +167,18 @@ projectpilot/
 
 ## 9. 风险与降级策略汇总
 
-| 风险 | 概率 | 影响 | 缓解 / 降级 |
-|---|---|---|---|
-| 插件事务不可靠（#886） | 高 | 高（数据损坏） | 多语句写全走 Rust 原子命令；预案整体迁 rusqlite |
-| select 无类型 | 高 | 中 | repository 层 Zod 收窄，unknown 不出边界 |
-| Gantt 自研延期 | 中 | 中 | 降级 frappe-gantt；极限降级纯 CSS 时间条 |
-| SVAR 许可证/PRO 边界误用 | 低 | 中 | 只依赖 MIT npm 包；不依赖 PRO 功能；使用前复核 |
-| SQLite 外键默认关闭 | 高 | 高 | 每连接 PRAGMA + 启动断言（查询 pragma 值不为 1 则报错） |
-| 时区差一天 | 中 | 中 | date.ts 统一 + 禁裸 new Date + UTC+8 午夜单测 |
-| 两层父子被绕过 | 中 | 中 | DB 触发器 + service 双重校验 |
-| 恢复损坏当前库 | 低 | 高 | 恢复前自动备份 + 二次确认，全程 Rust 命令内完成 |
-| WebView2 缺失（旧 Win10） | 低 | 中 | Tauri 安装器引导安装 WebView2 运行时 |
-| 双开写库冲突 | 低 | 中 | tauri-plugin-single-instance |
+| 风险                      | 概率 | 影响           | 缓解 / 降级                                             |
+| ------------------------- | ---- | -------------- | ------------------------------------------------------- |
+| 插件事务不可靠（#886）    | 高   | 高（数据损坏） | 多语句写全走 Rust 原子命令；预案整体迁 rusqlite         |
+| select 无类型             | 高   | 中             | repository 层 Zod 收窄，unknown 不出边界                |
+| Gantt 自研延期            | 中   | 中             | 降级 frappe-gantt；极限降级纯 CSS 时间条                |
+| SVAR 许可证/PRO 边界误用  | 低   | 中             | 只依赖 MIT npm 包；不依赖 PRO 功能；使用前复核          |
+| SQLite 外键默认关闭       | 高   | 高             | 每连接 PRAGMA + 启动断言（查询 pragma 值不为 1 则报错） |
+| 时区差一天                | 中   | 中             | date.ts 统一 + 禁裸 new Date + UTC+8 午夜单测           |
+| 两层父子被绕过            | 中   | 中             | DB 触发器 + service 双重校验                            |
+| 恢复损坏当前库            | 低   | 高             | 恢复前自动备份 + 二次确认，全程 Rust 命令内完成         |
+| WebView2 缺失（旧 Win10） | 低   | 中             | Tauri 安装器引导安装 WebView2 运行时                    |
+| 双开写库冲突              | 低   | 中             | tauri-plugin-single-instance                            |
 
 ## 10. 未来 AI 功能安全边界（硬规则）
 

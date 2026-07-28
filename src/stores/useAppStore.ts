@@ -1,7 +1,8 @@
 import { create } from 'zustand';
 import type { AppError } from '@/lib/errors';
+import type { Theme } from '@/lib/theme';
 
-export type Theme = 'light' | 'dark' | 'system';
+export type { Theme };
 
 interface AppState {
   theme: Theme;
@@ -14,9 +15,12 @@ interface AppState {
   setGlobalError: (error: AppError | null) => void;
 }
 
-/** Global UI state: theme, sidebar, DB readiness, and the global error banner. */
+/**
+ * Global UI state: theme, sidebar, DB readiness, and the global error banner.
+ * The product is dark-first, so `dark` is the default rather than `system`.
+ */
 export const useAppStore = create<AppState>((set) => ({
-  theme: 'system',
+  theme: 'dark',
   sidebarOpen: true,
   dbReady: false,
   globalError: null,

@@ -5,6 +5,7 @@ import { createMeetingRepository } from './meeting.repo';
 import { createMilestoneRepository } from './milestone.repo';
 import { createProjectRepository } from './project.repo';
 import { createProjectLinkRepository } from './projectLink.repo';
+import { createSampleDataRepository } from './sample.repo';
 import { createTaskRepository } from './task.repo';
 import { createTaskDependencyRepository } from './taskDependency.repo';
 
@@ -16,6 +17,7 @@ export * from './meeting.repo';
 export * from './actionItem.repo';
 export * from './projectLink.repo';
 export * from './appSetting.repo';
+export * from './sample.repo';
 
 /** Build every repository bound to the live SQLite singleton. */
 export async function getRepositories() {
@@ -29,6 +31,7 @@ export async function getRepositories() {
     actionItems: createActionItemRepository(db),
     projectLinks: createProjectLinkRepository(db),
     appSettings: createAppSettingRepository(db),
+    sample: createSampleDataRepository(db),
   };
 }
 

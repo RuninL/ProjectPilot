@@ -1,14 +1,29 @@
-import { LayoutDashboard } from 'lucide-react';
+import {
+  CalendarDays,
+  CheckSquare,
+  FolderKanban,
+  LayoutDashboard,
+  Settings,
+  Users,
+} from 'lucide-react';
+import type { LucideIcon } from 'lucide-react';
 import { NavLink, Outlet } from 'react-router-dom';
 import { cn } from '@/lib/cn';
 
 interface NavItem {
   to: string;
   label: string;
+  icon: LucideIcon;
 }
 
-// Only the Dashboard route exists in Phase 1; feature routes arrive in later phases.
-const NAV_ITEMS: NavItem[] = [{ to: '/', label: '仪表盘' }];
+const NAV_ITEMS: NavItem[] = [
+  { to: '/', label: '仪表盘', icon: LayoutDashboard },
+  { to: '/projects', label: '项目', icon: FolderKanban },
+  { to: '/tasks', label: '我的任务', icon: CheckSquare },
+  { to: '/calendar', label: '日历', icon: CalendarDays },
+  { to: '/meetings', label: '会议', icon: Users },
+  { to: '/settings', label: '设置', icon: Settings },
+];
 
 /** Application shell: sidebar navigation + routed content area. */
 export function AppLayout() {
@@ -24,15 +39,17 @@ export function AppLayout() {
             <NavLink
               key={item.to}
               to={item.to}
+              end={item.to === '/'}
               className={({ isActive }) =>
                 cn(
-                  'rounded-md px-3 py-2 text-sm font-medium transition-colors',
+                  'flex items-center gap-2 rounded-md px-3 py-2 text-sm font-medium transition-colors',
                   isActive
                     ? 'bg-accent text-accent-foreground'
                     : 'text-muted-foreground hover:bg-accent hover:text-accent-foreground',
                 )
               }
             >
+              <item.icon className="h-4 w-4" aria-hidden />
               {item.label}
             </NavLink>
           ))}
