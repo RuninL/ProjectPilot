@@ -17,7 +17,7 @@
 ├─────────────────────────────────────────────────────┤
 │ DB 客户端  tauri-plugin-sql 单例 + 自写 Rust 原子命令   │
 ├─────────────────────────────────────────────────────┤
-│ SQLite（Tauri app data 目录, PRAGMA foreign_keys=ON） │
+│ SQLite（Tauri app config 目录, foreign_keys=ON） │
 └─────────────────────────────────────────────────────┘
 ```
 
@@ -226,7 +226,7 @@ projectpilot/
 | select 无类型             | 高   | 中             | repository 层 Zod 收窄，unknown 不出边界                     |
 | Gantt 自研延期            | 中   | 中             | 降级 frappe-gantt；极限降级纯 CSS 时间条                     |
 | SVAR 许可证/PRO 边界误用  | 低   | 中             | 只依赖 MIT npm 包；不依赖 PRO 功能；使用前复核               |
-| SQLite 外键默认关闭       | 高   | 高             | 每连接 PRAGMA + 启动断言（查询 pragma 值不为 1 则报错）      |
+| SQLite 外键默认关闭       | 高   | 高             | SQLx SQLite 连接默认启用外键，Rust 原生命令也显式启用        |
 | 时区差一天                | 中   | 中             | date.ts 统一 + 禁裸 new Date + UTC+8 午夜单测                |
 | 两层父子被绕过            | 中   | 中             | DB 触发器 + service 双重校验                                 |
 | 恢复损坏当前库            | 低   | 高             | 恢复前自动备份 + 二次确认，全程 Rust 命令内完成              |

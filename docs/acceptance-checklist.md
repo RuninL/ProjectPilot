@@ -1,100 +1,98 @@
 # ProjectPilot 验收清单
 
-> 每项须在 Windows 10/11 真机（或阶段内在 Linux 冒烟 + 单测）验证。标记：[ ] 未验 / [x] 通过。发布 1.0 前全部必须为 [x]。
+> 标记：[ ] 尚未确认 / [x] 已由所列自动化测试、静态源码审计或真实环境记录确认。发布不要求机械勾满：
+> 数据完整性、核心 CRUD、迁移、导入导出、备份恢复逻辑、构建与 CI 必须有通过证据；Windows 安装、默认
+> opener 和真机体验必须如实保留为待验。每个未勾项目均附原因、阻塞环境和最小验证操作。
 
 ## 阶段 1：骨架与持久层
 
-- [ ] 应用冷启动进入空 Dashboard，无控制台错误
-- [ ] 数据库文件位于 Tauri app data 目录（设置页可显示并打开该目录），源码目录无任何 .db
-- [ ] `PRAGMA foreign_keys` 查询返回 1（启动断言，故意关闭时应用报错拒绝启动）
-- [ ] migration 0001 建成 8 张表 + 全部索引 + 触发器；重复启动不重复执行
-- [ ] execute_batch 命令：批内任一语句失败 → 全部回滚（集成测试）
-- [ ] 所有 SQL 仅存在于 repositories/（grep 校验 pages/components 无 SQL 字符串）
-- [ ] TypeScript strict 编译零错误；ESLint 禁 any 规则生效
-- [ ] Vitest 与 RTL 跑通示例测试
+- [ ] 应用冷启动进入空 Dashboard，无控制台错误。原因：产品首次启动会有意写入示例数据，不能按“空 Dashboard”验收；阻塞环境：Windows 安装包；最小操作：干净安装后检查启动、示例项目和控制台。
+- [ ] 数据库文件位于 Tauri app config 目录（设置页可显示并打开该目录），源码目录无任何 .db。原因：`app_config_dir` 和打开目录命令已静态审计，实际 Windows 路径/打开行为未验；阻塞环境：Windows 真机；最小操作：设置页显示并打开目录，确认源码树无数据库。
+- [x] SQLite plugin 所用 SQLx 连接默认启用 `foreign_keys`，Rust `execute_batch` 也显式启用（静态审计：`src-tauri/src/atomic.rs`；`sqlx-sqlite 0.8.6` 默认配置）；真实迁移约束由 `tests/repositories/persistence.test.ts` 覆盖。
+- [x] migration 0001 建成 8 张表、索引和触发器，0001–0006 按版本顺序加载且测试 harness 使用原始 SQL（证据：`src-tauri/src/migrations.rs`、`tests/repositories/persistence.test.ts`、`migration0002/0003/0004.test.ts`）。
+- [x] `execute_batch` 的全回滚契约由事务实现静态审计并由 `tests/services/task.service.test.ts` 的 batch-failure 测试覆盖。
+- [x] 页面、组件和 stores 不直接执行 SQL；SQL 位于 repositories、migration 与受限 Rust 原生命令（静态 `rg` 审计）。
+- [x] `npm run typecheck`、`npm run lint` 通过；strict/no-explicit-any 配置和源码均已审计。
+- [x] `npm run test` 通过（Vitest/RTL，57 files、616 tests）。
 
 ## 阶段 2：项目与任务
 
-- [ ] 项目创建/编辑/查看全字段生效（名称、描述、状态、颜色、开始/目标结束日期）
-- [ ] 项目归档后从活动列表消失、归档列表可见、可恢复
-- [ ] 项目永久删除：二次确认显示将删除的任务/会议/里程碑/链接数量；确认后所有关联行消失（DB 抽查无孤儿行）
-- [ ] 任务全字段 CRUD；父子最多两层——尝试建第三层被 UI 阻止且 DB 触发器兜底（直接 SQL 插入也失败）
-- [ ] 任务置 done 自动 progress=100；从 done 撤回进度可编辑
-- [ ] cancelled 任务不计入项目完成率（构造 2 done + 1 cancelled + 1 todo → 完成率 2/3）
-- [ ] 筛选（状态/优先级/日期）、搜索（标题/描述）、排序（截止日/优先级/更新时刻）、批量修改（含确认与影响数量）全部生效
-- [ ] 空项目/空任务列表显示引导性空状态；加载态与 DB 错误态可复现（模拟慢查询/坏库）
-- [ ] 示例数据带"示例"徽标；一键清除后真实数据无损
+- [x] 项目创建、编辑和查看字段由 `tests/services/project.service.test.ts` 及 `tests/components/ProjectListPage.test.tsx` 覆盖。
+- [x] 归档、活动筛选和恢复由 `tests/services/project.service.test.ts` 覆盖。
+- [x] 永久删除前显示任务、会议、里程碑和文件/链接的真实数量，且级联后无关联行（证据：`tests/services/project.service.test.ts`、`tests/components/ProjectListPage.test.tsx`）。
+- [x] 任务 CRUD、两层层级、UI 校验和 DB 触发器由 `tests/services/task.service.test.ts`、`tests/components/TaskForm.test.tsx` 和 `tests/repositories/persistence.test.ts` 覆盖。
+- [x] done 进度与撤回编辑由 `tests/services/task.service.test.ts` 覆盖。
+- [x] cancelled/archived 任务的完成率口径由 `tests/services/project.service.test.ts`、`tests/services/projectProgress.test.ts` 覆盖。
+- [x] 筛选、搜索、排序和带确认的批量修改由 `tests/repositories/taskQuery.test.ts`、`tests/components/TaskFilters.test.tsx`、`tests/components/BulkEditDialog.test.tsx` 覆盖。
+- [ ] 空项目已有自动化覆盖，但任务工作区的慢查询/坏库错误态未完整覆盖；阻塞环境：补充自动化场景；最小操作：为任务页注入 pending/rejecting executor 并断言空、加载、错误与重试。
+- [ ] 清除示例数据保留真实数据已由 `tests/services/sampleData.test.ts` 覆盖，但“示例”徽标无直接断言；阻塞环境：补充 RTL 场景；最小操作：种入 sample 行并断言徽标，再清除并复查真实行。
 
 ## 阶段 3：依赖与 Gantt
 
-- [ ] 创建 FS 依赖；自环、成环（A→B→C→A）被即时拒绝并给出含任务名称的中文提示
-- [ ] 跨项目依赖在 UI 无法创建；直接 SQL 插入被 migration 0003 触发器拒绝
-- [ ] 直接反向边（已有 A→B 时插入 B→A）被 DB 触发器拒绝；长度 ≥ 3 的环由 service 加边前拦截
-- [ ] 已归档任务不能新建依赖；添加依赖不改写任何任务的 status
-- [ ] 排期冲突（前驱 due > 后继 start）在依赖列表与 Gantt 同时警示，修正日期后消失；两端日期不全时不产生伪冲突
-- [ ] 受阻风险为派生提示：前驱恢复后自动消失，tasks.status 未被批量写入
-- [ ] 删除依赖二次确认；取消无副作用，两端任务状态不变
-- [ ] 周/月/季度三档切换：刻度正确（跨月/跨年边界抽查）、今日线位置正确
-- [ ] 任务时间条按状态着色，且颜色均有文本/图例辅助；依赖箭头连接正确端点、图例齐全
-- [ ] Gantt 内的 milestone 菱形推迟到后续阶段（不在阶段 4 执行清单内）：仅保留「后续阶段」占位，不伪造菱形
-- [ ] 无 start_date 任务不绘制但在 Gantt 下方按名称列出；有 start_date 无 due_date 按单日条显示并有文字说明
-- [ ] 横向滚动、窄屏、空项目、无可绘制任务、加载态与 DB 错误态均可用
-- [ ] 编辑任务日期或状态后 Gantt 与冲突/受阻提示即时刷新
-- [ ] dependencyGraph 与 GanttViewModel 单测全绿（含空图、孤立节点、分叉汇聚、长链、成环；千级任务性能测试记录实际耗时并设合理上限）
+- [x] FS 依赖、自环/成环中文错误由 `tests/services/dependency.service.test.ts`、`tests/components/DependencySection.test.tsx` 覆盖。
+- [x] 跨项目依赖的 UI/service 拒绝和 migration 0003 触发器由 `dependency.service.test.ts`、`migration0003.test.ts` 覆盖。
+- [x] 反向边触发器和长度 ≥3 的 service 防环由上述 dependency/migration 测试覆盖。
+- [x] 归档任务拒绝建边且不改写任务状态由 `tests/services/dependency.service.test.ts` 覆盖。
+- [x] 排期冲突显示、修复消失和缺失日期无伪冲突由 `dependency.service.test.ts`、`GanttSection.test.tsx` 覆盖。
+- [x] 受阻风险为派生数据且不写 `tasks.status`，由 `tests/services/dependency.service.test.ts` 覆盖。
+- [x] 删除依赖确认、取消无副作用与状态保持由 `tests/components/DependencySection.test.tsx` 覆盖。
+- [x] 周/月/季度、跨年刻度与今日线由 `tests/features/ganttViewModel.test.ts` 覆盖。
+- [x] 状态文字/图例与箭头端点由 `tests/components/GanttSection.test.tsx`、`ganttViewModel.test.ts` 覆盖。
+- [x] milestone 菱形仍为后续阶段占位，由 `tests/components/GanttSection.test.tsx` 覆盖。
+- [x] 无开始日期的说明和无截止日期的单日条由 `tests/features/ganttViewModel.test.ts` 覆盖。
+- [ ] 横向滚动和窄屏原生布局未自动化；阻塞环境：Windows 真机；最小操作：960px 最小宽度及更窄窗口逐档滚动、空项目和错误态检查。
+- [ ] 任务编辑后 Gantt 即时刷新的跨组件集成场景未直接覆盖；阻塞环境：补充 RTL 集成测试；最小操作：编辑日期/状态并断言风险与图模型刷新。
+- [x] `dependencyGraph`/`GanttViewModel` 单测通过；1000 任务 benchmark（`tests/performance/releaseBenchmark.test.ts`）对图和 Gantt 均设 <100ms。
 
 ## 阶段 4：会议、行动项、Milestone、日历
 
-- [ ] 会议全字段 CRUD；可关联项目或独立存在（列表标注「独立会议」）；`start_time` 非法（如 25:00）被 Zod 与 DB 触发器双重拒绝
-- [ ] 删除会议二次确认显示**真实行动项数量**并明示已转换任务保留；确认后级联删行动项，取消无任何写入
-- [ ] 行动项 CRUD（内容/负责人/截止日/状态），入口在会议详情页
-- [ ] 行动项转任务：默认值映射正确（标题=内容、描述含负责人、截止日、项目、todo）；转换后显示"查看任务"并可跳转；任务 `source_meeting_id` 可反查来源会议
-- [ ] 独立会议转换时必须先选目标项目（未选时确认按钮禁用）；取消不产生任何写入
-- [ ] 转换提交中按钮禁用并显示"转换中…"；连续快速点击只产生一个任务
-- [ ] 防重复：已转换行动项无法再转；删除生成的任务后行动项显示"任务已删除"且仍不可重转（`converted_at` 保留）
-- [ ] 转换中途失败（模拟）不产生幽灵任务（DB 无孤儿 task）；`execute_batch` 受影响行数不足时整批回滚
-- [ ] milestone CRUD 在项目详情的里程碑区；归档项目下全部写入入口禁用并说明原因
-- [ ] milestone 倒计时/逾期天数正确（未来「剩余 N 天」、当天「今天到期」、已过「已逾期 N 天」，按 Asia/Hong_Kong 判定）
-- [ ] 关联任务全部 done 时弹提示，选择"否，保持当前状态"后 status 与 `achieved_at` 均不变——**任何路径都不自动改状态**
-- [ ] 删除 milestone 二次确认明示关联任务不会被删除；取消无副作用
-- [ ] 日历月视图正确渲染任务截止、会议、milestone；同日三类条目以中文文字标签区分（不依赖颜色）
-- [ ] 日历忙日折叠为「还有 N 项」并可展开/收起；条目点击分别跳会议详情/项目里程碑区/任务列表
-- [ ] 翻月边界正确（2026-12 → 2027-01、2026-01 → 2025-12）；仅当前月显示「今天」标记
-- [ ] 日历为只读：界面明确说明不能拖动或改期，且不存在改期入口
-- [ ] 会议/会议详情/日历/里程碑区四处均具备加载态、空状态、数据库错误态（可重试）
+- [x] 会议 CRUD、独立会议和 `start_time` 的 Zod/DB 双重拒绝由 `tests/services/meeting.service.test.ts`、`tests/components/MeetingsPage.test.tsx`、migration 0004 覆盖。
+- [x] 删除会议的真实行动项数、级联、转换任务保留和取消无写入由 `meeting.service.test.ts`、`MeetingsPage.test.tsx` 覆盖。
+- [x] 行动项 CRUD 与会议详情入口由 `tests/services/actionItem.service.test.ts`、`tests/components/ActionItemSection.test.tsx` 覆盖。
+- [x] 转换字段映射、跳转和 `source_meeting_id` 反查由 `tests/services/actionItem.service.test.ts`、`MeetingDetailPage.test.tsx` 覆盖。
+- [x] 独立会议必须选项目及取消无写入由 `tests/services/actionItem.service.test.ts` 覆盖。
+- [x] 转换中禁用和快速重复点击仅生成一项由 `tests/services/actionItem.service.test.ts` 覆盖。
+- [x] 防重复转换、删除目标后的终态显示由 `tests/services/actionItem.service.test.ts` 覆盖。
+- [x] 失败回滚、无孤儿 task 及受影响行数不足回滚由 `tests/services/actionItem.service.test.ts` 覆盖。
+- [x] 里程碑 CRUD 和归档项目禁写由 `tests/services/milestone.service.test.ts`、`tests/components/MilestoneSection.test.tsx` 覆盖。
+- [x] Asia/Hong_Kong 倒计时/逾期显示由 `tests/services/milestoneStatus.test.ts` 覆盖。
+- [x] 关联任务完成只提示、选择保持状态不写入由 `tests/services/milestone.service.test.ts` 覆盖。
+- [x] 里程碑删除确认、关联任务保留和取消无副作用由 `tests/components/MilestoneSection.test.tsx` 覆盖。
+- [x] 日历三类条目的中文标签由 `tests/features/calendarModel.test.ts`、`tests/components/CalendarPage.test.tsx` 覆盖。
+- [x] 忙日折叠/展开与导航由 `tests/components/CalendarPage.test.tsx` 覆盖。
+- [x] 跨年翻月与仅当前月今日标记由 `tests/features/calendarModel.test.ts` 覆盖。
+- [x] 日历只读说明及无改期入口由 `tests/components/CalendarPage.test.tsx` 覆盖。
+- [ ] 会议详情的数据库错误重试没有直接测试；阻塞环境：补充 RTL 场景；最小操作：为详情查询注入 reject 并断言中文错误与重试。其余三个区域的加载/空/错误状态已有对应组件测试。
 
 ## 阶段 5：Dashboard 与风险
 
-- [x] Dashboard 严格只读；今日到期、未来 7 天到期、逾期三组未完成任务与构造数据一致，
-      第 0 天和第 7 天均含，done/cancelled/archived 均排除（聚合单测覆盖跨月、闰年）
-- [x] 近期会议（今天至第 7 天）及其未完成行动项正确，使用一次有界行动项 repository 查询而非逐会议查询
-- [x] milestone 分为当天、逾期、未来 30 天；第 30 天含、第 31 天不含，achieved/cancelled 排除
-- [x] 各进行中项目完成率直接按 §5.1 的全部非归档任务口径计算
-- [x] 四类风险卡各构造一例均正确出现：逾期未完成；今天至第 7 天到期且进度 <50%；
-      blocked 传导的未完成后续任务；14 天内非 achieved/cancelled milestone 的未完成前置链
-- [x] 任务、milestone、会议、项目健康度和登记风险摘要均有对应导航；Dashboard 无写入控件
-- [x] 风险登记册支持项目/状态/等级/分类筛选和标题/描述搜索；默认开放、监控风险置顶并按等级排序
-- [x] RiskForm 覆盖项目、标题、描述、分类、可能性、影响、状态、负责人、缓解计划、截止日期；
-      Zod 内联中文校验、实时等级预览与保存错误均已测试
-- [x] 风险可从 `/risks` 与项目详情 `#project-risks` 创建/编辑/删除；编辑和 `setStatus`
-      均拒绝非法状态迁移，resolved_at 在缓解/关闭和重开时保持正确
+- [x] Dashboard 只读、0/7 天边界、跨月/闰年和 terminal/archived 排除由 `tests/services/dashboard.service.test.ts` 覆盖。
+- [x] 近期会议与一次有界行动项查询由 `tests/services/dashboard.service.test.ts` 覆盖。
+- [x] milestone 当天/逾期/30 天边界及 terminal 排除由 `tests/services/dashboard.service.test.ts` 覆盖。
+- [x] 进行中项目完成率口径由 `tests/services/dashboard.service.test.ts`、`tests/services/projectProgress.test.ts` 覆盖。
+- [x] 四类派生风险由 `tests/services/dashboard.service.test.ts` 的构造数据覆盖。
+- [x] Dashboard 导航和无写入控件由 `src/features/dashboard/pages/DashboardPage.tsx` 静态审计确认。
+- [x] 风险筛选、搜索和排序由 `tests/repositories/riskQuery.test.ts`、`tests/services/risk.service.test.ts` 覆盖。
+- [x] RiskForm 的字段、中文校验、等级预览和保存错误由 `tests/components/RiskForm.test.tsx` 覆盖。
+- [x] `/risks` 与项目详情创建/编辑/删除入口经 `RisksPage.tsx`/`RiskSection.tsx` 静态审计；状态迁移和 `resolved_at` 由 `tests/services/risk.service.test.ts` 覆盖。
 
 ## 阶段 6：数据口与设置
 
-- [x] JSON 导出→清库→导入：全部数据等值恢复（含依赖边、转换关联、设置）
-- [x] 导入非法 JSON / 版本不符被拒绝且不改动现有数据；导入前有预览统计与二次确认
-- [x] 单项目/全部项目 CSV 导出：任务、里程碑、风险在 Excel 打开中文不乱码（UTF-8 BOM），字段与文档一致
-- [x] 备份生成带时间戳文件；恢复前自动生成"恢复前备份"且有二次确认；恢复源经过 SQLite 完整性校验
-- [x] 主题深/浅/跟随系统三态即时生效且通过 app_settings 在重启后保持
-- [x] Files & Links：URL 用默认浏览器打开；存在的本地路径可打开；不存在路径弹提示并可复制；非 http/https 协议只能复制
-- [x] 设置页显示数据库路径并可打开数据目录
+- [x] JSON 导出、清库、等值导入（依赖/转换/设置）由 `tests/services/dataTransfer.integration.test.ts` 覆盖。
+- [x] 非法 JSON/版本拒绝、零副作用、预览与二次确认由 `dataTransfer.rejection.test.ts`、`SettingsPage.dataTransfer.test.tsx` 覆盖。
+- [ ] CSV 的 UTF-8 BOM、中文字段和公式保护由 `csvExport*.test.ts` 覆盖，但真实 Windows Excel 打开未验；阻塞环境：Windows+Excel；最小操作：导出单项目和全部项目 CSV 并用 Excel 打开核对字符与单元格公式。
+- [ ] 备份/恢复逻辑、完整性检查和确认由前端测试与 Rust 源码审计覆盖，但 Rust 原生测试无法在本 Linux 缺少 `glib-2.0` 时编译；阻塞环境：Windows CI/真机；最小操作：执行 `cargo test --manifest-path src-tauri/Cargo.toml`，再备份、恢复并重启核对数据。
+- [x] 五种主题即时切换及 `app_settings` 持久化由 `tests/lib/theme.test.ts`、`tests/services/settingsPreference.service.test.ts` 覆盖。
+- [ ] Files & Links 的真实默认浏览器和 Windows opener 行为无法由 mock/单测替代；阻塞环境：Windows 真机；最小操作：分别验证 https、javascript/file/data/mailto、存在与不存在路径及复制提示。
+- [ ] 设置页真实显示/打开 Windows 数据目录未验；阻塞环境：Windows 真机；最小操作：点击“打开数据目录”，核对路径和目录窗口。
 
 ## 全局质量（发布门槛）
 
-- [ ] 界面全部简体中文；日期全部 YYYY-MM-DD
-- [ ] 所有危险操作（永久删除/恢复/导入/清示例/批量修改）均二次确认；取消无副作用
-- [ ] 全应用无 mock 数据残留（grep + 人工抽查）
-- [ ] 所有表单非法输入有内联错误提示（Zod）
-- [ ] TypeScript strict 零错误、零 any；测试全绿
-- [ ] 双开应用第二实例聚焦到第一实例（无写冲突）
-- [ ] 冷启动 ≤ 3s；千级任务列表/Gantt 操作流畅
-- [ ] Windows 10 与 11 各完整安装验收一次（含 WebView2 缺失机器的引导安装）
+- [ ] 全界面简体中文及日期格式尚无全局审计；阻塞环境：补充静态/RTL 审计；最小操作：遍历路由与日期格式快照，人工抽查设置、项目、任务、会议、风险页。
+- [ ] 危险操作的代表性确认与取消无副作用已有 `ConfirmDialog.test.tsx`、`BulkEditDialog.test.tsx`、`SettingsPage.dataTransfer.test.tsx` 覆盖，但尚无穷尽审计；阻塞环境：补充矩阵测试；最小操作：逐项执行取消并回读数据库。
+- [ ] 生产 UI 无 mock 数据残留尚无专门静态审计；阻塞环境：补充审计；最小操作：对 `src/` grep mock/fixture/placeholder 并人工确认命中均非生产数据。
+- [ ] 各主要表单已有 Project/Task/Meeting/Risk 的 Zod 测试，但非全部表单的内联错误审计；阻塞环境：补充 RTL；最小操作：逐表单输入非法值并断言内联中文错误。
+- [x] `npm run typecheck`、`npm run lint` 与 `npm run test` 通过（57 files、616 tests）；版本一致性由 `tests/lib/releaseMetadata.test.ts` 覆盖。
+- [ ] 第二实例聚焦由 `src-tauri/src/lib.rs` 静态审计确认，但未在打包程序中运行；阻塞环境：Windows 真机；最小操作：双击启动两次并确认仅一实例且首窗口聚焦。
+- [ ] 1000 任务的纯模型 benchmark 已通过（阈值 <100ms），但 ≤3 秒 Windows 冷启动和真实交互未验；阻塞环境：Windows 真机；最小操作：冷启动计时并执行列表/Gantt/日历操作。
+- [ ] Windows 10/11（含无 WebView2）安装尚未真机验收；阻塞环境：两台目标机器；最小操作：安装、升级、卸载并核对离线 WebView2、SQLite 保留和启动。

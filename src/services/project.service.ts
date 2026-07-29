@@ -15,6 +15,9 @@ export interface ProjectServiceDeps {
 /** What a permanent delete would destroy, shown before the user confirms. */
 export interface DeleteImpact {
   taskCount: number;
+  meetingCount: number;
+  milestoneCount: number;
+  projectLinkCount: number;
 }
 
 function parseInput(input: ProjectInput): ProjectInput {
@@ -103,7 +106,7 @@ export function createProjectService(deps: ProjectServiceDeps) {
     /** Real counts for the delete confirmation — never an estimate or a placeholder. */
     async countDeleteImpact(id: string): Promise<DeleteImpact> {
       await requireProject(id);
-      return { taskCount: await deps.tasks.countByProject(id) };
+      return deps.projects.countDeleteImpact(id);
     },
 
     /**

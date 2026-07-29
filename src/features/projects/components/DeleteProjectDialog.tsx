@@ -12,8 +12,8 @@ interface DeleteProjectDialogProps {
 }
 
 /**
- * Permanent-delete confirmation. The task count is read from the database when
- * the dialog opens — never estimated — so the user sees the real blast radius.
+ * Permanent-delete confirmation. Every cascade count is read from the database
+ * when the dialog opens — never estimated — so the user sees the real blast radius.
  */
 export function DeleteProjectDialog({
   project,
@@ -71,7 +71,7 @@ export function DeleteProjectDialog({
               ? `无法读取影响范围：${error}`
               : impact === null
                 ? '正在统计受影响的数据…'
-                : `将同时删除 ${String(impact.taskCount)} 个任务。`}
+                : `将同时删除 ${String(impact.taskCount)} 个任务、${String(impact.meetingCount)} 场会议、${String(impact.milestoneCount)} 个里程碑和 ${String(impact.projectLinkCount)} 个文件/链接。`}
           </span>
         </span>
       }

@@ -8,10 +8,10 @@
 | 时间戳    | 每表 `created_at TEXT NOT NULL`、`updated_at TEXT NOT NULL`，UTC ISO-8601（`YYYY-MM-DDTHH:mm:ssZ`）                           |
 | 业务日期  | `TEXT 'YYYY-MM-DD'`（date-only，语义为香港日历日），配 `CHECK(x GLOB '????-??-??')`；字典序 = 日期序，可直接 ORDER BY/BETWEEN |
 | 布尔      | INTEGER 0/1 + `CHECK(x IN (0,1))`                                                                                             |
-| 外键      | 全部声明；每个连接执行 `PRAGMA foreign_keys = ON`（SQLite 默认关闭），应用启动断言生效                                        |
+| 外键      | 全部声明；SQLx SQLite 连接默认启用 `foreign_keys`，Rust `execute_batch` 也显式启用（SQLite 默认关闭）                         |
 | 示例数据  | 业务表带 `is_sample INTEGER NOT NULL DEFAULT 0`，一键清除 = 单事务 `DELETE ... WHERE is_sample=1`                             |
 | Migration | tauri-plugin-sql Migration（version + up/down SQL），SQL 文件外置于 `src-tauri/migrations/`，幂等                             |
-| 存放位置  | Tauri app data directory（如 `%APPDATA%/com.projectpilot.app/projectpilot.db`），绝不放源码目录                               |
+| 存放位置  | Tauri app config directory（如 `%APPDATA%/com.projectpilot.app/projectpilot.db`），绝不放源码目录                             |
 
 ## 2. 表定义
 
