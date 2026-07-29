@@ -233,6 +233,7 @@ function isAbsoluteUrl(value: string): boolean {
 
 export function isAbsoluteWindowsPath(value: string): boolean {
   const path = value.trim();
+  // Accept drive-rooted paths and UNC shares; reject relative/non-Windows paths and NUL injection.
   const drivePath = /^[A-Za-z]:[\\/](?![\\/])/.test(path);
   const uncPath = /^\\\\[^\\/:*?"<>|\s][^\\/:*?"<>|]*\\[^\\/:*?"<>|\s][^\\/:*?"<>|]*/.test(path);
   return (drivePath || uncPath) && !path.includes('\0');
