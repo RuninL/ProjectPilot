@@ -1,7 +1,9 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import { ContactEmail } from '@/components/AppFooter';
 import { ConfirmDialog } from '@/components/common/ConfirmDialog';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
+import { APP_AUTHOR, APP_NAME, APP_VERSION } from '@/lib/appMetadata';
 import { getDbPath, openDataDir } from '@/lib/commands';
 import { toAppError } from '@/lib/errors';
 import type { Theme } from '@/lib/theme';
@@ -399,7 +401,7 @@ export function SettingsPage() {
         </div>
       </section>
 
-      <section className="rounded-lg border bg-card p-4">
+      <section className="mb-6 rounded-lg border bg-card p-4">
         <h2 className="text-lg font-medium">示例数据</h2>
         <p className="mt-1 text-sm text-muted-foreground">
           清除只会删除标记为「示例」的数据，且清除后不会再次生成。
@@ -422,6 +424,25 @@ export function SettingsPage() {
                 : '当前没有示例数据。'}
           </span>
         </div>
+      </section>
+
+      <section className="rounded-lg border bg-card p-4">
+        <h2 className="text-lg font-medium">关于</h2>
+        <dl className="mt-3 grid gap-2 text-sm sm:grid-cols-[auto_1fr] sm:gap-x-4">
+          <dt className="text-muted-foreground">应用名称</dt>
+          <dd>{APP_NAME}</dd>
+          <dt className="text-muted-foreground">版本</dt>
+          <dd>v{APP_VERSION}</dd>
+          <dt className="text-muted-foreground">作者</dt>
+          <dd>{APP_AUTHOR}</dd>
+          <dt className="text-muted-foreground">联系邮箱</dt>
+          <dd>
+            <ContactEmail className="justify-start" />
+          </dd>
+        </dl>
+        <p className="mt-3 text-sm text-muted-foreground">
+          所有数据均完全存储在本机，不会上传到任何服务器。
+        </p>
       </section>
 
       <ConfirmDialog

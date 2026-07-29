@@ -84,4 +84,14 @@ describe('SettingsPage 数据管理', () => {
     await user.click(await screen.findByRole('button', { name: '覆盖当前数据库' }));
     expect(await screen.findByText('所选文件不是有效的 SQLite 数据库')).toBeInTheDocument();
   });
+
+  it('渲染关于区域', () => {
+    render(<SettingsPage />);
+
+    expect(screen.getByRole('heading', { name: '关于' })).toBeInTheDocument();
+    expect(screen.getByText('ProjectPilot')).toBeInTheDocument();
+    expect(screen.getByText('v0.1.0')).toBeInTheDocument();
+    expect(screen.getByText('Racliu')).toBeInTheDocument();
+    expect(screen.getByText(/所有数据均完全存储在本机/)).toBeInTheDocument();
+  });
 });

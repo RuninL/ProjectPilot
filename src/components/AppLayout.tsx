@@ -10,6 +10,7 @@ import {
 import type { LucideIcon } from 'lucide-react';
 import { NavLink, Outlet } from 'react-router-dom';
 import { cn } from '@/lib/cn';
+import { AppFooter } from './AppFooter';
 
 interface NavItem {
   to: string;
@@ -57,8 +58,11 @@ export function AppLayout() {
           ))}
         </nav>
       </aside>
-      <main className="flex-1 overflow-auto">
-        <Outlet />
+      <main className="flex min-w-0 flex-1 flex-col overflow-auto">
+        <div className="flex-1">
+          <Outlet />
+        </div>
+        <AppFooter />
       </main>
     </div>
   );
