@@ -4,6 +4,7 @@ import {
   actionItemInputSchema,
   meetingInputSchema,
   milestoneInputSchema,
+  projectLinkInputSchema,
   projectInputSchema,
   riskInputSchema,
   taskInputSchema,
@@ -78,6 +79,16 @@ const cases: SchemaCase[] = [
       likelihood: 'high',
       impact: 'medium',
       due_date: '',
+    },
+  },
+  {
+    name: 'projectLinkInputSchema',
+    schema: projectLinkInputSchema,
+    raw: {
+      label: '需求文档',
+      link_type: 'url',
+      target: 'https://example.com/spec',
+      description: ' 产品资料 ',
     },
   },
 ];

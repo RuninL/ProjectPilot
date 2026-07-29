@@ -128,6 +128,7 @@ function snapshot(projectId = 'project-1'): DatabaseSnapshot {
         label: '资料',
         link_type: 'url',
         target: 'https://example.com',
+        description: '',
         is_sample: 0,
         created_at: NOW,
         updated_at: NOW,

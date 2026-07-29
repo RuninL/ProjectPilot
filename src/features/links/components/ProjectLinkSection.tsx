@@ -156,8 +156,7 @@ export function ProjectLinkSection({ project }: ProjectLinkSectionProps) {
         <ul className="divide-y rounded-lg border bg-card">
           {links.map((link) => {
             const canOpen =
-              link.link_type === 'file_path' ||
-              (link.link_type === 'url' && isOpenableHttpUrl(link.target));
+              link.link_type === 'file_path' ? true : isOpenableHttpUrl(link.target);
             return (
               <li
                 key={link.id}

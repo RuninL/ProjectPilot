@@ -55,7 +55,7 @@
 5. 批量修改任务（N 条 UPDATE）
 
 **纵深防御**：Tauri capabilities 按最小授权配置——主窗口开放
-`sql:allow-load/select/execute`、`dialog:default`、`fs:allow-read-text-file`、`fs:allow-write-text-file`
+`sql:allow-load/select/execute`、`opener:default`、`dialog:default`、`fs:allow-read-text-file`、`fs:allow-write-text-file`
 与白名单自定义命令。JSON/CSV 路径必须先由官方 dialog 插件选取并加入 fs scope；
 不开放插件的任意数据库路径加载。
 
@@ -69,6 +69,16 @@
 - 备份与还原使用 rusqlite online backup，而非直接复制主文件；还原源先执行
   `PRAGMA quick_check` 并核对 9 张必要表，还原前生成时间戳安全副本。UI 要求完成后重启，
   避免 Zustand 轻缓存继续展示还原前数据。
+
+### 2.5 Files & Links 安全边界
+
+- `project_links` 仅保存名称、类型、URL/Windows 本地路径字符串和可选备注，不读取或保存文件内容。
+- URL 在 service 层解析协议，只有 `http:`/`https:` 可调用官方 `tauri-plugin-opener`；其他协议仅可复制。
+- 本地路径由 Zod 与 service 拒绝空白、相对路径和非 Windows 绝对路径。打开时先调用
+  `local_path_exists`，存在后才调用 `open_local_path`；Rust 打开命令再次校验绝对路径与存在性，
+  再通过 `OpenerExt::open_path` 交给系统默认程序。
+- 两个自定义命令只执行元数据存在性判断和系统打开，不读取文件内容；未增加 shell、递归文件读取或全磁盘
+  fs scope。现有 `opener:default` 已满足 URL 打开，capability 无需扩权。
 
 **降级预案**：若 execute_batch 仍不满足（如需要行级回读逻辑），按触发条件整体迁移到 Rust command + rusqlite（事务/savepoint 完备，drop 默认回滚）。触发条件：事务压测失败、备份恢复需更强文件锁、需要精确 SQLite 错误码映射。
 

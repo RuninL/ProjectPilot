@@ -219,10 +219,12 @@ WHEN EXISTS (
 | label                   | TEXT    | NOT NULL, CHECK(length(trim(label)) BETWEEN 1 AND 160)                    |
 | link_type               | TEXT    | NOT NULL, CHECK(link_type IN ('url','file_path'))                         |
 | target                  | TEXT    | NOT NULL, CHECK(length(trim(target)) > 0)（URL 或本地路径，不存文件本体） |
+| description             | TEXT    | NOT NULL DEFAULT ''（migration 0006，可选备注）                          |
 | is_sample               | INTEGER | NOT NULL DEFAULT 0                                                        |
 | created_at / updated_at | TEXT    | NOT NULL                                                                  |
 
 索引：`idx_links_project(project_id)`
+0006 仅以 `ALTER TABLE ... ADD COLUMN` 追加 `description`，已有记录自动获得空备注，不重建表、不丢数据。
 打开前校验：file_path 用 Rust command 检查存在性，不存在提示并提供复制；url 仅 http/https 可打开。
 
 ### 2.8 app_settings（键值）
@@ -351,6 +353,7 @@ erDiagram
     TEXT label
     TEXT link_type
     TEXT target
+    TEXT description
   }
   app_settings {
     TEXT key PK
@@ -376,7 +379,7 @@ erDiagram
 - `taskDependencies[]`: `id,predecessor_id,successor_id,dep_type,lag_days,created_at,updated_at`
 - `milestones[]`: `id,project_id,linked_task_id,name,description,date,status,achieved_at,is_sample,created_at,updated_at`
 - `actionItems[]`: `id,meeting_id,content,owner,due_date,status,converted_task_id,converted_at,created_at,updated_at`
-- `projectLinks[]`: `id,project_id,label,link_type,target,is_sample,created_at,updated_at`
+- `projectLinks[]`: `id,project_id,label,link_type,target,description,is_sample,created_at,updated_at`
 - `risks[]`: `id,project_id,title,description,category,likelihood,impact,level,status,owner,mitigation_plan,due_date,resolved_at,is_sample,created_at,updated_at`
 - `appSettings[]`: `key,value,created_at,updated_at`
 
