@@ -11,12 +11,8 @@ describe('AppFooter', () => {
   });
 
   it('点击邮箱后复制并显示提示', async () => {
-    const writeText = vi.fn().mockResolvedValue(undefined);
-    Object.defineProperty(navigator, 'clipboard', {
-      configurable: true,
-      value: { writeText },
-    });
     const user = userEvent.setup();
+    const writeText = vi.spyOn(navigator.clipboard, 'writeText');
     render(<AppFooter />);
 
     await user.click(screen.getByRole('button', { name: 'rliubp@connect.ust.hk' }));
