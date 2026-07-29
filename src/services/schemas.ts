@@ -234,9 +234,7 @@ function isAbsoluteUrl(value: string): boolean {
 export function isAbsoluteWindowsPath(value: string): boolean {
   const path = value.trim();
   const drivePath = /^[A-Za-z]:[\\/](?![\\/])/.test(path);
-  const uncPath = /^\\\\[^\\/:*?"<>|\s][^\\/:*?"<>|]*\\[^\\/:*?"<>|\s][^\\/:*?"<>|]*/.test(
-    path,
-  );
+  const uncPath = /^\\\\[^\\/:*?"<>|\s][^\\/:*?"<>|]*\\[^\\/:*?"<>|\s][^\\/:*?"<>|]*/.test(path);
   return (drivePath || uncPath) && !path.includes('\0');
 }
 

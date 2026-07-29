@@ -87,10 +87,7 @@ describe('project link service CRUD and isolation', () => {
       '请输入包含协议的合法绝对 URL',
     );
     await expect(
-      service.createProjectLink(
-        'p1',
-        input({ link_type: 'file_path', target: 'docs\\plan.pdf' }),
-      ),
+      service.createProjectLink('p1', input({ link_type: 'file_path', target: 'docs\\plan.pdf' })),
     ).rejects.toThrow('请输入 Windows 绝对路径');
   });
 
@@ -172,10 +169,7 @@ describe('project link safe opening', () => {
 
   it('opens a local target only after the existence check succeeds', async () => {
     const target = '\\\\server\\share\\资料';
-    const link = await service.createProjectLink(
-      'p1',
-      input({ link_type: 'file_path', target }),
-    );
+    const link = await service.createProjectLink('p1', input({ link_type: 'file_path', target }));
 
     await service.openProjectLink('p1', link.id);
 

@@ -8,10 +8,7 @@ import { SampleBadge } from '@/components/common/SampleBadge';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { toAppError } from '@/lib/errors';
-import {
-  getProjectLinkService,
-  isOpenableHttpUrl,
-} from '@/services/projectLink.service';
+import { getProjectLinkService, isOpenableHttpUrl } from '@/services/projectLink.service';
 import type { ProjectLinkInput } from '@/services/schemas';
 import type { Project, ProjectLink } from '@/types';
 import { ProjectLinkForm } from './ProjectLinkForm';
@@ -155,13 +152,9 @@ export function ProjectLinkSection({ project }: ProjectLinkSectionProps) {
       ) : (
         <ul className="divide-y rounded-lg border bg-card">
           {links.map((link) => {
-            const canOpen =
-              link.link_type === 'file_path' ? true : isOpenableHttpUrl(link.target);
+            const canOpen = link.link_type === 'file_path' ? true : isOpenableHttpUrl(link.target);
             return (
-              <li
-                key={link.id}
-                className="flex flex-wrap items-start justify-between gap-3 p-4"
-              >
+              <li key={link.id} className="flex flex-wrap items-start justify-between gap-3 p-4">
                 <div className="min-w-0 flex-1 space-y-1">
                   <div className="flex flex-wrap items-center gap-2">
                     {link.link_type === 'url' ? (
@@ -175,7 +168,10 @@ export function ProjectLinkSection({ project }: ProjectLinkSectionProps) {
                     </Badge>
                     {link.is_sample === 1 && <SampleBadge />}
                   </div>
-                  <p className="max-w-3xl truncate text-sm text-muted-foreground" title={link.target}>
+                  <p
+                    className="max-w-3xl truncate text-sm text-muted-foreground"
+                    title={link.target}
+                  >
                     {link.target}
                   </p>
                   {link.description !== '' && (

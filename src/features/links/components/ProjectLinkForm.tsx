@@ -95,11 +95,7 @@ export function ProjectLinkForm({ open, link, onSubmit, onClose }: ProjectLinkFo
         >
           <div className="grid gap-1.5">
             <Label htmlFor="project-link-label">资料名称</Label>
-            <Input
-              id="project-link-label"
-              placeholder="例如：需求文档"
-              {...register('label')}
-            />
+            <Input id="project-link-label" placeholder="例如：需求文档" {...register('label')} />
             {errors.label && <p className="text-sm text-destructive">{errors.label.message}</p>}
           </div>
 

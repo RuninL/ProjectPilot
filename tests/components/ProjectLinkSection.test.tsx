@@ -120,7 +120,9 @@ describe('ProjectLinkSection actions', () => {
     const mailRow = screen.getByText('联系邮箱').closest('li');
     expect(httpRow).not.toBeNull();
     expect(mailRow).not.toBeNull();
-    expect(within(httpRow as HTMLElement).getByRole('button', { name: '打开' })).toBeInTheDocument();
+    expect(
+      within(httpRow as HTMLElement).getByRole('button', { name: '打开' }),
+    ).toBeInTheDocument();
     expect(within(mailRow as HTMLElement).queryByRole('button', { name: '打开' })).toBeNull();
 
     await user.click(within(httpRow as HTMLElement).getByRole('button', { name: '打开' }));

@@ -9,11 +9,7 @@ import {
   type ProjectRepository,
 } from '@/repositories';
 import type { ProjectLink } from '@/types';
-import {
-  isAbsoluteWindowsPath,
-  projectLinkInputSchema,
-  type ProjectLinkInput,
-} from './schemas';
+import { isAbsoluteWindowsPath, projectLinkInputSchema, type ProjectLinkInput } from './schemas';
 
 export interface ProjectLinkOpenDeps {
   openUrl: (url: string) => Promise<void>;

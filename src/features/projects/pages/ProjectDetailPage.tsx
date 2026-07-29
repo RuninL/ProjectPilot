@@ -25,9 +25,7 @@ import type { Project, TaskWithProject } from '@/types';
 import { ProjectForm } from '../components/ProjectForm';
 
 /** Capabilities that arrive in a later phase — listed, never clickable, never faked. */
-const LATER_PHASE_SECTIONS = [
-  { title: '关键路径与拖拽排期', description: '甘特图上的自动排程' },
-];
+const LATER_PHASE_SECTIONS = [{ title: '关键路径与拖拽排期', description: '甘特图上的自动排程' }];
 
 interface Overview {
   total: number;

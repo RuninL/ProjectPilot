@@ -219,7 +219,7 @@ WHEN EXISTS (
 | label                   | TEXT    | NOT NULL, CHECK(length(trim(label)) BETWEEN 1 AND 160)                    |
 | link_type               | TEXT    | NOT NULL, CHECK(link_type IN ('url','file_path'))                         |
 | target                  | TEXT    | NOT NULL, CHECK(length(trim(target)) > 0)（URL 或本地路径，不存文件本体） |
-| description             | TEXT    | NOT NULL DEFAULT ''（migration 0006，可选备注）                          |
+| description             | TEXT    | NOT NULL DEFAULT ''（migration 0006，可选备注）                           |
 | is_sample               | INTEGER | NOT NULL DEFAULT 0                                                        |
 | created_at / updated_at | TEXT    | NOT NULL                                                                  |
 
