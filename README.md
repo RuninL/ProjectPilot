@@ -28,18 +28,41 @@
 
 日期格式 `YYYY-MM-DD`，业务时区 Asia/Hong_Kong。
 
-## 环境要求
+## 正式支持与限制
 
-| 依赖    | 版本              | 说明                                                                           |
-| ------- | ----------------- | ------------------------------------------------------------------------------ |
-| Node.js | ≥ 20 LTS          | 附带 npm ≥ 10                                                                  |
-| Rust    | stable（≥ 1.77）  | 通过 [rustup](https://rustup.rs/) 安装                                         |
-| 系统    | Windows 10/11 x64 | 需安装 Microsoft Visual Studio C++ 生成工具与 WebView2 Runtime（Win11 已内置） |
+- 正式支持平台仅为 **Windows 10/11 x64**；不提供 macOS、Linux 或移动端的正式支持。
+- 完全离线且只使用本机 SQLite；没有云同步、账号体系、多人协作或文件内容托管。
+- Files & Links 只保存 URL 或 Windows 文件/目录路径。仅 `http/https` 可直接打开；其他协议或不存在的路径只能复制并给出中文提示。
+- 甘特图和日历均不支持拖拽排期；请通过任务编辑表单修改日期。
+
+## Windows 安装与首次启动
+
+1. 从官方 GitHub Release 下载 NSIS `.exe` 安装包和同页的 `SHA256SUMS.txt`。
+2. 在 PowerShell 运行 `Get-FileHash .\ProjectPilot_*.exe -Algorithm SHA256`，并与 `SHA256SUMS.txt` 中对应文件的值比对。
+3. 运行安装包。安装包内置 WebView2 离线安装程序，因此首次安装包较大，但无须预先安装 WebView2。
+4. 安装包未签名，Windows SmartScreen 提示时只应在确认下载来源为官方 GitHub Release 且校验和一致后继续。
+5. 首次启动可使用示例数据熟悉界面；数据始终保留在本机的 Tauri app data 目录。
+
+## 数据、备份与恢复
+
+- 设置页显示数据库位置，并可打开数据目录。
+- JSON 导入/导出用于完整数据迁移；替换导入会先明确确认，合并导入会跳过同 ID 数据。
+- CSV 仅支持导出任务、里程碑和风险，使用 UTF-8 BOM 和公式注入保护，可用 Excel 打开。
+- SQLite 备份使用在线备份；恢复前会验证文件并自动保存当前数据库的安全副本。**恢复完成后必须重启应用。**
+- 请定期将备份保存到应用数据目录以外的位置。
+
+## 环境要求（开发者）
+
+| 依赖    | 版本              | 说明                                                                   |
+| ------- | ----------------- | ---------------------------------------------------------------------- |
+| Node.js | ≥ 20 LTS          | 附带 npm ≥ 10                                                          |
+| Rust    | stable（≥ 1.77）  | 通过 [rustup](https://rustup.rs/) 安装                                 |
+| 系统    | Windows 10/11 x64 | 需安装 Microsoft Visual Studio C++ 生成工具；发布安装包会处理 WebView2 |
 
 前端相关命令（`lint` / `typecheck` / `test` / `format:check` / `dev`）只需 Node.js；
 `npm run tauri dev` 与 `npm run tauri build` 需要完整的 Rust 工具链。
 
-## 安装
+## 开发安装
 
 ```bash
 npm install
@@ -48,11 +71,12 @@ npm install
 `better-sqlite3` 为 devDependency，用于测试中运行真实迁移 SQL；安装时会编译原生模块，
 因此需要上表中的 C++ 生成工具。
 
-## 开发启动
+## 开发启动与构建
 
 ```bash
 npm run tauri dev   # 桌面应用（Rust + 前端）
 npm run dev         # 仅前端页面调试；数据库相关功能不可用
+npm run tauri build # 生成本机平台的安装包
 ```
 
 首次启动会自动创建示例项目与示例任务（带「示例」徽标），仅执行一次。
@@ -81,7 +105,9 @@ npm run format:check  # Prettier 格式检查
 | 启动时提示「数据库初始化失败」             | 说明迁移或 `PRAGMA foreign_keys` 断言失败；该断言会主动阻止启动以免数据损坏，请查看控制台错误详情 |
 | 启动时提示「示例数据创建失败」             | 示例数据为非致命功能，应用仍可使用；重装或清除数据库文件后重启即可重新创建                        |
 | 想从干净数据库重来                         | 删除 Tauri app data 目录下的 `projectpilot.db` 后重启应用                                         |
-| 界面显示为浅色                             | 本应用深色优先；主题跟随系统时会读取系统偏好，跟随系统开关将在阶段 2 的设置页开放                 |
+| 界面显示为浅色                             | 在设置页选择深色、浅色、暖橙、彩色或跟随系统；选择会在重启后保持                                  |
+| 恢复后界面仍显示旧数据                     | 恢复会替换数据库；请按提示完全重启应用                                                            |
+| 本地链接无法打开                           | 检查文件或目录是否仍存在；应用不会读取、上传或托管文件内容，仍可复制保存的路径                    |
 
 ## 文档
 
@@ -95,7 +121,7 @@ npm run format:check  # Prettier 格式检查
 
 ## 项目状态
 
-**阶段 6：数据管理 + 文件与链接** — 已完成（Windows 本机启动与安装包验证仍待办，见下）。
+**阶段 7：发布准备** — 代码、自动化质量检查和 Windows 发布工作流已配置；Windows 真机安装体验仍需在发布后完成最终确认。
 
 已具备：
 
@@ -149,7 +175,7 @@ npm run format:check  # Prettier 格式检查
 - **文件与链接**：项目详情同页 `#project-links` 支持 URL/Windows 本地路径的完整 CRUD、复制与安全打开；
   service 层只允许 `http/https` 交给官方 opener，Rust command 在打开本地路径前检查存在性且不读取文件内容
 
-尚未具备（后续阶段）：
+尚未具备（后续版本）：
 
 - 甘特图内的里程碑菱形、关键路径与拖拽排期
 - 提醒通知、数据库位置迁移
@@ -164,3 +190,8 @@ npm run format:check  # Prettier 格式检查
 - 危险操作二次确认；所有表单 Zod 校验
 - 显式处理空状态、加载状态、数据库错误、日期错误与无效输入
 - 未来 AI 功能只能是用户确认后写入数据的辅助层（详见 architecture.md 安全边界）
+
+## 作者与许可证
+
+Made by **Racliu** · [rliubp@connect.ust.hk](mailto:rliubp@connect.ust.hk)
+本项目使用 [MIT License](LICENSE)，Copyright (c) 2026 Racliu。

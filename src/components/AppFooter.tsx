@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { openUrl } from '@tauri-apps/plugin-opener';
 import { cn } from '@/lib/cn';
 import { APP_AUTHOR, APP_VERSION, CONTACT_EMAIL } from '@/lib/appMetadata';
 
@@ -9,12 +10,17 @@ interface ContactEmailProps {
 export function ContactEmail({ className }: ContactEmailProps) {
   const [message, setMessage] = useState<string | null>(null);
 
-  const copyEmail = async () => {
+  const contactByEmail = async () => {
     try {
-      await navigator.clipboard.writeText(CONTACT_EMAIL);
-      setMessage('邮箱已复制到剪贴板。');
+      await openUrl(`mailto:${CONTACT_EMAIL}`);
+      setMessage('已打开邮件客户端。');
     } catch {
-      setMessage('复制失败，请手动复制邮箱。');
+      try {
+        await navigator.clipboard.writeText(CONTACT_EMAIL);
+        setMessage('邮箱已复制到剪贴板。');
+      } catch {
+        setMessage('复制失败，请手动复制邮箱。');
+      }
     }
   };
 
@@ -23,7 +29,7 @@ export function ContactEmail({ className }: ContactEmailProps) {
       <button
         type="button"
         className="hover:text-foreground hover:underline"
-        onClick={() => void copyEmail()}
+        onClick={() => void contactByEmail()}
       >
         {CONTACT_EMAIL}
       </button>

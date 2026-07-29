@@ -10,8 +10,8 @@
 | **3（已完成）**       | 依赖 + Gantt（自研 SVG）                                               | task_dependencies 创建/删除 + 加边防环（migration 0003 触发器兜底同项目与直接反向边）；dependencyGraph.ts（构图/防环/Kahn/前驱后继/blocked 传导/排期冲突）；ganttViewModel + 纯 SVG renderer（周/月/季轴、时间条、依赖线、今日线、冲突高亮、图例；菱形留待阶段 4）                                                                                                        | Gantt 稳定正确，检测全通过单测                          |
 | **4（当前，已完成）** | 会议 + 行动项 + Milestone + 日历                                       | 迁移 0004（纯增量：`meetings.start_time`、`idx_milestones_date`、防重复转换与审计触发器）；会议 CRUD（可关联项目或独立）+ 会议详情页；行动项 CRUD + 一键转任务（`execute_batch` 单事务、防重复、双向关联、独立会议需选目标项目）；milestone CRUD + 香港时区倒计时/逾期 + 关联任务全完成仅提示（绝不自动改状态）；日历月视图（三类条目文字区分、折叠展开、跨年切换、只读） | 流程 C 闭环走通（Windows 本机 tauri dev/build 待验证）  |
 | **5**                 | Dashboard + 风险                                                       | 今日/本周/逾期、30 天 milestone、项目完成率、四类风险卡                                                                                                                                                                                                                                                                                                                   | 风险规则与 product-spec §5.2 完全一致                   |
-| **6**                 | 数据口 + 设置                                                          | JSON 全量导入导出（原子）；单项目 CSV（UTF-8 BOM）；SQLite 备份/恢复（自动预备份 + 二次确认）；主题三态；数据目录；关于页                                                                                                                                                                                                                                                 | 流程 D 走通；JSON 往返无损                              |
-| **7**                 | 打磨与发布                                                             | 全量验收清单过检；性能（千级任务）；GitHub Actions CI 与 Windows 安装包构建（NSIS/MSI）；README 使用说明                                                                                                                                                                                                                                                                  | acceptance-checklist 全绿                               |
+| **6（已完成）**       | 数据口 + 设置                                                          | JSON 全量导入导出（原子）；单项目 CSV（UTF-8 BOM）；SQLite 备份/恢复（自动预备份 + 二次确认）；主题三态；数据目录；关于页                                                                                                                                                                                                                                                 | 流程 D 自动化测试通过；JSON 往返无损                    |
+| **7（进行中）**       | 打磨与发布                                                             | 版本统一、发布文档、千级数据性能基准、GitHub Actions Windows NSIS 构建与 Release 资产；Windows 真机安装验收保留为发布后确认                                                                                                                                                                                                                                               | 自动质量门和 Windows 工作流通过；真机项有明确记录       |
 | **8+（后续版本）**    | Gantt 拖拽（切 SVAR 适配器）、AI 建议层（见 architecture.md §10 边界） | —                                                                                                                                                                                                                                                                                                                                                                         | —                                                       |
 
 依赖关系：2 依赖 1；3 依赖 2；4/5 依赖 2（5 的 blocked 传导依赖 3）；6 依赖 1–5 数据全形态。
@@ -74,8 +74,7 @@
 
 ## 4. 交付与打包路线
 
-- 开发与测试全程在 Computer（Linux 沙箱）完成：编码、Vitest/RTL、临时 SQLite 集成测试、Linux 版 Tauri 冒烟
-- Windows 安装包两条路线（待用户确认其一）：
-  - **A（推荐）**：GitHub Actions + tauri-action，推送即自动构建 Windows NSIS/MSI 工件，用户下载安装做最终验收；本地零环境
-  - **B**：用户本机装 Node LTS + Rust（rustup），运行 `npm run tauri build` 出安装包
-- 版本号语义化：0.x 直至阶段 7 完成出 1.0.0
+- Linux 沙箱承担编码、Vitest/RTL 与 SQLite 集成测试；Windows 真机负责安装体验和系统集成验收。
+- 推送 `v*` tag 后，GitHub Actions 在 `windows-latest` 执行完整质量门、构建 NSIS，并创建带 SHA-256 文件的 GitHub Release。
+- NSIS 使用 Tauri WebView2 Offline Installer，保证未安装 WebView2 时无需网络即可安装，但安装包体积更大。
+- 版本号已统一为 1.0.0；正式支持平台为 Windows 10/11 x64。

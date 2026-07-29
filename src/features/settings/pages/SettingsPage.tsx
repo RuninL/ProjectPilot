@@ -476,7 +476,7 @@ export function SettingsPage() {
           </dd>
         </dl>
         <p className="mt-3 text-sm text-muted-foreground">
-          所有数据均完全存储在本机，不会上传到任何服务器。
+          完全离线运行，所有数据仅存储在本机 SQLite 数据库，不会上传到任何服务器。
         </p>
       </section>
 
