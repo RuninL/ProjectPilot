@@ -38,6 +38,7 @@ jobs:
           npm run typecheck
           npm run test
           npm run build
+          cargo test --manifest-path src-tauri/Cargo.toml
 
       - name: Build Windows NSIS installer
         run: npm run tauri build -- --bundles nsis
@@ -52,7 +53,7 @@ jobs:
 
       - uses: actions/upload-artifact@v4.6.2
         with:
-          name: ProjectPilot-v${{ github.ref_name }}-windows
+          name: ProjectPilot-${{ github.ref_name }}-windows
           path: |
             src-tauri/target/release/bundle/nsis/*.exe
             src-tauri/target/release/bundle/nsis/SHA256SUMS.txt
@@ -60,11 +61,15 @@ jobs:
 
       - uses: softprops/action-gh-release@v2.3.3
         with:
+          name: ProjectPilot ${{ github.ref_name }}
           generate_release_notes: true
           body: |
             ProjectPilot v1.0.0 提供完全离线的本机 SQLite 项目、任务、甘特图、会议、风险、Files & Links 与数据备份管理。
 
             请使用随附 `SHA256SUMS.txt` 校验安装包。Windows 安装包未签名，SmartScreen 提示时仅在确认文件来自本官方 GitHub Release 后继续。
+
+            建议在首台 Windows 真机完成以下验收：未安装 WebView2 时的离线安装、http/https 默认浏览器打开、非 http(s) 协议仅复制、
+            存在及不存在的本地路径、安装/升级/卸载后的 SQLite 保留、JSON/CSV/备份恢复与重启、冷启动不超过 3 秒。
           files: |
             src-tauri/target/release/bundle/nsis/*.exe
             src-tauri/target/release/bundle/nsis/SHA256SUMS.txt

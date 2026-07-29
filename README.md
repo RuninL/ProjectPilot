@@ -35,6 +35,18 @@
 - Files & Links 只保存 URL 或 Windows 文件/目录路径。仅 `http/https` 可直接打开；其他协议或不存在的路径只能复制并给出中文提示。
 - 甘特图和日历均不支持拖拽排期；请通过任务编辑表单修改日期。
 
+### 已接受的依赖风险（待跟踪）
+
+`npm audit --omit=dev` 目前报告 2 个 moderate 生产依赖漏洞（无 high/critical）：`react-router-dom@6.30.4`
+及其传递依赖 `react-router@6.30.4`。相关公告为
+[GHSA-jjmj-jmhj-qwj2](https://github.com/advisories/GHSA-jjmj-jmhj-qwj2)（开放重定向/XSS）、
+[GHSA-wrjc-x8rr-h8h6](https://github.com/advisories/GHSA-wrjc-x8rr-h8h6)（反斜杠绕过开放重定向）和
+[GHSA-337j-9hxr-rhxg](https://github.com/advisories/GHSA-337j-9hxr-rhxg)（SSR hydration 的构造器注入）。
+审计工具仅提供 `react-router-dom@7.18.2` 的 major 升级修复，当前 6.x 没有非破坏性安全升级路径；本版不使用
+`--force` 升级。ProjectPilot 没有远程服务端、多人 Web 暴露或 SSR hydration，且数据仅本地保存，因此影响面较小，
+但若应用未来处理不可信链接、运行在 Web 上下文或采用 SSR，仍可能受影响。这是已接受的非阻塞风险，后续版本将评估
+React Router 7 迁移并持续跟踪上述公告。
+
 ## Windows 安装与首次启动
 
 1. 从官方 GitHub Release 下载 NSIS `.exe` 安装包和同页的 `SHA256SUMS.txt`。
