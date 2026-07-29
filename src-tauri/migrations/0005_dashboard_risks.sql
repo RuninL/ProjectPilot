@@ -22,8 +22,8 @@ CREATE TABLE risks (
   CHECK (
     level = CASE
       WHEN likelihood = 'high' AND impact = 'high' THEN 'critical'
-      WHEN (likelihood = 'high' AND impact IN ('medium', 'high'))
-        OR (impact = 'high' AND likelihood IN ('medium', 'high')) THEN 'high'
+      WHEN (likelihood = 'high' AND impact = 'medium')
+        OR (impact = 'high' AND likelihood = 'medium') THEN 'high'
       WHEN likelihood = 'medium' AND impact = 'medium' THEN 'medium'
       ELSE 'low'
     END
