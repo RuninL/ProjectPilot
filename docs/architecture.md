@@ -17,7 +17,7 @@
 ├─────────────────────────────────────────────────────┤
 │ DB 客户端  tauri-plugin-sql 单例 + 自写 Rust 原子命令   │
 ├─────────────────────────────────────────────────────┤
-│ SQLite（Tauri app data 目录, PRAGMA foreign_keys=ON） │
+│ SQLite（Tauri app config 目录, foreign_keys=ON） │
 └─────────────────────────────────────────────────────┘
 ```
 
@@ -39,22 +39,46 @@
 
 ### 2.2 决策：混合持久层
 
-| 场景                            | 通道                                                                                         | 理由                 |
-| ------------------------------- | -------------------------------------------------------------------------------------------- | -------------------- |
-| 单表 CRUD、查询、Dashboard 聚合 | tauri-plugin-sql `select/execute`                                                            | 官方维护、样板少     |
-| **必须原子的多语句写**          | 自写 Rust `#[tauri::command] execute_batch(statements)`：单连接内 BEGIN…COMMIT，出错整体回滚 | 绕开连接池事务陷阱   |
-| Schema migration                | 插件 Migration（Up/Down，幂等）                                                              | 官方机制             |
-| 备份/恢复/打开数据目录          | 自写 Rust command（文件操作 + 连接管理）                                                     | 需要文件锁与关闭连接 |
+| 场景                            | 通道                                                                                         | 理由               |
+| ------------------------------- | -------------------------------------------------------------------------------------------- | ------------------ |
+| 单表 CRUD、查询、Dashboard 聚合 | tauri-plugin-sql `select/execute`                                                            | 官方维护、样板少   |
+| **必须原子的多语句写**          | 自写 Rust `#[tauri::command] execute_batch(statements)`：单连接内 BEGIN…COMMIT，出错整体回滚 | 绕开连接池事务陷阱 |
+| Schema migration                | 插件 Migration（Up/Down，幂等）                                                              | 官方机制           |
+| 备份/恢复/打开数据目录          | Rust command + SQLite online backup；文本文件走官方 fs/dialog 插件                           | 一致快照与最小权限 |
 
 必须走原子命令的操作（白名单）：
 
 1. 行动项转任务（INSERT task + UPDATE action_item）
 2. 项目永久删除的级联清理
-3. 全量 JSON 导入（清空 + 重建 8 张表）
+3. 全量 JSON 导入（清空 + 重建当前 9 张应用表）
 4. 清除示例数据（跨表删除 is_sample=1）
 5. 批量修改任务（N 条 UPDATE）
 
-**纵深防御**：Tauri capabilities 按最小授权配置——主窗口仅开放 `sql:allow-load/select/execute` 与白名单自定义命令；不开放插件的任意数据库路径加载。
+**纵深防御**：Tauri capabilities 按最小授权配置——主窗口开放
+`sql:allow-load/select/execute`、`opener:default`、`dialog:default`、`fs:allow-read-text-file`、`fs:allow-write-text-file`
+与白名单自定义命令。JSON/CSV 路径必须先由官方 dialog 插件选取并加入 fs scope；
+不开放插件的任意数据库路径加载。
+
+### 2.4 阶段 6 数据口
+
+- `dataTransfer.repo.ts` 是全量读取、清库和参数化插入 SQL 的唯一边界；service 不含 SQL。
+- 导出按实体分别查询后组装 `schemaVersion=1` 文件，包含应用版本、UTC 导出时间和统计摘要。
+- 导入在任何写入前完成严格 Zod、统计、主键、外键、两层任务、转换唯一性和全图防环校验。
+- 合并模式统一跳过同主键/设置键；替换模式反向清库。两种模式最终都只调用一次
+  Rust `execute_batch`，任一语句失败由 SQLite 事务整体回滚。
+- 备份与还原使用 rusqlite online backup，而非直接复制主文件；还原源先执行
+  `PRAGMA quick_check` 并核对 9 张必要表，还原前生成时间戳安全副本。UI 要求完成后重启，
+  避免 Zustand 轻缓存继续展示还原前数据。
+
+### 2.5 Files & Links 安全边界
+
+- `project_links` 仅保存名称、类型、URL/Windows 本地路径字符串和可选备注，不读取或保存文件内容。
+- URL 在 service 层解析协议，只有 `http:`/`https:` 可调用官方 `tauri-plugin-opener`；其他协议仅可复制。
+- 本地路径由 Zod 与 service 拒绝空白、相对路径和非 Windows 绝对路径。打开时先调用
+  `local_path_exists`，存在后才调用 `open_local_path`；Rust 打开命令再次校验绝对路径与存在性，
+  再通过 `OpenerExt::open_path` 交给系统默认程序。
+- 两个自定义命令只执行元数据存在性判断和系统打开，不读取文件内容；未增加 shell、递归文件读取或全磁盘
+  fs scope。现有 `opener:default` 已满足 URL 打开，capability 无需扩权。
 
 **降级预案**：若 execute_batch 仍不满足（如需要行级回读逻辑），按触发条件整体迁移到 Rust command + rusqlite（事务/savepoint 完备，drop 默认回滚）。触发条件：事务压测失败、备份恢复需更强文件锁、需要精确 SQLite 错误码映射。
 
@@ -196,18 +220,18 @@ projectpilot/
 
 ## 9. 风险与降级策略汇总
 
-| 风险                      | 概率 | 影响           | 缓解 / 降级                                             |
-| ------------------------- | ---- | -------------- | ------------------------------------------------------- |
-| 插件事务不可靠（#886）    | 高   | 高（数据损坏） | 多语句写全走 Rust 原子命令；预案整体迁 rusqlite         |
-| select 无类型             | 高   | 中             | repository 层 Zod 收窄，unknown 不出边界                |
-| Gantt 自研延期            | 中   | 中             | 降级 frappe-gantt；极限降级纯 CSS 时间条                |
-| SVAR 许可证/PRO 边界误用  | 低   | 中             | 只依赖 MIT npm 包；不依赖 PRO 功能；使用前复核          |
-| SQLite 外键默认关闭       | 高   | 高             | 每连接 PRAGMA + 启动断言（查询 pragma 值不为 1 则报错） |
-| 时区差一天                | 中   | 中             | date.ts 统一 + 禁裸 new Date + UTC+8 午夜单测           |
-| 两层父子被绕过            | 中   | 中             | DB 触发器 + service 双重校验                            |
-| 恢复损坏当前库            | 低   | 高             | 恢复前自动备份 + 二次确认，全程 Rust 命令内完成         |
-| WebView2 缺失（旧 Win10） | 低   | 中             | Tauri 安装器引导安装 WebView2 运行时                    |
-| 双开写库冲突              | 低   | 中             | tauri-plugin-single-instance                            |
+| 风险                      | 概率 | 影响           | 缓解 / 降级                                                  |
+| ------------------------- | ---- | -------------- | ------------------------------------------------------------ |
+| 插件事务不可靠（#886）    | 高   | 高（数据损坏） | 多语句写全走 Rust 原子命令；预案整体迁 rusqlite              |
+| select 无类型             | 高   | 中             | repository 层 Zod 收窄，unknown 不出边界                     |
+| Gantt 自研延期            | 中   | 中             | 降级 frappe-gantt；极限降级纯 CSS 时间条                     |
+| SVAR 许可证/PRO 边界误用  | 低   | 中             | 只依赖 MIT npm 包；不依赖 PRO 功能；使用前复核               |
+| SQLite 外键默认关闭       | 高   | 高             | SQLx SQLite 连接默认启用外键，Rust 原生命令也显式启用        |
+| 时区差一天                | 中   | 中             | date.ts 统一 + 禁裸 new Date + UTC+8 午夜单测                |
+| 两层父子被绕过            | 中   | 中             | DB 触发器 + service 双重校验                                 |
+| 恢复损坏当前库            | 低   | 高             | 恢复前自动备份 + 二次确认，全程 Rust 命令内完成              |
+| WebView2 缺失（旧 Win10） | 低   | 中             | NSIS 安装包嵌入 WebView2 Offline Installer，首次安装无需联网 |
+| 双开写库冲突              | 低   | 中             | tauri-plugin-single-instance                                 |
 
 ## 10. 未来 AI 功能安全边界（硬规则）
 

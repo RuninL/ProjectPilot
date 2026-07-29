@@ -1,0 +1,58 @@
+import { z } from 'zod';
+import {
+  actionItemRowSchema,
+  appSettingRowSchema,
+  meetingRowSchema,
+  milestoneRowSchema,
+  projectLinkRowSchema,
+  projectRowSchema,
+  riskRowSchema,
+  taskDependencyRowSchema,
+  taskRowSchema,
+} from '@/db/schemas';
+
+export const DATA_SCHEMA_VERSION = 1 as const;
+
+export const entityCountSchema = z
+  .object({
+    projects: z.number().int().nonnegative(),
+    meetings: z.number().int().nonnegative(),
+    tasks: z.number().int().nonnegative(),
+    taskDependencies: z.number().int().nonnegative(),
+    milestones: z.number().int().nonnegative(),
+    actionItems: z.number().int().nonnegative(),
+    projectLinks: z.number().int().nonnegative(),
+    risks: z.number().int().nonnegative(),
+    appSettings: z.number().int().nonnegative(),
+  })
+  .strict();
+
+export const exportDataSchema = z
+  .object({
+    projects: z.array(projectRowSchema.strict()),
+    meetings: z.array(meetingRowSchema.strict()),
+    tasks: z.array(taskRowSchema.strict()),
+    taskDependencies: z.array(taskDependencyRowSchema.strict()),
+    milestones: z.array(milestoneRowSchema.strict()),
+    actionItems: z.array(actionItemRowSchema.strict()),
+    projectLinks: z.array(projectLinkRowSchema.strict()),
+    risks: z.array(riskRowSchema.strict()),
+    appSettings: z.array(appSettingRowSchema.strict()),
+  })
+  .strict();
+
+export const projectPilotExportSchema = z
+  .object({
+    schemaVersion: z.literal(DATA_SCHEMA_VERSION, {
+      errorMap: () => ({ message: `不支持的数据版本，仅支持版本 ${String(DATA_SCHEMA_VERSION)}` }),
+    }),
+    exportedAt: z.string().datetime({ offset: true }),
+    appVersion: z.string().min(1),
+    statistics: entityCountSchema,
+    data: exportDataSchema,
+  })
+  .strict();
+
+export type EntityCounts = z.infer<typeof entityCountSchema>;
+export type ProjectPilotExport = z.infer<typeof projectPilotExportSchema>;
+export type ExportData = z.infer<typeof exportDataSchema>;

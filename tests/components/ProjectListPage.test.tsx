@@ -185,7 +185,9 @@ describe('ProjectListPage', () => {
     await user.click(screen.getByRole('button', { name: '已归档项目 的操作' }));
     await user.click(await screen.findByRole('menuitem', { name: '永久删除' }));
 
-    expect(await screen.findByText('将同时删除 2 个任务。')).toBeInTheDocument();
+    expect(
+      await screen.findByText('将同时删除 2 个任务、0 场会议、0 个里程碑和 0 个文件/链接。'),
+    ).toBeInTheDocument();
 
     await user.click(screen.getByRole('button', { name: '取消' }));
 

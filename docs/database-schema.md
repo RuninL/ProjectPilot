@@ -6,12 +6,12 @@
 | --------- | ----------------------------------------------------------------------------------------------------------------------------- |
 | 主键      | `id TEXT PRIMARY KEY`，UUID v4（前端 `crypto.randomUUID()` 生成）。跨库导入导出稳定、离线生成无需回读                         |
 | 时间戳    | 每表 `created_at TEXT NOT NULL`、`updated_at TEXT NOT NULL`，UTC ISO-8601（`YYYY-MM-DDTHH:mm:ssZ`）                           |
-| 业务日期  | `TEXT 'YYYY-MM-DD'`（date-only，语义为香港日历日），配 `CHECK(x GLOB '____-__-__')`；字典序 = 日期序，可直接 ORDER BY/BETWEEN |
+| 业务日期  | `TEXT 'YYYY-MM-DD'`（date-only，语义为香港日历日），配 `CHECK(x GLOB '????-??-??')`；字典序 = 日期序，可直接 ORDER BY/BETWEEN |
 | 布尔      | INTEGER 0/1 + `CHECK(x IN (0,1))`                                                                                             |
-| 外键      | 全部声明；每个连接执行 `PRAGMA foreign_keys = ON`（SQLite 默认关闭），应用启动断言生效                                        |
+| 外键      | 全部声明；SQLx SQLite 连接默认启用 `foreign_keys`，Rust `execute_batch` 也显式启用（SQLite 默认关闭）                         |
 | 示例数据  | 业务表带 `is_sample INTEGER NOT NULL DEFAULT 0`，一键清除 = 单事务 `DELETE ... WHERE is_sample=1`                             |
 | Migration | tauri-plugin-sql Migration（version + up/down SQL），SQL 文件外置于 `src-tauri/migrations/`，幂等                             |
-| 存放位置  | Tauri app data directory（如 `%APPDATA%/com.projectpilot.app/projectpilot.db`），绝不放源码目录                               |
+| 存放位置  | Tauri app config directory（如 `%APPDATA%/com.projectpilot.app/projectpilot.db`），绝不放源码目录                             |
 
 ## 2. 表定义
 
@@ -24,7 +24,7 @@
 | description             | TEXT    | NOT NULL DEFAULT ''                                                                                                 |
 | status                  | TEXT    | NOT NULL DEFAULT 'active', CHECK(status IN ('active','on_hold','completed','archived'))                             |
 | color                   | TEXT    | NOT NULL DEFAULT '#2563EB', CHECK(color GLOB '#[0-9A-Fa-f][0-9A-Fa-f][0-9A-Fa-f][0-9A-Fa-f][0-9A-Fa-f][0-9A-Fa-f]') |
-| start_date              | TEXT    | NULL, CHECK(start_date IS NULL OR start_date GLOB '____-**-**')                                                     |
+| start_date              | TEXT    | NULL, CHECK(start_date IS NULL OR start_date GLOB '????-??-??')                                                     |
 | target_end_date         | TEXT    | NULL, 同上格式 CHECK；CHECK(start_date IS NULL OR target_end_date IS NULL OR start_date <= target_end_date)         |
 | archived_at             | TEXT    | NULL（归档时间，NULL=未归档；替代单独布尔，含审计信息）                                                             |
 | is_sample               | INTEGER | NOT NULL DEFAULT 0, CHECK(is_sample IN (0,1))                                                                       |
@@ -54,7 +54,7 @@
 | is_sample               | INTEGER | NOT NULL DEFAULT 0                                                                                   |
 | created_at / updated_at | TEXT    | NOT NULL                                                                                             |
 
-索引：`idx_tasks_project_status(project_id, status)`、`idx_tasks_project_due(project_id, due_date)`、`idx_tasks_parent(parent_task_id)`、`idx_tasks_dashboard(status, due_date, progress)`（Dashboard 今日/本周/逾期/临期低进度均命中）
+索引：`idx_tasks_project_status(project_id, status)`、`idx_tasks_project_due(project_id, due_date)`、`idx_tasks_parent(parent_task_id)`、`idx_tasks_dashboard(status, due_date, progress)`（Dashboard 今日/未来 7 天/逾期/临期低进度均命中）
 migration 0002 追加：`idx_tasks_archived(archived_at)`（列表与完成率排除归档任务）、`idx_tasks_due_status(due_date, status)`（跨项目「我的任务」按截止日期排序 + 状态筛选）
 
 **两层父子限制（0001，触发器兜底 + service 校验）**：
@@ -219,10 +219,12 @@ WHEN EXISTS (
 | label                   | TEXT    | NOT NULL, CHECK(length(trim(label)) BETWEEN 1 AND 160)                    |
 | link_type               | TEXT    | NOT NULL, CHECK(link_type IN ('url','file_path'))                         |
 | target                  | TEXT    | NOT NULL, CHECK(length(trim(target)) > 0)（URL 或本地路径，不存文件本体） |
+| description             | TEXT    | NOT NULL DEFAULT ''（migration 0006，可选备注）                           |
 | is_sample               | INTEGER | NOT NULL DEFAULT 0                                                        |
 | created_at / updated_at | TEXT    | NOT NULL                                                                  |
 
 索引：`idx_links_project(project_id)`
+0006 仅以 `ALTER TABLE ... ADD COLUMN` 追加 `description`，已有记录自动获得空备注，不重建表、不丢数据。
 打开前校验：file_path 用 Rust command 检查存在性，不存在提示并提供复制；url 仅 http/https 可打开。
 
 ### 2.8 app_settings（键值）
@@ -235,12 +237,37 @@ WHEN EXISTS (
 
 推荐 key：`theme`（dark/light/system）、`sample_data_seeded_at`、`last_backup_at`、`week_starts_on`。恢复数据库时整体替换，UI 不提供批量清空。
 
+### 2.9 risks（migration 0005）
+
+结构化风险归属一个项目（`project_id → projects(id) ON DELETE CASCADE`）。
+
+| 字段                    | 类型    | 约束 / 语义                                                                  |
+| ----------------------- | ------- | ---------------------------------------------------------------------------- |
+| id                      | TEXT    | PK                                                                           |
+| project_id              | TEXT    | NOT NULL, FK→projects(id) **ON DELETE CASCADE**                              |
+| title / description     | TEXT    | 标题 NOT NULL，trim 后 1–160 字符；描述 NOT NULL DEFAULT ''                  |
+| category                | TEXT    | NOT NULL DEFAULT `other`，scope/schedule/resource/technical/external/other   |
+| likelihood / impact     | TEXT    | NOT NULL，low/medium/high                                                    |
+| level                   | TEXT    | NOT NULL，low/medium/high/critical；由 likelihood × impact 的表级 CHECK 确定 |
+| status                  | TEXT    | NOT NULL DEFAULT `open`，open/monitoring/mitigated/closed                    |
+| owner / mitigation_plan | TEXT    | NOT NULL DEFAULT ''；负责人和缓解计划                                        |
+| due_date                | TEXT    | NULL，业务日期格式                                                           |
+| resolved_at             | TEXT    | NULL；mitigated/closed 时必须非空，open/monitoring 时必须为空                |
+| is_sample               | INTEGER | NOT NULL DEFAULT 0                                                           |
+| created_at / updated_at | TEXT    | NOT NULL                                                                     |
+
+索引为 `idx_risks_project`、`idx_risks_status_level_due`、`idx_risks_project_status`。
+风险状态迁移是 service 规则而非 SQLite 状态机触发器：仅允许 `open → monitoring/closed`、
+`monitoring → mitigated/closed`、`mitigated/closed → open`；`risk.service.ts` 的 `updateRisk`
+和 `setStatus` 都执行此校验，防止编辑表单绕过生命周期。
+
 ## 3. Mermaid ER 图
 
 ```mermaid
 erDiagram
   projects ||--o{ tasks : "owns (CASCADE)"
   projects ||--o{ milestones : "owns (CASCADE)"
+  projects ||--o{ risks : "owns (CASCADE)"
   projects |o--o{ meetings : "optional (CASCADE)"
   projects ||--o{ project_links : "owns (CASCADE)"
   tasks |o--o{ tasks : "parent_of (CASCADE, max 2 levels, same project)"
@@ -291,6 +318,18 @@ erDiagram
     TEXT date
     TEXT status
   }
+  risks {
+    TEXT id PK
+    TEXT project_id FK
+    TEXT title
+    TEXT category
+    TEXT likelihood
+    TEXT impact
+    TEXT level
+    TEXT status
+    TEXT due_date
+    TEXT resolved_at
+  }
   meetings {
     TEXT id PK
     TEXT project_id FK
@@ -314,6 +353,7 @@ erDiagram
     TEXT label
     TEXT link_type
     TEXT target
+    TEXT description
   }
   app_settings {
     TEXT key PK
@@ -321,7 +361,34 @@ erDiagram
   }
 ```
 
-## 4. 删除 / 归档规则总表
+## 4. JSON 交换格式（schemaVersion 1）
+
+顶层严格结构：
+
+- `schemaVersion: 1`
+- `exportedAt: UTC ISO-8601 string`
+- `appVersion: non-empty string`
+- `statistics`: 下列九个数组各自的非负整数记录数
+- `data`: 九个实体数组；未知顶层、data、统计或行字段均拒绝
+
+`data` 的完整字段如下（字段类型、枚举和可空性与 §2 表定义一致）：
+
+- `projects[]`: `id,name,description,status,color,start_date,target_end_date,archived_at,is_sample,created_at,updated_at`
+- `meetings[]`: `id,project_id,topic,date,start_time,attendees,agenda,notes,decisions,risks,is_sample,created_at,updated_at`
+- `tasks[]`: `id,project_id,parent_task_id,title,description,status,priority,start_date,due_date,progress,estimated_hours,actual_hours,completed_at,archived_at,source_meeting_id,is_sample,created_at,updated_at`
+- `taskDependencies[]`: `id,predecessor_id,successor_id,dep_type,lag_days,created_at,updated_at`
+- `milestones[]`: `id,project_id,linked_task_id,name,description,date,status,achieved_at,is_sample,created_at,updated_at`
+- `actionItems[]`: `id,meeting_id,content,owner,due_date,status,converted_task_id,converted_at,created_at,updated_at`
+- `projectLinks[]`: `id,project_id,label,link_type,target,description,is_sample,created_at,updated_at`
+- `risks[]`: `id,project_id,title,description,category,likelihood,impact,level,status,owner,mitigation_plan,due_date,resolved_at,is_sample,created_at,updated_at`
+- `appSettings[]`: `key,value,created_at,updated_at`
+
+导入顺序为 projects → meetings → 根 tasks → 子 tasks →
+taskDependencies/milestones/actionItems/projectLinks/risks → appSettings。替换模式先按反向依赖顺序清空；
+合并模式对所有数组统一按主键（设置按 key）跳过。写入前校验统计、重复键、外键、同项目关系、
+两层任务、converted_task_id 唯一性和完整依赖图无环，之后一次调用 `execute_batch`。
+
+## 5. 删除 / 归档规则总表
 
 | 操作                   | 行为                                                                                                                                                                                                                      | 确认                                 |
 | ---------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------ |
@@ -336,7 +403,7 @@ erDiagram
 | 恢复数据库             | 自动备份当前库 → 二次确认 → 替换文件 → 重建连接                                                                                                                                                                           | **二次确认**                         |
 | JSON 导入              | Zod 校验 → 预览统计 → 单事务全量替换，失败回滚                                                                                                                                                                            | **二次确认**                         |
 
-## 5. Migration 策略
+## 6. Migration 策略
 
 - `src-tauri/migrations/0001_init.sql`：8 张表 + 索引 + 触发器（一次性建全）
 - `src-tauri/migrations/0002_task_lifecycle.sql`：**纯增量**——3 个 `ALTER TABLE tasks ADD COLUMN`、2 个 `CREATE INDEX`、4 个 `CREATE TRIGGER`。
@@ -353,6 +420,9 @@ erDiagram
   不新增表、不 DROP 任何对象、不重建任何表、不复制或删除任何既有行，0001/0002/0003 保持原样。
   会议、行动项、milestones 三张表在 0001 就已建好，阶段 4 只补齐 0001 未能表达的不变式与一个可选列。
   详见 [§2.5](#25-meetings)、[§2.6](#26-action_items)。
+- `src-tauri/migrations/0005_dashboard_risks.sql`：**纯增量**——新增 `risks` 表及其 3 个查询索引，
+  不修改或重建 0001–0004 的任何表、索引、触发器，也不复制或删除既有行。风险等级与
+  `status`/`resolved_at` 一致性由表级 CHECK 兜底；合法状态迁移由 service 层校验。
 - 每个 migration 幂等（CREATE TABLE IF NOT EXISTS 风格不用于变更，版本号单调递增，插件按 version 执行一次）
 - Down SQL 仅用于开发期回滚；发布后只前进不后退
 - schema 版本随 JSON 导出携带，导入时校验兼容性

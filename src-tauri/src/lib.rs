@@ -1,7 +1,10 @@
 mod atomic;
 mod backup;
+#[cfg(test)]
+mod backup_tests;
 mod error;
 mod migrations;
+mod project_links;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
@@ -14,6 +17,7 @@ pub fn run() {
         }))
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_dialog::init())
+        .plugin(tauri_plugin_fs::init())
         .plugin(
             tauri_plugin_sql::Builder::default()
                 .add_migrations("sqlite:projectpilot.db", migrations::migrations())
@@ -25,6 +29,8 @@ pub fn run() {
             backup::open_data_dir,
             backup::backup_database,
             backup::restore_database,
+            project_links::local_path_exists,
+            project_links::open_local_path,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

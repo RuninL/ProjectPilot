@@ -47,6 +47,13 @@ function insertParams(project: Project): unknown[] {
 export type ProjectScope = 'active' | 'archived' | 'all';
 export type ProjectSort = 'updated_at' | 'name' | 'target_end_date';
 
+interface DeleteImpactRow {
+  task_count: number;
+  meeting_count: number;
+  milestone_count: number;
+  project_link_count: number;
+}
+
 export interface ProjectQuery {
   search?: string;
   status?: ProjectStatus;
@@ -129,6 +136,29 @@ export function createProjectRepository(db: SqlExecutor) {
     async deleteById(id: string): Promise<number> {
       const result = await db.execute('DELETE FROM projects WHERE id = ?', [id]);
       return result.rowsAffected;
+    },
+
+    async countDeleteImpact(id: string): Promise<{
+      taskCount: number;
+      meetingCount: number;
+      milestoneCount: number;
+      projectLinkCount: number;
+    }> {
+      const rows = await db.select<DeleteImpactRow[]>(
+        `SELECT
+          (SELECT COUNT(*) FROM tasks WHERE project_id = ?) AS task_count,
+          (SELECT COUNT(*) FROM meetings WHERE project_id = ?) AS meeting_count,
+          (SELECT COUNT(*) FROM milestones WHERE project_id = ?) AS milestone_count,
+          (SELECT COUNT(*) FROM project_links WHERE project_id = ?) AS project_link_count`,
+        [id, id, id, id],
+      );
+      const row = rows[0];
+      return {
+        taskCount: row?.task_count ?? 0,
+        meetingCount: row?.meeting_count ?? 0,
+        milestoneCount: row?.milestone_count ?? 0,
+        projectLinkCount: row?.project_link_count ?? 0,
+      };
     },
   };
 }

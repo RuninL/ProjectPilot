@@ -4,7 +4,9 @@ import {
   actionItemInputSchema,
   meetingInputSchema,
   milestoneInputSchema,
+  projectLinkInputSchema,
   projectInputSchema,
+  riskInputSchema,
   taskInputSchema,
 } from '@/services/schemas';
 
@@ -67,6 +69,27 @@ const cases: SchemaCase[] = [
     name: 'milestoneInputSchema',
     schema: milestoneInputSchema,
     raw: { project_id: 'p1', linked_task_id: '', name: '一期上线', date: '2026-08-01' },
+  },
+  {
+    name: 'riskInputSchema',
+    schema: riskInputSchema,
+    raw: {
+      project_id: 'p1',
+      title: '第三方接口延迟',
+      likelihood: 'high',
+      impact: 'medium',
+      due_date: '',
+    },
+  },
+  {
+    name: 'projectLinkInputSchema',
+    schema: projectLinkInputSchema,
+    raw: {
+      label: '需求文档',
+      link_type: 'url',
+      target: 'https://example.com/spec',
+      description: ' 产品资料 ',
+    },
   },
 ];
 

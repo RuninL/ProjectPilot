@@ -39,6 +39,7 @@ describe('migration 0001 schema', () => {
       'milestones',
       'project_links',
       'projects',
+      'risks',
       'task_dependencies',
       'tasks',
     ]);

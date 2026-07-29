@@ -54,3 +54,21 @@ export async function restoreDatabase(srcPath: string): Promise<string> {
     throw toAppError(error);
   }
 }
+
+/** Check whether a Windows-local file or directory exists without reading it. */
+export async function localPathExists(path: string): Promise<boolean> {
+  try {
+    return await invoke<boolean>('local_path_exists', { path });
+  } catch (error) {
+    throw toAppError(error);
+  }
+}
+
+/** Open an existing Windows-local path with the system default application. */
+export async function openLocalPath(path: string): Promise<void> {
+  try {
+    await invoke('open_local_path', { path });
+  } catch (error) {
+    throw toAppError(error);
+  }
+}

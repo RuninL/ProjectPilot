@@ -1,10 +1,12 @@
 import { getDb } from '@/lib/db';
 import { createActionItemRepository } from './actionItem.repo';
 import { createAppSettingRepository } from './appSetting.repo';
+import { createDataTransferRepository } from './dataTransfer.repo';
 import { createMeetingRepository } from './meeting.repo';
 import { createMilestoneRepository } from './milestone.repo';
 import { createProjectRepository } from './project.repo';
 import { createProjectLinkRepository } from './projectLink.repo';
+import { createRiskRepository } from './risk.repo';
 import { createSampleDataRepository } from './sample.repo';
 import { createTaskRepository } from './task.repo';
 import { createTaskDependencyRepository } from './taskDependency.repo';
@@ -18,6 +20,8 @@ export * from './actionItem.repo';
 export * from './projectLink.repo';
 export * from './appSetting.repo';
 export * from './sample.repo';
+export * from './risk.repo';
+export * from './dataTransfer.repo';
 
 /** Build every repository bound to the live SQLite singleton. */
 export async function getRepositories() {
@@ -31,7 +35,9 @@ export async function getRepositories() {
     actionItems: createActionItemRepository(db),
     projectLinks: createProjectLinkRepository(db),
     appSettings: createAppSettingRepository(db),
+    dataTransfer: createDataTransferRepository(db),
     sample: createSampleDataRepository(db),
+    risks: createRiskRepository(db),
   };
 }
 

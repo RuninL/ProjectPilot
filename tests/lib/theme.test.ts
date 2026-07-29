@@ -22,13 +22,15 @@ function stubMatchMedia(matches: boolean): FakeQuery {
 
 afterEach(() => {
   vi.unstubAllGlobals();
-  document.documentElement.classList.remove('dark');
+  document.documentElement.classList.remove('dark', 'theme-warm', 'theme-colorful');
 });
 
 describe('resolveTheme', () => {
   it('returns explicit themes unchanged', () => {
     expect(resolveTheme('light')).toBe('light');
     expect(resolveTheme('dark')).toBe('dark');
+    expect(resolveTheme('warm')).toBe('warm');
+    expect(resolveTheme('colorful')).toBe('colorful');
   });
 
   it('follows the OS preference for system', () => {
@@ -51,6 +53,26 @@ describe('applyTheme', () => {
 
     expect(applyTheme('light')).toBe('light');
     expect(document.documentElement.classList.contains('dark')).toBe(false);
+  });
+
+  it('applies theme-warm as a light-based palette', () => {
+    expect(applyTheme('warm')).toBe('warm');
+    expect(document.documentElement.classList.contains('theme-warm')).toBe(true);
+    expect(document.documentElement.classList.contains('dark')).toBe(false);
+  });
+
+  it('applies theme-colorful as a dark-based palette', () => {
+    expect(applyTheme('colorful')).toBe('colorful');
+    expect(document.documentElement.classList.contains('theme-colorful')).toBe(true);
+    expect(document.documentElement.classList.contains('dark')).toBe(true);
+  });
+
+  it('clears palette classes when switching back to light', () => {
+    applyTheme('colorful');
+    expect(applyTheme('light')).toBe('light');
+    expect(document.documentElement.classList.contains('dark')).toBe(false);
+    expect(document.documentElement.classList.contains('theme-warm')).toBe(false);
+    expect(document.documentElement.classList.contains('theme-colorful')).toBe(false);
   });
 });
 

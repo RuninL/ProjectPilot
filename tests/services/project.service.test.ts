@@ -1,8 +1,20 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { createProjectRepository, createTaskRepository } from '@/repositories';
+import {
+  createMeetingRepository,
+  createMilestoneRepository,
+  createProjectLinkRepository,
+  createProjectRepository,
+  createTaskRepository,
+} from '@/repositories';
 import { createProjectService, type ProjectService } from '@/services/project.service';
 import type { ProjectInput } from '@/services/schemas';
-import { makeProject, makeTask } from '../helpers/fixtures';
+import {
+  makeMeeting,
+  makeMilestone,
+  makeProject,
+  makeProjectLink,
+  makeTask,
+} from '../helpers/fixtures';
 import { createTestDb, type TestDb } from '../helpers/testDb';
 
 let db: TestDb;
@@ -109,18 +121,26 @@ describe('deleteProjectPermanently', () => {
     expect(await service.getProject(project.id)).not.toBeNull();
   });
 
-  it('deletes an archived project and cascades its tasks', async () => {
+  it('deletes an archived project and cascades every project-owned record', async () => {
     const project = await service.createProject(input());
     await createTaskRepository(db.executor).insert(makeTask({ id: 't1', project_id: project.id }));
+    await createMeetingRepository(db.executor).insert(makeMeeting({ project_id: project.id }));
+    await createMilestoneRepository(db.executor).insert(makeMilestone({ project_id: project.id }));
+    await createProjectLinkRepository(db.executor).insert(
+      makeProjectLink({ project_id: project.id }),
+    );
     await service.archiveProject(project.id);
 
     await service.deleteProjectPermanently(project.id);
 
     await expect(service.getProject(project.id)).rejects.toThrow('项目不存在');
     expect(await createTaskRepository(db.executor).findById('t1')).toBeNull();
+    expect(await createMeetingRepository(db.executor).findByProject(project.id)).toEqual([]);
+    expect(await createMilestoneRepository(db.executor).findByProject(project.id)).toEqual([]);
+    expect(await createProjectLinkRepository(db.executor).findByProject(project.id)).toEqual([]);
   });
 
-  it('reports the real task count before deleting, not an estimate', async () => {
+  it('reports every cascade count before deleting, not an estimate', async () => {
     const project = await service.createProject(input());
     const tasks = createTaskRepository(db.executor);
     await tasks.insert(makeTask({ id: 't1', project_id: project.id }));
@@ -128,14 +148,29 @@ describe('deleteProjectPermanently', () => {
     await tasks.insert(
       makeTask({ id: 't3', project_id: project.id, archived_at: '2026-07-01T00:00:00Z' }),
     );
+    await createMeetingRepository(db.executor).insert(makeMeeting({ project_id: project.id }));
+    await createMilestoneRepository(db.executor).insert(makeMilestone({ project_id: project.id }));
+    await createProjectLinkRepository(db.executor).insert(
+      makeProjectLink({ project_id: project.id }),
+    );
 
-    expect(await service.countDeleteImpact(project.id)).toEqual({ taskCount: 3 });
+    expect(await service.countDeleteImpact(project.id)).toEqual({
+      taskCount: 3,
+      meetingCount: 1,
+      milestoneCount: 1,
+      projectLinkCount: 1,
+    });
   });
 
   it('reports zero impact for an empty project', async () => {
     const project = await service.createProject(input());
 
-    expect(await service.countDeleteImpact(project.id)).toEqual({ taskCount: 0 });
+    expect(await service.countDeleteImpact(project.id)).toEqual({
+      taskCount: 0,
+      meetingCount: 0,
+      milestoneCount: 0,
+      projectLinkCount: 0,
+    });
   });
 });
 

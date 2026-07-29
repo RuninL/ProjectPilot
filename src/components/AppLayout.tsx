@@ -2,13 +2,16 @@ import {
   CalendarDays,
   CheckSquare,
   FolderKanban,
+  GanttChartSquare,
   LayoutDashboard,
+  ShieldAlert,
   Settings,
   Users,
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import { NavLink, Outlet } from 'react-router-dom';
 import { cn } from '@/lib/cn';
+import { AppFooter } from './AppFooter';
 
 interface NavItem {
   to: string;
@@ -20,8 +23,10 @@ const NAV_ITEMS: NavItem[] = [
   { to: '/', label: '仪表盘', icon: LayoutDashboard },
   { to: '/projects', label: '项目', icon: FolderKanban },
   { to: '/tasks', label: '我的任务', icon: CheckSquare },
+  { to: '/gantt', label: '甘特图', icon: GanttChartSquare },
   { to: '/calendar', label: '日历', icon: CalendarDays },
   { to: '/meetings', label: '会议', icon: Users },
+  { to: '/risks', label: '风险', icon: ShieldAlert },
   { to: '/settings', label: '设置', icon: Settings },
 ];
 
@@ -55,8 +60,11 @@ export function AppLayout() {
           ))}
         </nav>
       </aside>
-      <main className="flex-1 overflow-auto">
-        <Outlet />
+      <main className="flex min-w-0 flex-1 flex-col overflow-auto">
+        <div className="flex-1">
+          <Outlet />
+        </div>
+        <AppFooter />
       </main>
     </div>
   );

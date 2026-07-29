@@ -42,3 +42,6 @@ Thumbs.db
 *.sqlite
 *.sqlite3
 backups/
+exports/
+projectpilot-export-*.json
+projectpilot-*.csv

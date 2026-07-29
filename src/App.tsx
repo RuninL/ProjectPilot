@@ -7,6 +7,7 @@ import { toAppError } from '@/lib/errors';
 import { applyTheme, subscribeToSystemTheme } from '@/lib/theme';
 import { router } from '@/router';
 import { ensureSampleDataSeeded } from '@/services/sampleData.service';
+import { loadThemePreference } from '@/features/settings/services/settingsPreference.service';
 import { useAppStore } from '@/stores/useAppStore';
 
 /**
@@ -19,6 +20,7 @@ export function App() {
   const theme = useAppStore((state) => state.theme);
   const dbReady = useAppStore((state) => state.dbReady);
   const setDbReady = useAppStore((state) => state.setDbReady);
+  const setTheme = useAppStore((state) => state.setTheme);
   const setGlobalError = useAppStore((state) => state.setGlobalError);
   const [error, setError] = useState<string | null>(null);
 
@@ -34,6 +36,10 @@ export function App() {
     void (async () => {
       try {
         await getDb();
+        const savedTheme = await loadThemePreference();
+        if (savedTheme !== null && !controller.signal.aborted) {
+          setTheme(savedTheme);
+        }
       } catch (caught) {
         if (!controller.signal.aborted) {
           setError(toAppError(caught).message);
@@ -58,7 +64,7 @@ export function App() {
     return () => {
       controller.abort();
     };
-  }, [setDbReady, setGlobalError]);
+  }, [setDbReady, setGlobalError, setTheme]);
 
   if (error !== null) {
     return <ErrorState title="数据库初始化失败" message={error} />;

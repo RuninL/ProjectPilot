@@ -1,13 +1,13 @@
 import { create } from 'zustand';
 
 interface DashboardState {
-  /** Set false whenever underlying data changes, so Phase 5 re-computes risk cards. */
+  /** Optional invalidation marker for future dashboard refresh coordination. */
   stale: boolean;
   invalidate: () => void;
   markFresh: () => void;
 }
 
-/** Dashboard risk-card cache invalidation flag. Computation arrives in Phase 5. */
+/** Dashboard cache invalidation flag; dashboard aggregates are always read-only. */
 export const useDashboardStore = create<DashboardState>((set) => ({
   stale: true,
   invalidate: () => {
