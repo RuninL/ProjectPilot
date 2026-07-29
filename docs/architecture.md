@@ -44,17 +44,31 @@
 | 单表 CRUD、查询、Dashboard 聚合 | tauri-plugin-sql `select/execute`                                                            | 官方维护、样板少     |
 | **必须原子的多语句写**          | 自写 Rust `#[tauri::command] execute_batch(statements)`：单连接内 BEGIN…COMMIT，出错整体回滚 | 绕开连接池事务陷阱   |
 | Schema migration                | 插件 Migration（Up/Down，幂等）                                                              | 官方机制             |
-| 备份/恢复/打开数据目录          | 自写 Rust command（文件操作 + 连接管理）                                                     | 需要文件锁与关闭连接 |
+| 备份/恢复/打开数据目录          | Rust command + SQLite online backup；文本文件走官方 fs/dialog 插件                           | 一致快照与最小权限   |
 
 必须走原子命令的操作（白名单）：
 
 1. 行动项转任务（INSERT task + UPDATE action_item）
 2. 项目永久删除的级联清理
-3. 全量 JSON 导入（清空 + 重建 8 张表）
+3. 全量 JSON 导入（清空 + 重建当前 9 张应用表）
 4. 清除示例数据（跨表删除 is_sample=1）
 5. 批量修改任务（N 条 UPDATE）
 
-**纵深防御**：Tauri capabilities 按最小授权配置——主窗口仅开放 `sql:allow-load/select/execute` 与白名单自定义命令；不开放插件的任意数据库路径加载。
+**纵深防御**：Tauri capabilities 按最小授权配置——主窗口开放
+`sql:allow-load/select/execute`、`dialog:default`、`fs:allow-read-text-file`、`fs:allow-write-text-file`
+与白名单自定义命令。JSON/CSV 路径必须先由官方 dialog 插件选取并加入 fs scope；
+不开放插件的任意数据库路径加载。
+
+### 2.4 阶段 6 数据口
+
+- `dataTransfer.repo.ts` 是全量读取、清库和参数化插入 SQL 的唯一边界；service 不含 SQL。
+- 导出按实体分别查询后组装 `schemaVersion=1` 文件，包含应用版本、UTC 导出时间和统计摘要。
+- 导入在任何写入前完成严格 Zod、统计、主键、外键、两层任务、转换唯一性和全图防环校验。
+- 合并模式统一跳过同主键/设置键；替换模式反向清库。两种模式最终都只调用一次
+  Rust `execute_batch`，任一语句失败由 SQLite 事务整体回滚。
+- 备份与还原使用 rusqlite online backup，而非直接复制主文件；还原源先执行
+  `PRAGMA quick_check` 并核对 9 张必要表，还原前生成时间戳安全副本。UI 要求完成后重启，
+  避免 Zustand 轻缓存继续展示还原前数据。
 
 **降级预案**：若 execute_batch 仍不满足（如需要行级回读逻辑），按触发条件整体迁移到 Rust command + rusqlite（事务/savepoint 完备，drop 默认回滚）。触发条件：事务压测失败、备份恢复需更强文件锁、需要精确 SQLite 错误码映射。
 

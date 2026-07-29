@@ -6,7 +6,7 @@
 | --------- | ----------------------------------------------------------------------------------------------------------------------------- |
 | 主键      | `id TEXT PRIMARY KEY`，UUID v4（前端 `crypto.randomUUID()` 生成）。跨库导入导出稳定、离线生成无需回读                         |
 | 时间戳    | 每表 `created_at TEXT NOT NULL`、`updated_at TEXT NOT NULL`，UTC ISO-8601（`YYYY-MM-DDTHH:mm:ssZ`）                           |
-| 业务日期  | `TEXT 'YYYY-MM-DD'`（date-only，语义为香港日历日），配 `CHECK(x GLOB '____-__-__')`；字典序 = 日期序，可直接 ORDER BY/BETWEEN |
+| 业务日期  | `TEXT 'YYYY-MM-DD'`（date-only，语义为香港日历日），配 `CHECK(x GLOB '????-??-??')`；字典序 = 日期序，可直接 ORDER BY/BETWEEN |
 | 布尔      | INTEGER 0/1 + `CHECK(x IN (0,1))`                                                                                             |
 | 外键      | 全部声明；每个连接执行 `PRAGMA foreign_keys = ON`（SQLite 默认关闭），应用启动断言生效                                        |
 | 示例数据  | 业务表带 `is_sample INTEGER NOT NULL DEFAULT 0`，一键清除 = 单事务 `DELETE ... WHERE is_sample=1`                             |
@@ -24,7 +24,7 @@
 | description             | TEXT    | NOT NULL DEFAULT ''                                                                                                 |
 | status                  | TEXT    | NOT NULL DEFAULT 'active', CHECK(status IN ('active','on_hold','completed','archived'))                             |
 | color                   | TEXT    | NOT NULL DEFAULT '#2563EB', CHECK(color GLOB '#[0-9A-Fa-f][0-9A-Fa-f][0-9A-Fa-f][0-9A-Fa-f][0-9A-Fa-f][0-9A-Fa-f]') |
-| start_date              | TEXT    | NULL, CHECK(start_date IS NULL OR start_date GLOB '____-**-**')                                                     |
+| start_date              | TEXT    | NULL, CHECK(start_date IS NULL OR start_date GLOB '????-??-??')                                                     |
 | target_end_date         | TEXT    | NULL, 同上格式 CHECK；CHECK(start_date IS NULL OR target_end_date IS NULL OR start_date <= target_end_date)         |
 | archived_at             | TEXT    | NULL（归档时间，NULL=未归档；替代单独布尔，含审计信息）                                                             |
 | is_sample               | INTEGER | NOT NULL DEFAULT 0, CHECK(is_sample IN (0,1))                                                                       |
@@ -358,7 +358,34 @@ erDiagram
   }
 ```
 
-## 4. 删除 / 归档规则总表
+## 4. JSON 交换格式（schemaVersion 1）
+
+顶层严格结构：
+
+- `schemaVersion: 1`
+- `exportedAt: UTC ISO-8601 string`
+- `appVersion: non-empty string`
+- `statistics`: 下列九个数组各自的非负整数记录数
+- `data`: 九个实体数组；未知顶层、data、统计或行字段均拒绝
+
+`data` 的完整字段如下（字段类型、枚举和可空性与 §2 表定义一致）：
+
+- `projects[]`: `id,name,description,status,color,start_date,target_end_date,archived_at,is_sample,created_at,updated_at`
+- `meetings[]`: `id,project_id,topic,date,start_time,attendees,agenda,notes,decisions,risks,is_sample,created_at,updated_at`
+- `tasks[]`: `id,project_id,parent_task_id,title,description,status,priority,start_date,due_date,progress,estimated_hours,actual_hours,completed_at,archived_at,source_meeting_id,is_sample,created_at,updated_at`
+- `taskDependencies[]`: `id,predecessor_id,successor_id,dep_type,lag_days,created_at,updated_at`
+- `milestones[]`: `id,project_id,linked_task_id,name,description,date,status,achieved_at,is_sample,created_at,updated_at`
+- `actionItems[]`: `id,meeting_id,content,owner,due_date,status,converted_task_id,converted_at,created_at,updated_at`
+- `projectLinks[]`: `id,project_id,label,link_type,target,is_sample,created_at,updated_at`
+- `risks[]`: `id,project_id,title,description,category,likelihood,impact,level,status,owner,mitigation_plan,due_date,resolved_at,is_sample,created_at,updated_at`
+- `appSettings[]`: `key,value,created_at,updated_at`
+
+导入顺序为 projects → meetings → 根 tasks → 子 tasks →
+taskDependencies/milestones/actionItems/projectLinks/risks → appSettings。替换模式先按反向依赖顺序清空；
+合并模式对所有数组统一按主键（设置按 key）跳过。写入前校验统计、重复键、外键、同项目关系、
+两层任务、converted_task_id 唯一性和完整依赖图无环，之后一次调用 `execute_batch`。
+
+## 5. 删除 / 归档规则总表
 
 | 操作                   | 行为                                                                                                                                                                                                                      | 确认                                 |
 | ---------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------ |
@@ -373,7 +400,7 @@ erDiagram
 | 恢复数据库             | 自动备份当前库 → 二次确认 → 替换文件 → 重建连接                                                                                                                                                                           | **二次确认**                         |
 | JSON 导入              | Zod 校验 → 预览统计 → 单事务全量替换，失败回滚                                                                                                                                                                            | **二次确认**                         |
 
-## 5. Migration 策略
+## 6. Migration 策略
 
 - `src-tauri/migrations/0001_init.sql`：8 张表 + 索引 + 触发器（一次性建全）
 - `src-tauri/migrations/0002_task_lifecycle.sql`：**纯增量**——3 个 `ALTER TABLE tasks ADD COLUMN`、2 个 `CREATE INDEX`、4 个 `CREATE TRIGGER`。

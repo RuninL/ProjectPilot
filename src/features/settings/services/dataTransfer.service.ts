@@ -7,10 +7,7 @@ import {
   type DataTransferRepository,
 } from '@/repositories/dataTransfer.repo';
 import type { Task, TaskDependency } from '@/types';
-import {
-  buildDependencyGraph,
-  hasCycle,
-} from '@/services/dependencyGraph';
+import { buildDependencyGraph, hasCycle } from '@/services/dependencyGraph';
 import {
   DATA_SCHEMA_VERSION,
   projectPilotExportSchema,
@@ -53,7 +50,10 @@ export function createDataTransferService(deps: DataTransferServiceDeps) {
       return deps.repository.readSnapshot();
     },
 
-    async exportData(appVersion: string, exportedAt = new Date().toISOString()): Promise<ProjectPilotExport> {
+    async exportData(
+      appVersion: string,
+      exportedAt = new Date().toISOString(),
+    ): Promise<ProjectPilotExport> {
       const snapshot = await deps.repository.readSnapshot();
       return projectPilotExportSchema.parse({
         schemaVersion: DATA_SCHEMA_VERSION,
@@ -75,13 +75,6 @@ export function createDataTransferService(deps: DataTransferServiceDeps) {
         });
       }
 
-      export async function getDataTransferService(): Promise<DataTransferService> {
-        const db = await getDb();
-        return createDataTransferService({
-          repository: createDataTransferRepository(db),
-          runBatch: executeBatch,
-        });
-      }
       const parsed = projectPilotExportSchema.safeParse(raw);
       if (!parsed.success) {
         const reason = parsed.error.issues[0]?.message ?? '文件结构不完整';
@@ -104,16 +97,30 @@ export function createDataTransferService(deps: DataTransferServiceDeps) {
 
       const statements =
         mode === 'replace'
-          ? [...deps.repository.buildClearStatements(), ...deps.repository.buildInsertStatements(selected)]
+          ? [
+              ...deps.repository.buildClearStatements(),
+              ...deps.repository.buildInsertStatements(selected),
+            ]
           : deps.repository.buildInsertStatements(selected);
       await deps.runBatch(statements);
 
       return {
         inserted: countSnapshot(selected),
-        skipped: mode === 'replace' ? emptyCounts() : subtractCounts(countSnapshot(incoming), countSnapshot(selected)),
+        skipped:
+          mode === 'replace'
+            ? emptyCounts()
+            : subtractCounts(countSnapshot(incoming), countSnapshot(selected)),
       };
     },
   };
+}
+
+export async function getDataTransferService(): Promise<DataTransferService> {
+  const db = await getDb();
+  return createDataTransferService({
+    repository: createDataTransferRepository(db),
+    runBatch: executeBatch,
+  });
 }
 
 function countSnapshot(snapshot: DatabaseSnapshot): EntityCounts {
@@ -251,8 +258,8 @@ function validateSnapshot(snapshot: DatabaseSnapshot): void {
   for (const item of snapshot.actionItems) {
     assertReference(item.meeting_id, meetingIds, `行动项 ${item.id} 的会议`);
     assertNullableReference(item.converted_task_id, taskIds, `行动项 ${item.id} 的转换任务`);
-    if ((item.converted_task_id === null) !== (item.converted_at === null)) {
-      throw validationError(`行动项 ${item.id} 的转换关联与转换时间不一致`);
+    if (item.converted_task_id !== null && item.converted_at === null) {
+      throw validationError(`行动项 ${item.id} 缺少转换时间`);
     }
     if (item.converted_task_id !== null) {
       if (convertedTaskIds.has(item.converted_task_id)) {
@@ -271,15 +278,42 @@ function validateSnapshot(snapshot: DatabaseSnapshot): void {
 }
 
 function assertUniqueKeys(snapshot: DatabaseSnapshot): void {
-  assertUnique(snapshot.projects.map((row) => row.id), '项目 ID');
-  assertUnique(snapshot.meetings.map((row) => row.id), '会议 ID');
-  assertUnique(snapshot.tasks.map((row) => row.id), '任务 ID');
-  assertUnique(snapshot.taskDependencies.map((row) => row.id), '任务依赖 ID');
-  assertUnique(snapshot.milestones.map((row) => row.id), '里程碑 ID');
-  assertUnique(snapshot.actionItems.map((row) => row.id), '行动项 ID');
-  assertUnique(snapshot.projectLinks.map((row) => row.id), '项目链接 ID');
-  assertUnique(snapshot.risks.map((row) => row.id), '风险 ID');
-  assertUnique(snapshot.appSettings.map((row) => row.key), '设置键');
+  assertUnique(
+    snapshot.projects.map((row) => row.id),
+    '项目 ID',
+  );
+  assertUnique(
+    snapshot.meetings.map((row) => row.id),
+    '会议 ID',
+  );
+  assertUnique(
+    snapshot.tasks.map((row) => row.id),
+    '任务 ID',
+  );
+  assertUnique(
+    snapshot.taskDependencies.map((row) => row.id),
+    '任务依赖 ID',
+  );
+  assertUnique(
+    snapshot.milestones.map((row) => row.id),
+    '里程碑 ID',
+  );
+  assertUnique(
+    snapshot.actionItems.map((row) => row.id),
+    '行动项 ID',
+  );
+  assertUnique(
+    snapshot.projectLinks.map((row) => row.id),
+    '项目链接 ID',
+  );
+  assertUnique(
+    snapshot.risks.map((row) => row.id),
+    '风险 ID',
+  );
+  assertUnique(
+    snapshot.appSettings.map((row) => row.key),
+    '设置键',
+  );
   assertUnique(
     snapshot.taskDependencies.map((row) => `${row.predecessor_id}\u0000${row.successor_id}`),
     '任务依赖关系',
@@ -298,17 +332,16 @@ function assertReference(id: string, ids: ReadonlySet<string>, label: string): v
   }
 }
 
-function assertNullableReference(
-  id: string | null,
-  ids: ReadonlySet<string>,
-  label: string,
-): void {
+function assertNullableReference(id: string | null, ids: ReadonlySet<string>, label: string): void {
   if (id !== null) {
     assertReference(id, ids, label);
   }
 }
 
-function validateDependencyGraph(tasks: readonly Task[], dependencies: readonly TaskDependency[]): void {
+function validateDependencyGraph(
+  tasks: readonly Task[],
+  dependencies: readonly TaskDependency[],
+): void {
   if (hasCycle(buildDependencyGraph([...tasks], [...dependencies]))) {
     throw validationError('任务依赖存在环');
   }

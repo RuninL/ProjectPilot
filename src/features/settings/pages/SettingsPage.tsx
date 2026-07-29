@@ -24,6 +24,7 @@ import {
   type ImportMode,
   type ImportResult,
 } from '../services/dataTransfer.service';
+import { saveThemePreference } from '../services/settingsPreference.service';
 
 const THEME_OPTIONS: { value: Theme; label: string }[] = [
   { value: 'dark', label: '深色' },
@@ -97,9 +98,11 @@ export function SettingsPage() {
   useEffect(() => {
     void refreshSampleState();
     void loadOptions();
-    void getDbPath().then(setDbPath).catch((caught: unknown) => {
-      setError(toAppError(caught).message);
-    });
+    void getDbPath()
+      .then(setDbPath)
+      .catch((caught: unknown) => {
+        setError(toAppError(caught).message);
+      });
   }, [loadOptions, refreshSampleState]);
 
   const runOperation = useCallback(async (operation: () => Promise<string | null>) => {
@@ -235,7 +238,12 @@ export function SettingsPage() {
           className="mt-3 h-10 rounded-md border border-input bg-background px-3 text-sm"
           value={theme}
           onChange={(event) => {
-            setTheme(event.target.value as Theme);
+            const nextTheme = event.target.value as Theme;
+            setTheme(nextTheme);
+            void runOperation(async () => {
+              await saveThemePreference(nextTheme);
+              return '主题设置已保存。';
+            });
           }}
         >
           {THEME_OPTIONS.map((option) => (

@@ -138,7 +138,10 @@ export function createCsv(
 
 type CsvCell = string | number | null;
 
-export function serializeCsv(headers: readonly string[], rows: readonly (readonly CsvCell[])[]): string {
+export function serializeCsv(
+  headers: readonly string[],
+  rows: readonly (readonly CsvCell[])[],
+): string {
   const lines = [
     headers.map(escapeCell).join(','),
     ...rows.map((row) => row.map(escapeCell).join(',')),

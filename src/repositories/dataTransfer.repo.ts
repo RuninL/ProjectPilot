@@ -76,10 +76,7 @@ export function createDataTransferRepository(db: SqlExecutor) {
         taskDependencyRowSchema,
         await db.select('SELECT * FROM task_dependencies'),
       );
-      const milestones = parseRows(
-        milestoneRowSchema,
-        await db.select('SELECT * FROM milestones'),
-      );
+      const milestones = parseRows(milestoneRowSchema, await db.select('SELECT * FROM milestones'));
       const actionItems = parseRows(
         actionItemRowSchema,
         await db.select('SELECT * FROM action_items'),

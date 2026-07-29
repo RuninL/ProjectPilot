@@ -7,9 +7,7 @@ import type { ProjectPilotExport } from '../data/dataTransfer.schema';
 
 function dateStamp(includeTime: boolean): string {
   const iso = new Date().toISOString();
-  return includeTime
-    ? iso.replaceAll(':', '-').replace(/\.\d{3}Z$/, 'Z')
-    : iso.slice(0, 10);
+  return includeTime ? iso.replaceAll(':', '-').replace(/\.\d{3}Z$/, 'Z') : iso.slice(0, 10);
 }
 
 export async function saveJsonExport(file: ProjectPilotExport): Promise<string | null> {

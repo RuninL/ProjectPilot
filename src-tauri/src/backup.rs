@@ -90,9 +90,7 @@ fn pre_restore_path(database: &Path) -> CommandResult<PathBuf> {
         .duration_since(UNIX_EPOCH)
         .map_err(|e| CommandError::Invalid(e.to_string()))?
         .as_secs();
-    Ok(database.with_file_name(format!(
-        "projectpilot-pre-restore-{timestamp}.db"
-    )))
+    Ok(database.with_file_name(format!("projectpilot-pre-restore-{timestamp}.db")))
 }
 
 /// Create a consistent SQLite online backup at `dest_path`.
@@ -127,4 +125,25 @@ pub fn restore_database(app: AppHandle, src_path: String) -> CommandResult<Strin
     }
     copy_database(&source, &dst)?;
     Ok(dst.to_string_lossy().into_owned())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::validate_database;
+    use std::time::{SystemTime, UNIX_EPOCH};
+
+    #[test]
+    fn rejects_non_sqlite_restore_file() {
+        let suffix = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .expect("system clock should be valid")
+            .as_nanos();
+        let path = std::env::temp_dir().join(format!("projectpilot-invalid-{suffix}.db"));
+        std::fs::write(&path, b"not a sqlite database").expect("fixture should be writable");
+
+        let result = validate_database(&path);
+        std::fs::remove_file(path).expect("fixture should be removable");
+
+        assert!(result.is_err());
+    }
 }
