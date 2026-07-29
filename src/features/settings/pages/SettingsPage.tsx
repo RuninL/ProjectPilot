@@ -24,6 +24,7 @@ import {
 import {
   getDataTransferService,
   type ImportMode,
+  type ImportPreview,
   type ImportResult,
 } from '../services/dataTransfer.service';
 import { saveThemePreference } from '../services/settingsPreference.service';
@@ -79,6 +80,7 @@ export function SettingsPage() {
   const [sampleConfirmOpen, setSampleConfirmOpen] = useState(false);
   const [pendingImport, setPendingImport] = useState<PendingImport | null>(null);
   const [importMode, setImportMode] = useState<ImportMode | ''>('');
+  const [importPreview, setImportPreview] = useState<ImportPreview | null>(null);
   const [importConfirmOpen, setImportConfirmOpen] = useState(false);
   const [restorePath, setRestorePath] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -87,6 +89,7 @@ export function SettingsPage() {
   const [dbPath, setDbPath] = useState<string | null>(null);
   const [csvEntity, setCsvEntity] = useState<CsvEntity>('tasks');
   const [csvProjectId, setCsvProjectId] = useState('');
+  const [includeSampleInExport, setIncludeSampleInExport] = useState(false);
 
   const refreshSampleState = useCallback(async () => {
     try {
@@ -138,7 +141,11 @@ export function SettingsPage() {
   const exportJson = () =>
     runOperation(async () => {
       const service = await getDataTransferService();
-      const file = await service.exportData(await readAppVersion());
+      const file = await service.exportData(
+        await readAppVersion(),
+        new Date().toISOString(),
+        includeSampleInExport,
+      );
       const path = await saveJsonExport(file);
       return path === null ? null : `JSON 已导出到：${path}`;
     });
@@ -157,6 +164,7 @@ export function SettingsPage() {
         current: await service.getCurrentStatistics(),
       });
       setImportMode('');
+      setImportPreview(null);
       return `文件校验通过：${countSummary(file.statistics)}。请选择导入模式。`;
     });
 
@@ -171,6 +179,7 @@ export function SettingsPage() {
       await loadOptions();
       setPendingImport(null);
       setImportMode('');
+      setImportPreview(null);
       return `导入完成。${resultSummary(result)}`;
     });
     setImportConfirmOpen(false);
@@ -210,10 +219,13 @@ export function SettingsPage() {
       return '';
     }
     if (importMode === 'replace') {
-      return `替换模式会删除当前全部数据（${countSummary(pendingImport.current)}），再导入所选文件。此操作不可撤销。`;
+      const deleted = importPreview?.deleted ?? pendingImport.current;
+      return `替换模式会删除当前全部数据（${countSummary(deleted)}），再导入所选文件。此操作不可撤销。`;
     }
-    return '合并模式会保留现有数据；所有实体统一采用“同 ID 跳过”策略，不会更新已有记录。';
-  }, [importMode, pendingImport]);
+    const skipped =
+      importPreview === null ? '' : `预计跳过：${countSummary(importPreview.skipped)}。`;
+    return `合并模式会保留现有数据；所有实体统一采用“同 ID 跳过”策略，不会更新已有记录。${skipped}`;
+  }, [importMode, importPreview, pendingImport]);
 
   return (
     <div className="p-6">
@@ -268,6 +280,16 @@ export function SettingsPage() {
             <Button disabled={busy} onClick={() => void exportJson()}>
               导出全量 JSON
             </Button>
+            <Label className="flex items-center gap-2 text-sm font-normal">
+              <input
+                type="checkbox"
+                checked={includeSampleInExport}
+                onChange={(event) => {
+                  setIncludeSampleInExport(event.target.checked);
+                }}
+              />
+              包含示例数据
+            </Label>
             <Button variant="outline" disabled={busy} onClick={() => void selectImport()}>
               选择 JSON 导入文件
             </Button>
@@ -294,6 +316,7 @@ export function SettingsPage() {
                 value={importMode}
                 onChange={(event) => {
                   setImportMode(event.target.value as ImportMode | '');
+                  setImportPreview(null);
                 }}
               >
                 <option value="">请选择</option>
@@ -305,7 +328,15 @@ export function SettingsPage() {
                   variant={importMode === 'replace' ? 'destructive' : 'default'}
                   disabled={busy || importMode === ''}
                   onClick={() => {
-                    setImportConfirmOpen(true);
+                    if (pendingImport === null || importMode === '') {
+                      return;
+                    }
+                    void runOperation(async () => {
+                      const service = await getDataTransferService();
+                      setImportPreview(await service.previewImport(pendingImport.file, importMode));
+                      setImportConfirmOpen(true);
+                      return null;
+                    });
                   }}
                 >
                   预览并确认导入

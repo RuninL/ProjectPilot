@@ -1,5 +1,7 @@
 mod atomic;
 mod backup;
+#[cfg(test)]
+mod backup_tests;
 mod error;
 mod migrations;
 

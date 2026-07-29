@@ -34,7 +34,7 @@ fn open_read_only(path: &Path) -> CommandResult<Connection> {
         .map_err(|_| CommandError::Invalid("所选文件不是有效的 SQLite 数据库".into()))
 }
 
-fn validate_database(path: &Path) -> CommandResult<Connection> {
+pub(crate) fn validate_database(path: &Path) -> CommandResult<Connection> {
     if !path.is_file() {
         return Err(CommandError::Invalid("数据库文件不存在".into()));
     }
@@ -86,7 +86,7 @@ fn copy_database(source: &Connection, destination: &Path) -> CommandResult<()> {
     Ok(())
 }
 
-fn pre_restore_path(database: &Path) -> CommandResult<PathBuf> {
+pub(crate) fn pre_restore_path(database: &Path) -> CommandResult<PathBuf> {
     let timestamp = SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .map_err(|e| CommandError::Invalid(e.to_string()))?

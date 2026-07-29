@@ -8,6 +8,7 @@ import {
 } from '@/repositories/dataTransfer.repo';
 import type { Task, TaskDependency } from '@/types';
 import { buildDependencyGraph, hasCycle } from '@/services/dependencyGraph';
+import { calculateRiskLevel } from '@/services/riskLevel';
 import {
   DATA_SCHEMA_VERSION,
   projectPilotExportSchema,
@@ -21,6 +22,10 @@ export type ImportMode = 'merge' | 'replace';
 export interface ImportResult {
   inserted: EntityCounts;
   skipped: EntityCounts;
+}
+
+export interface ImportPreview extends ImportResult {
+  deleted: EntityCounts;
 }
 
 export interface DataTransferServiceDeps {
@@ -53,8 +58,10 @@ export function createDataTransferService(deps: DataTransferServiceDeps) {
     async exportData(
       appVersion: string,
       exportedAt = new Date().toISOString(),
+      includeSample = false,
     ): Promise<ProjectPilotExport> {
-      const snapshot = await deps.repository.readSnapshot();
+      const complete = await deps.repository.readSnapshot();
+      const snapshot = includeSample ? complete : withoutSampleData(complete);
       return projectPilotExportSchema.parse({
         schemaVersion: DATA_SCHEMA_VERSION,
         exportedAt,
@@ -88,10 +95,24 @@ export function createDataTransferService(deps: DataTransferServiceDeps) {
       return parsed.data;
     },
 
+    async previewImport(file: ProjectPilotExport, mode: ImportMode): Promise<ImportPreview> {
+      const current = await deps.repository.readSnapshot();
+      const selected = selectImportRows(file.data, current, mode);
+      validateSnapshot(mode === 'replace' ? selected : mergeSnapshots(current, selected));
+      return {
+        inserted: countSnapshot(selected),
+        skipped:
+          mode === 'replace'
+            ? emptyCounts()
+            : subtractCounts(countSnapshot(file.data), countSnapshot(selected)),
+        deleted: mode === 'replace' ? countSnapshot(current) : emptyCounts(),
+      };
+    },
+
     async importData(file: ProjectPilotExport, mode: ImportMode): Promise<ImportResult> {
       const current = await deps.repository.readSnapshot();
       const incoming = file.data;
-      const selected = mode === 'replace' ? incoming : withoutConflicts(incoming, current);
+      const selected = selectImportRows(incoming, current, mode);
       const combined = mode === 'replace' ? selected : mergeSnapshots(current, selected);
       validateSnapshot(combined);
 
@@ -113,6 +134,14 @@ export function createDataTransferService(deps: DataTransferServiceDeps) {
       };
     },
   };
+}
+
+function selectImportRows(
+  incoming: ExportData,
+  current: DatabaseSnapshot,
+  mode: ImportMode,
+): DatabaseSnapshot {
+  return mode === 'replace' ? incoming : withoutConflicts(incoming, current);
 }
 
 export async function getDataTransferService(): Promise<DataTransferService> {
@@ -183,6 +212,51 @@ function withoutConflicts(incoming: ExportData, current: DatabaseSnapshot): Data
     projectLinks: excludeIds(incoming.projectLinks, current.projectLinks, (row) => row.id),
     risks: excludeIds(incoming.risks, current.risks, (row) => row.id),
     appSettings: excludeIds(incoming.appSettings, current.appSettings, (row) => row.key),
+  };
+}
+
+function withoutSampleData(snapshot: DatabaseSnapshot): DatabaseSnapshot {
+  const projects = snapshot.projects.filter((row) => row.is_sample === 0);
+  const projectIds = new Set(projects.map((row) => row.id));
+  const meetings = snapshot.meetings.filter(
+    (row) => row.is_sample === 0 && (row.project_id === null || projectIds.has(row.project_id)),
+  );
+  const meetingIds = new Set(meetings.map((row) => row.id));
+  const candidateTasks = snapshot.tasks.filter(
+    (row) =>
+      row.is_sample === 0 &&
+      projectIds.has(row.project_id) &&
+      (row.source_meeting_id === null || meetingIds.has(row.source_meeting_id)),
+  );
+  const candidateTaskIds = new Set(candidateTasks.map((row) => row.id));
+  const tasks = candidateTasks.filter(
+    (row) => row.parent_task_id === null || candidateTaskIds.has(row.parent_task_id),
+  );
+  const taskIds = new Set(tasks.map((row) => row.id));
+
+  return {
+    projects,
+    meetings,
+    tasks,
+    taskDependencies: snapshot.taskDependencies.filter(
+      (row) => taskIds.has(row.predecessor_id) && taskIds.has(row.successor_id),
+    ),
+    milestones: snapshot.milestones.filter(
+      (row) =>
+        row.is_sample === 0 &&
+        projectIds.has(row.project_id) &&
+        (row.linked_task_id === null || taskIds.has(row.linked_task_id)),
+    ),
+    actionItems: snapshot.actionItems.filter(
+      (row) =>
+        meetingIds.has(row.meeting_id) &&
+        (row.converted_task_id === null || taskIds.has(row.converted_task_id)),
+    ),
+    projectLinks: snapshot.projectLinks.filter(
+      (row) => row.is_sample === 0 && projectIds.has(row.project_id),
+    ),
+    risks: snapshot.risks.filter((row) => row.is_sample === 0 && projectIds.has(row.project_id)),
+    appSettings: snapshot.appSettings,
   };
 }
 
@@ -273,6 +347,9 @@ function validateSnapshot(snapshot: DatabaseSnapshot): void {
   }
   for (const risk of snapshot.risks) {
     assertReference(risk.project_id, projectIds, `风险 ${risk.id} 的项目`);
+    if (risk.level !== calculateRiskLevel(risk.likelihood, risk.impact)) {
+      throw validationError(`风险 ${risk.id} 的等级与可能性、影响不一致`);
+    }
   }
   validateDependencyGraph(snapshot.tasks, snapshot.taskDependencies);
 }
