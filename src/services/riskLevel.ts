@@ -6,8 +6,8 @@ export function calculateRiskLevel(likelihood: RiskLikelihood, impact: RiskImpac
     return 'critical';
   }
   if (
-    (likelihood === 'high' && (impact === 'medium' || impact === 'high')) ||
-    (impact === 'high' && (likelihood === 'medium' || likelihood === 'high'))
+    (likelihood === 'high' && impact === 'medium') ||
+    (impact === 'high' && likelihood === 'medium')
   ) {
     return 'high';
   }

@@ -17,6 +17,7 @@ interface DashboardData {
   upcoming: TaskWithProject[];
   risks: Awaited<ReturnType<Awaited<ReturnType<typeof getRiskService>>['listRisks']>>;
 }
+const riskLevelLabel = { low: '低', medium: '中', high: '高', critical: '严重' } as const;
 
 /** Read-only project overview composed from the existing repositories. */
 export function DashboardPage() {
@@ -177,7 +178,7 @@ export function DashboardPage() {
                   risk.level === 'critical' || risk.level === 'high' ? 'destructive' : 'outline'
                 }
               >
-                {risk.level}
+                {riskLevelLabel[risk.level]}风险
               </Badge>
             </Link>
           ))}
