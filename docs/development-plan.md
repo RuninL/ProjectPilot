@@ -57,7 +57,7 @@
 | SQLite bridge           | `@tauri-apps/plugin-sql`（sqlite feature）                                                             | 官方；migration 内建；事务缺口由自写命令补   |
 | Rust SQLite（原子命令） | `rusqlite`                                                                                             | 事务/savepoint 完备，drop 默认回滚           |
 | 单实例                  | `tauri-plugin-single-instance`                                                                         | 防双开写库                                   |
-| 打开文件/目录           | `tauri-plugin-opener`（或 shell open）                                                                 | 安全打开 URL/路径                            |
+| 打开文件/目录           | `tauri-plugin-opener`                                                                                  | 安全打开 URL/路径；禁止 shell 拼接命令       |
 | 文件对话框              | `tauri-plugin-dialog`                                                                                  | 备份/恢复选路径                              |
 | UI                      | shadcn/ui（CLI 拷贝进仓库）+ Tailwind CSS                                                              | MIT、代码归本仓库、主题三态                  |
 | 路由                    | `react-router`                                                                                         | 固定栈                                       |
