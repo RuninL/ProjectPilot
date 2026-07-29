@@ -80,6 +80,7 @@ fn copy_database(source: &Connection, destination: &Path) -> CommandResult<()> {
         std::fs::create_dir_all(parent)?;
     }
     let mut target = Connection::open(destination)?;
+    target.busy_timeout(Duration::from_secs(5))?;
     let backup = Backup::new(source, &mut target)?;
     backup.run_to_completion(64, Duration::from_millis(25), None)?;
     Ok(())

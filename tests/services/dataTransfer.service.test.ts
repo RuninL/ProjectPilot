@@ -163,14 +163,22 @@ function serviceFor(db: TestDb) {
     repository,
     service: createDataTransferService({
       repository,
-      runBatch: async (statements) => db.runBatch(statements),
+      runBatch: (statements) => Promise.resolve(db.runBatch(statements)),
     }),
   };
 }
 
-async function seed(db: TestDb, data: DatabaseSnapshot): Promise<void> {
+function seed(db: TestDb, data: DatabaseSnapshot): Promise<void> {
   const repository = createDataTransferRepository(db.executor);
   db.runBatch(repository.buildInsertStatements(data));
+  return Promise.resolve();
+}
+
+function required<T>(value: T | undefined, label: string): T {
+  if (value === undefined) {
+    throw new Error(`测试数据缺少${label}`);
+  }
+  return value;
 }
 
 describe('dataTransfer.service', () => {
@@ -291,14 +299,12 @@ describe('dataTransfer.service', () => {
     const before = await repository.readSnapshot();
     const service = createDataTransferService({
       repository,
-      runBatch: async (statements) => {
-        const firstInsert = statements.find((statement) =>
-          statement.sql.startsWith('INSERT INTO projects'),
-        );
+      runBatch: (statements) => {
+        const firstInsert = statements.find((statement) => statement.params !== undefined);
         if (firstInsert === undefined) {
           throw new Error('测试未找到项目插入语句');
         }
-        return db.runBatch([...statements, firstInsert]);
+        return Promise.resolve(db.runBatch([...statements, firstInsert]));
       },
     });
     const source = createTestDb();
@@ -334,7 +340,7 @@ describe('dataTransfer.service', () => {
     const { service } = serviceFor(db);
     const file = await service.exportData('0.1.0', NOW);
     file.data.tasks.push({
-      ...file.data.tasks[1]!,
+      ...required(file.data.tasks[1], '子任务'),
       id: 'task-third-level',
       parent_task_id: 'task-child-project-1',
     });
@@ -347,7 +353,7 @@ describe('dataTransfer.service', () => {
     const { service } = serviceFor(db);
     const file = await service.exportData('0.1.0', NOW);
     file.data.actionItems.push({
-      ...file.data.actionItems[0]!,
+      ...required(file.data.actionItems[0], '行动项'),
       id: 'action-duplicate',
     });
     file.statistics.actionItems += 1;

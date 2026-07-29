@@ -22,6 +22,12 @@ describe('CSV 导出', () => {
     expect(csv).toBe('\uFEFF标题,描述\r\n"含,逗号","引号""与\n换行"\r\n');
   });
 
+  it('中和 Excel 公式前缀', () => {
+    expect(serializeCsv(['标题'], [['=1+1'], ['@命令'], ['正常']])).toBe(
+      "\uFEFF标题\r\n'=1+1\r\n'@命令\r\n正常\r\n",
+    );
+  });
+
   it.each([
     ['tasks', '任务 ID'],
     ['milestones', '里程碑 ID'],

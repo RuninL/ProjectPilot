@@ -39,12 +39,12 @@
 
 ### 2.2 决策：混合持久层
 
-| 场景                            | 通道                                                                                         | 理由                 |
-| ------------------------------- | -------------------------------------------------------------------------------------------- | -------------------- |
-| 单表 CRUD、查询、Dashboard 聚合 | tauri-plugin-sql `select/execute`                                                            | 官方维护、样板少     |
-| **必须原子的多语句写**          | 自写 Rust `#[tauri::command] execute_batch(statements)`：单连接内 BEGIN…COMMIT，出错整体回滚 | 绕开连接池事务陷阱   |
-| Schema migration                | 插件 Migration（Up/Down，幂等）                                                              | 官方机制             |
-| 备份/恢复/打开数据目录          | Rust command + SQLite online backup；文本文件走官方 fs/dialog 插件                           | 一致快照与最小权限   |
+| 场景                            | 通道                                                                                         | 理由               |
+| ------------------------------- | -------------------------------------------------------------------------------------------- | ------------------ |
+| 单表 CRUD、查询、Dashboard 聚合 | tauri-plugin-sql `select/execute`                                                            | 官方维护、样板少   |
+| **必须原子的多语句写**          | 自写 Rust `#[tauri::command] execute_batch(statements)`：单连接内 BEGIN…COMMIT，出错整体回滚 | 绕开连接池事务陷阱 |
+| Schema migration                | 插件 Migration（Up/Down，幂等）                                                              | 官方机制           |
+| 备份/恢复/打开数据目录          | Rust command + SQLite online backup；文本文件走官方 fs/dialog 插件                           | 一致快照与最小权限 |
 
 必须走原子命令的操作（白名单）：
 
