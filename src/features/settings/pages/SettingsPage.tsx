@@ -328,7 +328,7 @@ export function SettingsPage() {
                   variant={importMode === 'replace' ? 'destructive' : 'default'}
                   disabled={busy || importMode === ''}
                   onClick={() => {
-                    if (pendingImport === null || importMode === '') {
+                    if (importMode === '') {
                       return;
                     }
                     void runOperation(async () => {
