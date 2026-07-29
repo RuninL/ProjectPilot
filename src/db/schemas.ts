@@ -176,4 +176,5 @@ export const riskRowSchema = z.object({
 
 export const riskWithProjectRowSchema = riskRowSchema.extend({
   project_name: z.string(),
+  project_color: z.string(),
 });

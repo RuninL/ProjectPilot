@@ -96,7 +96,9 @@ describe('ProjectLinkSection states and form', () => {
       'placeholder',
       'C:\\项目资料\\方案.pdf',
     );
-    expect(screen.getByText(/请输入 Windows 绝对路径/)).toBeInTheDocument();
+    expect(screen.getByText(/可点击「浏览」直接选择本机文件或目录/)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '浏览文件…' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '浏览目录…' })).toBeInTheDocument();
   });
 });
 

@@ -1,3 +1,13 @@
+import {
+  AlertTriangle,
+  CalendarClock,
+  Flag,
+  FolderKanban,
+  HeartPulse,
+  ShieldAlert,
+  Users,
+} from 'lucide-react';
+import type { LucideIcon } from 'lucide-react';
 import { useCallback, useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { EmptyState } from '@/components/common/EmptyState';
@@ -13,25 +23,74 @@ import {
 } from '@/services/dashboard.service';
 import type { TaskWithProject } from '@/types';
 
+/**
+ * Design conventions on this page:
+ * - Section headings all use the theme's `heading` accent token so every 栏目
+ *   (项目健康度, 派生风险, …) is identified by one uniform color per theme.
+ * - Clickable project names are always painted with the project's own color,
+ *   accompanied by a same-color dot so color is never the only signal.
+ */
+
+/** A project name link/label tinted with the project's configured color. */
+function ProjectName({ name, color }: { name: string; color: string | null }) {
+  return (
+    <span className="inline-flex min-w-0 items-center gap-1.5">
+      <span
+        className="h-2 w-2 shrink-0 rounded-full"
+        style={color === null ? undefined : { backgroundColor: color }}
+        aria-hidden
+      />
+      <span className="truncate font-medium" style={color === null ? undefined : { color }}>
+        {name}
+      </span>
+    </span>
+  );
+}
+
+/** Uniform section heading: accent bar + heading color, shared by every栏目. */
+function SectionTitle({
+  icon: Icon,
+  children,
+  small,
+}: {
+  icon?: LucideIcon;
+  children: React.ReactNode;
+  small?: boolean;
+}) {
+  return (
+    <div className="flex items-center gap-2">
+      <span className="h-4 w-1 shrink-0 rounded-full bg-heading" aria-hidden />
+      {Icon !== undefined && <Icon className="h-4 w-4 shrink-0 text-heading" aria-hidden />}
+      {small ? (
+        <h3 className="font-medium text-heading">{children}</h3>
+      ) : (
+        <h2 className="text-lg font-semibold text-heading">{children}</h2>
+      )}
+    </div>
+  );
+}
+
 function taskList(title: string, tasks: readonly TaskWithProject[], empty: string) {
   return (
-    <section className="rounded-lg border bg-card p-4">
-      <h2 className="mb-3 text-lg font-medium text-primary">{title}</h2>
+    <section className="rounded-lg border bg-card p-4 shadow-sm">
+      <div className="mb-3">
+        <SectionTitle icon={CalendarClock}>{title}</SectionTitle>
+      </div>
       {tasks.length === 0 ? (
         <p className="text-sm text-muted-foreground">{empty}</p>
       ) : (
-        <ul className="space-y-2">
+        <ul className="space-y-1">
           {tasks.map((task) => (
             <li key={task.id}>
               <Link
-                className="flex justify-between gap-2 text-sm hover:underline"
+                className="flex items-center justify-between gap-2 rounded-md px-2 py-1.5 text-sm transition-colors hover:bg-accent"
                 to={`/tasks?taskId=${encodeURIComponent(task.id)}`}
               >
-                <span className="min-w-0">
-                  <span className="font-medium text-sky-700 dark:text-sky-300">{task.title}</span>
-                  <span className="text-muted-foreground"> · {task.project_name}</span>
+                <span className="flex min-w-0 items-center gap-2">
+                  <span className="truncate">{task.title}</span>
+                  <ProjectName name={task.project_name} color={task.project_color} />
                 </span>
-                <span>{task.due_date}</span>
+                <span className="shrink-0 text-xs text-muted-foreground">{task.due_date}</span>
               </Link>
             </li>
           ))}
@@ -43,22 +102,31 @@ function taskList(title: string, tasks: readonly TaskWithProject[], empty: strin
 
 function milestoneList(title: string, milestones: readonly DashboardMilestone[], empty: string) {
   return (
-    <section className="rounded-lg border bg-card p-4">
-      <h3 className="mb-3 font-medium">{title}</h3>
+    <section className="rounded-lg border bg-card p-4 shadow-sm">
+      <div className="mb-3">
+        <SectionTitle icon={Flag} small>
+          {title}
+        </SectionTitle>
+      </div>
       {milestones.length === 0 ? (
         <p className="text-sm text-muted-foreground">{empty}</p>
       ) : (
-        <ul className="space-y-2">
+        <ul className="space-y-1">
           {milestones.map(({ milestone, project }) => (
             <li key={milestone.id}>
               <Link
-                className="flex justify-between gap-2 text-sm hover:underline"
+                className="flex items-center justify-between gap-2 rounded-md px-2 py-1.5 text-sm transition-colors hover:bg-accent"
                 to={`/projects/${encodeURIComponent(milestone.project_id)}#project-milestones`}
               >
-                <span>
-                  {milestone.name} · {project?.name ?? '项目已删除'}
+                <span className="flex min-w-0 items-center gap-2">
+                  <span className="truncate">{milestone.name}</span>
+                  {project === null ? (
+                    <span className="text-muted-foreground">项目已删除</span>
+                  ) : (
+                    <ProjectName name={project.name} color={project.color} />
+                  )}
                 </span>
-                <span>{milestone.date}</span>
+                <span className="shrink-0 text-xs text-muted-foreground">{milestone.date}</span>
               </Link>
             </li>
           ))}
@@ -67,6 +135,13 @@ function milestoneList(title: string, milestones: readonly DashboardMilestone[],
     </section>
   );
 }
+
+const STAT_STYLES = [
+  'text-sky-600 dark:text-sky-400',
+  'text-amber-600 dark:text-amber-400',
+  'text-rose-600 dark:text-rose-400',
+  'text-red-600 dark:text-red-400',
+] as const;
 
 /** Read-only overview of persisted work plus the four documented derived risk signals. */
 export function DashboardPage() {
@@ -112,24 +187,33 @@ export function DashboardPage() {
     (risk) => risk.level === 'critical' || risk.level === 'high',
   );
   const cards = [
-    ['进行中项目', data.projects.length, '/projects'],
-    ['今日到期任务', data.todayTasks.length, '/tasks'],
-    ['已逾期任务', data.overdueTasks.length, '/tasks'],
-    ['高风险 / 严重风险', highRisks.length, '/risks'],
+    ['进行中项目', data.projects.length, '/projects', FolderKanban],
+    ['今日到期任务', data.todayTasks.length, '/tasks', CalendarClock],
+    ['已逾期任务', data.overdueTasks.length, '/tasks', AlertTriangle],
+    ['高风险 / 严重风险', highRisks.length, '/risks', ShieldAlert],
   ] as const;
 
   return (
     <div className="space-y-6 p-6">
       <header>
-        <h1 className="text-2xl font-semibold text-primary">仪表盘</h1>
+        <h1 className="text-2xl font-semibold text-heading">仪表盘</h1>
         <p className="text-sm text-muted-foreground">今天是 {data.today}（香港时区）</p>
       </header>
 
       <dl className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-        {cards.map(([label, value, to]) => (
-          <Link key={label} to={to} className="rounded-lg border bg-card p-4 hover:bg-accent">
-            <dt className="text-xs text-muted-foreground">{label}</dt>
-            <dd className="mt-1 text-2xl font-semibold">{value}</dd>
+        {cards.map(([label, value, to, Icon], index) => (
+          <Link
+            key={label}
+            to={to}
+            className="group rounded-lg border bg-card p-4 shadow-sm transition-colors hover:border-heading/40 hover:bg-accent"
+          >
+            <dt className="flex items-center gap-1.5 text-xs text-muted-foreground">
+              <Icon className={`h-3.5 w-3.5 ${STAT_STYLES[index] ?? ''}`} aria-hidden />
+              {label}
+            </dt>
+            <dd className={`mt-1 text-2xl font-semibold tabular-nums ${STAT_STYLES[index] ?? ''}`}>
+              {value}
+            </dd>
           </Link>
         ))}
       </dl>
@@ -140,27 +224,36 @@ export function DashboardPage() {
         {taskList('已逾期', data.overdueTasks, '没有已逾期的未完成任务。')}
       </div>
 
-      <section className="rounded-lg border bg-card p-4">
+      <section className="rounded-lg border bg-card p-4 shadow-sm">
         <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
           <div>
-            <h2 className="text-lg font-medium">派生风险</h2>
-            <p className="text-xs text-muted-foreground">只读计算，不会改写任务或里程碑状态。</p>
+            <SectionTitle icon={AlertTriangle}>派生风险</SectionTitle>
+            <p className="mt-1 text-xs text-muted-foreground">
+              只读计算，不会改写任务或里程碑状态。
+            </p>
           </div>
-          <Link to="/risks" className="text-sm hover:underline">
+          <Link to="/risks" className="text-sm text-primary hover:underline">
             查看登记风险
           </Link>
         </div>
         <div className="grid gap-4 lg:grid-cols-2">
           <section className="rounded-md border p-3">
-            <h3 className="font-medium">逾期未完成（{data.overdueRisks.length}）</h3>
+            <h3 className="font-medium text-heading">逾期未完成（{data.overdueRisks.length}）</h3>
             {data.overdueRisks.length === 0 ? (
               <p className="mt-2 text-sm text-muted-foreground">没有逾期的未完成任务。</p>
             ) : (
               <ul className="mt-2 space-y-1">
                 {data.overdueRisks.map((task) => (
                   <li key={task.id}>
-                    <Link className="text-sm hover:underline" to={`/tasks?taskId=${task.id}`}>
-                      {task.title} · {task.due_date}
+                    <Link
+                      className="flex items-center gap-2 rounded-md px-2 py-1 text-sm transition-colors hover:bg-accent"
+                      to={`/tasks?taskId=${task.id}`}
+                    >
+                      <span className="truncate">{task.title}</span>
+                      <ProjectName name={task.project_name} color={task.project_color} />
+                      <span className="shrink-0 text-xs text-muted-foreground">
+                        {task.due_date}
+                      </span>
                     </Link>
                   </li>
                 ))}
@@ -168,7 +261,9 @@ export function DashboardPage() {
             )}
           </section>
           <section className="rounded-md border p-3">
-            <h3 className="font-medium">临期低进度（{data.lowProgressRisks.length}）</h3>
+            <h3 className="font-medium text-heading">
+              临期低进度（{data.lowProgressRisks.length}）
+            </h3>
             {data.lowProgressRisks.length === 0 ? (
               <p className="mt-2 text-sm text-muted-foreground">
                 未来 7 天没有低于 50% 的未完成任务。
@@ -177,8 +272,15 @@ export function DashboardPage() {
               <ul className="mt-2 space-y-1">
                 {data.lowProgressRisks.map((task) => (
                   <li key={task.id}>
-                    <Link className="text-sm hover:underline" to={`/tasks?taskId=${task.id}`}>
-                      {task.title} · {task.progress}% · {task.due_date}
+                    <Link
+                      className="flex items-center gap-2 rounded-md px-2 py-1 text-sm transition-colors hover:bg-accent"
+                      to={`/tasks?taskId=${task.id}`}
+                    >
+                      <span className="truncate">{task.title}</span>
+                      <ProjectName name={task.project_name} color={task.project_color} />
+                      <span className="shrink-0 text-xs text-muted-foreground">
+                        {task.progress}% · {task.due_date}
+                      </span>
                     </Link>
                   </li>
                 ))}
@@ -186,7 +288,9 @@ export function DashboardPage() {
             )}
           </section>
           <section className="rounded-md border p-3">
-            <h3 className="font-medium">受阻传导（{data.blockedPropagationRisks.length}）</h3>
+            <h3 className="font-medium text-heading">
+              受阻传导（{data.blockedPropagationRisks.length}）
+            </h3>
             {data.blockedPropagationRisks.length === 0 ? (
               <p className="mt-2 text-sm text-muted-foreground">
                 没有受阻前驱影响的未完成后续任务。
@@ -195,8 +299,15 @@ export function DashboardPage() {
               <ul className="mt-2 space-y-1">
                 {data.blockedPropagationRisks.map(({ task, blockedBy }) => (
                   <li key={task.id}>
-                    <Link className="text-sm hover:underline" to={`/tasks?taskId=${task.id}`}>
-                      {task.title} · 受 {blockedBy.map((blocker) => blocker.title).join('、')} 影响
+                    <Link
+                      className="flex items-center gap-2 rounded-md px-2 py-1 text-sm transition-colors hover:bg-accent"
+                      to={`/tasks?taskId=${task.id}`}
+                    >
+                      <span className="truncate">
+                        {task.title} · 受 {blockedBy.map((blocker) => blocker.title).join('、')}{' '}
+                        影响
+                      </span>
+                      <ProjectName name={task.project_name} color={task.project_color} />
                     </Link>
                   </li>
                 ))}
@@ -204,20 +315,26 @@ export function DashboardPage() {
             )}
           </section>
           <section className="rounded-md border p-3">
-            <h3 className="font-medium">
+            <h3 className="font-medium text-heading">
               14 天内里程碑前置未完成（{data.milestonePredecessorRisks.length}）
             </h3>
             {data.milestonePredecessorRisks.length === 0 ? (
               <p className="mt-2 text-sm text-muted-foreground">近期里程碑没有未完成前置任务。</p>
             ) : (
               <ul className="mt-2 space-y-1">
-                {data.milestonePredecessorRisks.map(({ milestone, blockingTasks }) => (
+                {data.milestonePredecessorRisks.map(({ milestone, project, blockingTasks }) => (
                   <li key={milestone.id}>
                     <Link
-                      className="text-sm hover:underline"
+                      className="flex items-center gap-2 rounded-md px-2 py-1 text-sm transition-colors hover:bg-accent"
                       to={`/projects/${milestone.project_id}#project-milestones`}
                     >
-                      {milestone.name} · 前置：{blockingTasks.map((task) => task.title).join('、')}
+                      <span className="truncate">
+                        {milestone.name} · 前置：
+                        {blockingTasks.map((task) => task.title).join('、')}
+                      </span>
+                      {project !== null && (
+                        <ProjectName name={project.name} color={project.color} />
+                      )}
                     </Link>
                   </li>
                 ))}
@@ -227,8 +344,10 @@ export function DashboardPage() {
         </div>
       </section>
 
-      <section className="rounded-lg border bg-card p-4">
-        <h2 className="mb-3 text-lg font-medium">项目健康度</h2>
+      <section className="rounded-lg border bg-card p-4 shadow-sm">
+        <div className="mb-3">
+          <SectionTitle icon={HeartPulse}>项目健康度</SectionTitle>
+        </div>
         {data.projects.length === 0 ? (
           <EmptyState
             title="暂无进行中项目"
@@ -240,17 +359,31 @@ export function DashboardPage() {
             }
           />
         ) : (
-          <ul className="space-y-2">
+          <ul className="space-y-1">
             {data.projects.map(({ project, progress }) => (
               <li key={project.id}>
                 <Link
                   to={`/projects/${encodeURIComponent(project.id)}`}
-                  className="flex justify-between text-sm hover:underline"
+                  className="flex items-center justify-between gap-4 rounded-md px-2 py-2 text-sm transition-colors hover:bg-accent"
                 >
-                  <span>{project.name}</span>
-                  <span>
-                    {progress.total === 0 ? '暂无任务' : `${String(progress.percent)}%`} · 已完成{' '}
-                    {String(progress.done)}/{String(progress.total)}
+                  <ProjectName name={project.name} color={project.color} />
+                  <span className="flex shrink-0 items-center gap-3">
+                    <span
+                      className="hidden h-1.5 w-28 overflow-hidden rounded-full bg-muted sm:block"
+                      role="presentation"
+                    >
+                      <span
+                        className="block h-full rounded-full"
+                        style={{
+                          width: `${String(progress.percent)}%`,
+                          backgroundColor: project.color,
+                        }}
+                      />
+                    </span>
+                    <span className="text-xs text-muted-foreground">
+                      {progress.total === 0 ? '暂无任务' : `${String(progress.percent)}%`} · 已完成{' '}
+                      {String(progress.done)}/{String(progress.total)}
+                    </span>
                   </span>
                 </Link>
               </li>
@@ -259,13 +392,13 @@ export function DashboardPage() {
         )}
       </section>
 
-      <section className="rounded-lg border bg-card p-4">
+      <section className="rounded-lg border bg-card p-4 shadow-sm">
         <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
           <div>
-            <h2 className="text-lg font-medium">即将举行的会议（7 天内）</h2>
-            <p className="text-xs text-muted-foreground">显示这些会议尚未完成的行动项。</p>
+            <SectionTitle icon={Users}>即将举行的会议（7 天内）</SectionTitle>
+            <p className="mt-1 text-xs text-muted-foreground">显示这些会议尚未完成的行动项。</p>
           </div>
-          <Link to="/meetings" className="text-sm hover:underline">
+          <Link to="/meetings" className="text-sm text-primary hover:underline">
             查看全部会议
           </Link>
         </div>
@@ -276,12 +409,18 @@ export function DashboardPage() {
             {data.upcomingMeetings.map(({ meeting, project, actionItems }) => (
               <li key={meeting.id} className="rounded-md border p-3">
                 <Link
-                  className="text-sm font-medium hover:underline"
+                  className="flex flex-wrap items-center gap-2 text-sm font-medium hover:underline"
                   to={`/meetings/${meeting.id}`}
                 >
-                  {meeting.topic} · {meeting.date}
-                  {meeting.start_time === null ? '' : ` ${meeting.start_time}`} ·{' '}
-                  {project?.name ?? '独立会议'}
+                  <span>
+                    {meeting.topic} · {meeting.date}
+                    {meeting.start_time === null ? '' : ` ${meeting.start_time}`}
+                  </span>
+                  {project === null ? (
+                    <span className="text-muted-foreground">独立会议</span>
+                  ) : (
+                    <ProjectName name={project.name} color={project.color} />
+                  )}
                 </Link>
                 {actionItems.length === 0 ? (
                   <p className="mt-1 text-xs text-muted-foreground">没有未完成行动项。</p>
@@ -309,10 +448,10 @@ export function DashboardPage() {
       <section className="space-y-3">
         <div className="flex flex-wrap items-center justify-between gap-2">
           <div>
-            <h2 className="text-lg font-medium">里程碑</h2>
-            <p className="text-sm text-muted-foreground">不显示已达成或已取消的里程碑。</p>
+            <SectionTitle icon={Flag}>里程碑</SectionTitle>
+            <p className="mt-1 text-sm text-muted-foreground">不显示已达成或已取消的里程碑。</p>
           </div>
-          <Link to="/projects" className="text-sm hover:underline">
+          <Link to="/projects" className="text-sm text-primary hover:underline">
             查看项目
           </Link>
         </div>
@@ -323,11 +462,11 @@ export function DashboardPage() {
         </div>
       </section>
 
-      <section className="rounded-lg border bg-card p-4">
+      <section className="rounded-lg border bg-card p-4 shadow-sm">
         <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
           <div>
-            <h2 className="text-lg font-medium">风险摘要</h2>
-            <p className="text-xs text-muted-foreground">显示开放和监控中的已登记风险。</p>
+            <SectionTitle icon={ShieldAlert}>风险摘要</SectionTitle>
+            <p className="mt-1 text-xs text-muted-foreground">显示开放和监控中的已登记风险。</p>
           </div>
           <div className="flex gap-2">
             <Button size="sm" variant="outline" asChild>
@@ -341,17 +480,18 @@ export function DashboardPage() {
         {data.openRisks.length === 0 ? (
           <p className="text-sm text-muted-foreground">暂无开放或监控中的风险。</p>
         ) : (
-          <ul className="space-y-2">
+          <ul className="space-y-1">
             {data.openRisks.slice(0, 5).map((risk) => (
               <li key={risk.id}>
                 <Link
                   to={`/projects/${encodeURIComponent(risk.project_id)}#project-risks`}
-                  className="flex justify-between gap-2 text-sm hover:underline"
+                  className="flex items-center justify-between gap-2 rounded-md px-2 py-1.5 text-sm transition-colors hover:bg-accent"
                 >
-                  <span>
-                    {risk.title} · {risk.project_name}
+                  <span className="flex min-w-0 items-center gap-2">
+                    <span className="truncate">{risk.title}</span>
+                    <ProjectName name={risk.project_name} color={risk.project_color} />
                   </span>
-                  <span className="flex items-center gap-2">
+                  <span className="flex shrink-0 items-center gap-2">
                     <Badge
                       variant={
                         risk.level === 'critical' || risk.level === 'high'

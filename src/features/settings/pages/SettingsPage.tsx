@@ -32,6 +32,8 @@ import { saveThemePreference } from '../services/settingsPreference.service';
 const THEME_OPTIONS: { value: Theme; label: string }[] = [
   { value: 'dark', label: '深色' },
   { value: 'light', label: '浅色' },
+  { value: 'warm', label: '暖橙（淡橙+白）' },
+  { value: 'colorful', label: '彩色（多彩深底）' },
   { value: 'system', label: '跟随系统' },
 ];
 
@@ -243,7 +245,9 @@ export function SettingsPage() {
 
       <section className="mb-6 rounded-lg border bg-card p-4">
         <h2 className="text-lg font-medium">主题</h2>
-        <p className="mt-1 text-sm text-muted-foreground">默认深色，可切换为浅色或跟随系统。</p>
+        <p className="mt-1 text-sm text-muted-foreground">
+          默认深色，可切换为浅色、暖橙、彩色或跟随系统。
+        </p>
         <Label htmlFor="theme-select" className="sr-only">
           主题
         </Label>

@@ -1,4 +1,5 @@
 import { zodResolver } from '@hookform/resolvers/zod';
+import { open as openFileDialog } from '@tauri-apps/plugin-dialog';
 import { useEffect } from 'react';
 import { useForm } from 'react-hook-form';
 import { Button } from '@/components/ui/button';
@@ -46,6 +47,7 @@ export function ProjectLinkForm({ open, link, onSubmit, onClose }: ProjectLinkFo
     handleSubmit,
     reset,
     setError,
+    setValue,
     watch,
     formState: { errors, isSubmitting },
   } = useForm<ProjectLinkFormValues>({
@@ -56,6 +58,21 @@ export function ProjectLinkForm({ open, link, onSubmit, onClose }: ProjectLinkFo
   const targetLabel = linkType === 'url' ? 'URL 地址' : '本地文件或目录路径';
   const targetPlaceholder =
     linkType === 'url' ? 'https://example.com/document' : 'C:\\项目资料\\方案.pdf';
+
+  const browseLocalPath = async (directory: boolean) => {
+    try {
+      const selected = await openFileDialog({
+        title: directory ? '选择目录' : '选择文件',
+        multiple: false,
+        directory,
+      });
+      if (typeof selected === 'string') {
+        setValue('target', selected, { shouldValidate: true, shouldDirty: true });
+      }
+    } catch (caught) {
+      setError('root', { message: toAppError(caught).message });
+    }
+  };
 
   useEffect(() => {
     if (open) {
@@ -121,10 +138,32 @@ export function ProjectLinkForm({ open, link, onSubmit, onClose }: ProjectLinkFo
               placeholder={targetPlaceholder}
               {...register('target')}
             />
+            {linkType === 'file_path' && (
+              <div className="flex gap-2">
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  disabled={isSubmitting}
+                  onClick={() => void browseLocalPath(false)}
+                >
+                  浏览文件…
+                </Button>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  disabled={isSubmitting}
+                  onClick={() => void browseLocalPath(true)}
+                >
+                  浏览目录…
+                </Button>
+              </div>
+            )}
             <p className="text-xs text-muted-foreground">
               {linkType === 'url'
                 ? '只有 http/https 链接可直接打开，其他协议仅可复制。'
-                : '请输入 Windows 绝对路径；打开前会先检查文件或目录是否存在。'}
+                : '可点击「浏览」直接选择本机文件或目录，也可手动输入绝对路径；打开前会先检查文件或目录是否存在。'}
             </p>
             {errors.target && <p className="text-sm text-destructive">{errors.target.message}</p>}
           </div>

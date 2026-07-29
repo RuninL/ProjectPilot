@@ -1,12 +1,9 @@
 import type { Theme } from '@/lib/theme';
+import { isTheme } from '@/lib/theme';
 import { nowIso } from '@/lib/date';
 import { getRepositories } from '@/repositories';
 
 const THEME_KEY = 'theme';
-
-function isTheme(value: string): value is Theme {
-  return value === 'dark' || value === 'light' || value === 'system';
-}
 
 export async function loadThemePreference(): Promise<Theme | null> {
   const repositories = await getRepositories();

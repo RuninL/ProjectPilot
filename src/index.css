@@ -22,6 +22,8 @@
     --input: 214.3 31.8% 91.4%;
     --ring: 221.2 83.2% 53.3%;
     --radius: 0.5rem;
+    /* Uniform accent for section headings (e.g. 项目健康度), distinct from body text. */
+    --heading: 262 83% 58%;
   }
 
   .dark {
@@ -42,6 +44,51 @@
     --border: 217.2 32.6% 17.5%;
     --input: 217.2 32.6% 17.5%;
     --ring: 224.3 76.3% 48%;
+    --heading: 263 90% 76%;
+  }
+
+  /* 暖橙主题：淡橙色与白色，浅色基底。 */
+  .theme-warm {
+    --background: 33 100% 98%;
+    --foreground: 24 30% 12%;
+    --card: 0 0% 100%;
+    --card-foreground: 24 30% 12%;
+    --primary: 24 94% 50%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 32 100% 93%;
+    --secondary-foreground: 24 45% 20%;
+    --muted: 32 100% 94%;
+    --muted-foreground: 25 20% 42%;
+    --accent: 30 100% 92%;
+    --accent-foreground: 24 45% 20%;
+    --destructive: 0 84.2% 60.2%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 30 60% 88%;
+    --input: 30 60% 88%;
+    --ring: 24 94% 50%;
+    --heading: 18 85% 42%;
+  }
+
+  /* 彩色主题：深底高饱和多彩配色（类似 VS Code 的彩色主题）。 */
+  .dark.theme-colorful {
+    --background: 250 32% 11%;
+    --foreground: 230 40% 94%;
+    --card: 249 30% 15%;
+    --card-foreground: 230 40% 94%;
+    --primary: 288 88% 66%;
+    --primary-foreground: 250 40% 10%;
+    --secondary: 249 28% 22%;
+    --secondary-foreground: 230 40% 94%;
+    --muted: 249 28% 20%;
+    --muted-foreground: 235 25% 70%;
+    --accent: 200 85% 24%;
+    --accent-foreground: 190 95% 88%;
+    --destructive: 350 90% 58%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 249 26% 26%;
+    --input: 249 26% 26%;
+    --ring: 288 88% 66%;
+    --heading: 172 85% 55%;
   }
 }
 

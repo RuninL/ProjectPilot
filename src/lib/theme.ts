@@ -1,8 +1,19 @@
-/** User-selectable theme. `system` follows the OS preference. */
-export type Theme = 'light' | 'dark' | 'system';
+/**
+ * User-selectable theme. `system` follows the OS preference (dark/light).
+ * `warm` is a soft orange-on-white palette; `colorful` is a vibrant,
+ * VS Code-inspired multi-hue palette.
+ */
+export type Theme = 'light' | 'dark' | 'system' | 'warm' | 'colorful';
 
 /** The theme actually painted, after resolving `system`. */
-export type ResolvedTheme = 'light' | 'dark';
+export type ResolvedTheme = 'light' | 'dark' | 'warm' | 'colorful';
+
+/** All persistable theme values, for validation of stored preferences. */
+export const THEME_VALUES: readonly Theme[] = ['light', 'dark', 'system', 'warm', 'colorful'];
+
+export function isTheme(value: string): value is Theme {
+  return (THEME_VALUES as readonly string[]).includes(value);
+}
 
 const DARK_QUERY = '(prefers-color-scheme: dark)';
 
@@ -30,10 +41,18 @@ export function resolveTheme(theme: Theme): ResolvedTheme {
   return prefersDark ? 'dark' : 'light';
 }
 
-/** Paint the theme by toggling the `dark` class Tailwind is configured against. */
+/**
+ * Paint the theme by toggling the `dark` class Tailwind is configured against,
+ * plus the `theme-warm` / `theme-colorful` classes that swap the CSS palette.
+ */
 export function applyTheme(theme: Theme): ResolvedTheme {
   const resolved = resolveTheme(theme);
-  document.documentElement.classList.toggle('dark', resolved === 'dark');
+  const root = document.documentElement;
+  // `colorful` is a dark-based palette, so it keeps the `dark` class and the
+  // `.theme-colorful` variables (declared after `.dark`) override the colors.
+  root.classList.toggle('dark', resolved === 'dark' || resolved === 'colorful');
+  root.classList.toggle('theme-warm', resolved === 'warm');
+  root.classList.toggle('theme-colorful', resolved === 'colorful');
   return resolved;
 }
 
