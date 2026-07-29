@@ -57,8 +57,8 @@ const INSERTS = {
     (id, meeting_id, content, owner, due_date, status, converted_task_id, converted_at,
      created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
   projectLink: `INSERT INTO project_links
-    (id, project_id, label, link_type, target, is_sample, created_at, updated_at)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+    (id, project_id, label, link_type, target, description, is_sample, created_at, updated_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
   risk: `INSERT INTO risks
     (id, project_id, title, description, category, likelihood, impact, level, status, owner,
      mitigation_plan, due_date, resolved_at, is_sample, created_at, updated_at)
@@ -263,6 +263,7 @@ function projectLinkStatement(row: ProjectLink): BatchStatement {
       row.label,
       row.link_type,
       row.target,
+      row.description,
       row.is_sample,
       row.created_at,
       row.updated_at,

@@ -16,7 +16,7 @@ import type { TaskWithProject } from '@/types';
 function taskList(title: string, tasks: readonly TaskWithProject[], empty: string) {
   return (
     <section className="rounded-lg border bg-card p-4">
-      <h2 className="mb-3 text-lg font-medium">{title}</h2>
+      <h2 className="mb-3 text-lg font-medium text-primary">{title}</h2>
       {tasks.length === 0 ? (
         <p className="text-sm text-muted-foreground">{empty}</p>
       ) : (
@@ -27,8 +27,9 @@ function taskList(title: string, tasks: readonly TaskWithProject[], empty: strin
                 className="flex justify-between gap-2 text-sm hover:underline"
                 to={`/tasks?taskId=${encodeURIComponent(task.id)}`}
               >
-                <span>
-                  {task.title} · {task.project_name}
+                <span className="min-w-0">
+                  <span className="font-medium text-sky-700 dark:text-sky-300">{task.title}</span>
+                  <span className="text-muted-foreground"> · {task.project_name}</span>
                 </span>
                 <span>{task.due_date}</span>
               </Link>
@@ -120,7 +121,7 @@ export function DashboardPage() {
   return (
     <div className="space-y-6 p-6">
       <header>
-        <h1 className="text-2xl font-semibold">仪表盘</h1>
+        <h1 className="text-2xl font-semibold text-primary">仪表盘</h1>
         <p className="text-sm text-muted-foreground">今天是 {data.today}（香港时区）</p>
       </header>
 

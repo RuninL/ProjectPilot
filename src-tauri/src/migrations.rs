@@ -34,5 +34,11 @@ pub fn migrations() -> Vec<Migration> {
             sql: include_str!("../migrations/0005_dashboard_risks.sql"),
             kind: MigrationKind::Up,
         },
+        Migration {
+            version: 6,
+            description: "optional descriptions for project links",
+            sql: include_str!("../migrations/0006_project_links_description.sql"),
+            kind: MigrationKind::Up,
+        },
     ]
 }

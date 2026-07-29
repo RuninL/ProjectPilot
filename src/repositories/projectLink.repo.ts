@@ -3,7 +3,7 @@ import type { SqlExecutor } from '@/lib/db';
 import type { ProjectLink } from '@/types';
 import { buildUpdate, parseOptional, parseRows, runUpdate } from './_shared';
 
-const UPDATABLE = ['label', 'link_type', 'target'] as const;
+const UPDATABLE = ['label', 'link_type', 'target', 'description'] as const;
 
 export function createProjectLinkRepository(db: SqlExecutor) {
   return {
@@ -23,14 +23,15 @@ export function createProjectLinkRepository(db: SqlExecutor) {
     async insert(link: ProjectLink): Promise<void> {
       await db.execute(
         `INSERT INTO project_links
-          (id, project_id, label, link_type, target, is_sample, created_at, updated_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+          (id, project_id, label, link_type, target, description, is_sample, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         [
           link.id,
           link.project_id,
           link.label,
           link.link_type,
           link.target,
+          link.description,
           link.is_sample,
           link.created_at,
           link.updated_at,

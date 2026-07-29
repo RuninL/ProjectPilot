@@ -9,6 +9,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { DependencySection } from '@/features/dependencies/components/DependencySection';
 import { GanttSection } from '@/features/gantt/components/GanttSection';
+import { ProjectLinkSection } from '@/features/links/components/ProjectLinkSection';
 import { MeetingSection } from '@/features/meetings/components/MeetingSection';
 import { MilestoneSection } from '@/features/milestones/components/MilestoneSection';
 import { RiskSection } from '@/features/risks/components/RiskSection';
@@ -26,7 +27,6 @@ import { ProjectForm } from '../components/ProjectForm';
 /** Capabilities that arrive in a later phase — listed, never clickable, never faked. */
 const LATER_PHASE_SECTIONS = [
   { title: '关键路径与拖拽排期', description: '甘特图上的自动排程' },
-  { title: '项目链接', description: '关联文档与本地文件' },
 ];
 
 interface Overview {
@@ -298,6 +298,11 @@ export function ProjectDetailPage() {
             void loadDependencies(project.id);
           }}
         />
+      </section>
+
+      <section className="mb-6" id="project-links">
+        <h2 className="mb-3 text-lg font-medium">文件与链接</h2>
+        <ProjectLinkSection project={project} />
       </section>
 
       <section>

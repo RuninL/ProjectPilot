@@ -2,6 +2,7 @@ import { z } from 'zod';
 import { isValidDateStr } from '@/lib/date';
 import {
   actionItemStatusEnum,
+  linkTypeEnum,
   milestoneStatusEnum,
   projectStatusEnum,
   riskCategoryEnum,
@@ -221,6 +222,48 @@ export const riskInputSchema = z.object({
   due_date: optionalDate,
 });
 
+function isAbsoluteUrl(value: string): boolean {
+  try {
+    const parsed = new URL(value);
+    return parsed.protocol !== '' && parsed.href !== '';
+  } catch {
+    return false;
+  }
+}
+
+export function isAbsoluteWindowsPath(value: string): boolean {
+  const path = value.trim();
+  const drivePath = /^[A-Za-z]:[\\/](?![\\/])/.test(path);
+  const uncPath = /^\\\\[^\\/:*?"<>|\s][^\\/:*?"<>|]*\\[^\\/:*?"<>|\s][^\\/:*?"<>|]*/.test(
+    path,
+  );
+  return (drivePath || uncPath) && !path.includes('\0');
+}
+
+export const projectLinkInputSchema = z
+  .object({
+    label: z.string().trim().min(1, '资料名称不能为空').max(160, '资料名称不能超过 160 个字符'),
+    link_type: linkTypeEnum,
+    target: z.string().trim().min(1, '目标地址或路径不能为空').max(4000, '目标地址或路径过长'),
+    description: z.string().trim().max(2000, '备注不能超过 2000 个字符').default(''),
+  })
+  .superRefine((value, context) => {
+    if (value.link_type === 'url' && !isAbsoluteUrl(value.target)) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['target'],
+        message: '请输入包含协议的合法绝对 URL',
+      });
+    }
+    if (value.link_type === 'file_path' && !isAbsoluteWindowsPath(value.target)) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['target'],
+        message: '请输入 Windows 绝对路径（如 C:\\资料\\文件.pdf 或 \\\\服务器\\共享）',
+      });
+    }
+  });
+
 export type ProjectInput = z.infer<typeof projectInputSchema>;
 export type TaskInput = z.infer<typeof taskInputSchema>;
 export type BulkTaskUpdate = z.infer<typeof bulkTaskUpdateSchema>;
@@ -230,3 +273,4 @@ export type ActionItemInput = z.infer<typeof actionItemInputSchema>;
 export type ConvertActionItemInput = z.infer<typeof convertActionItemSchema>;
 export type MilestoneInput = z.infer<typeof milestoneInputSchema>;
 export type RiskInput = z.infer<typeof riskInputSchema>;
+export type ProjectLinkInput = z.infer<typeof projectLinkInputSchema>;

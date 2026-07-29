@@ -1,4 +1,4 @@
-import type { ActionItem, Meeting, Milestone, Project, Risk, Task } from '@/types';
+import type { ActionItem, Meeting, Milestone, Project, ProjectLink, Risk, Task } from '@/types';
 import { NOW } from './testDb';
 
 /** Row fixtures shared by the repository and service test suites. */
@@ -89,6 +89,21 @@ export function makeMilestone(overrides: Partial<Milestone> = {}): Milestone {
     date: '2026-08-01',
     status: 'upcoming',
     achieved_at: null,
+    is_sample: 0,
+    created_at: NOW,
+    updated_at: NOW,
+    ...overrides,
+  };
+}
+
+export function makeProjectLink(overrides: Partial<ProjectLink> = {}): ProjectLink {
+  return {
+    id: 'link-1',
+    project_id: 'p1',
+    label: '项目文档',
+    link_type: 'url',
+    target: 'https://example.com/docs',
+    description: '',
     is_sample: 0,
     created_at: NOW,
     updated_at: NOW,

@@ -4,6 +4,7 @@ mod backup;
 mod backup_tests;
 mod error;
 mod migrations;
+mod project_links;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
@@ -28,6 +29,8 @@ pub fn run() {
             backup::open_data_dir,
             backup::backup_database,
             backup::restore_database,
+            project_links::local_path_exists,
+            project_links::open_local_path,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

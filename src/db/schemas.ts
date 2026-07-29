@@ -145,6 +145,7 @@ export const projectLinkRowSchema = z.object({
   label: z.string(),
   link_type: linkTypeEnum,
   target: z.string(),
+  description: z.string().default(''),
   is_sample: sqliteBool,
   ...auditColumns,
 });
