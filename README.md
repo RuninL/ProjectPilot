@@ -9,7 +9,7 @@
 - 完全离线，所有数据存本机 SQLite（Tauri app data 目录），无账号、无云同步、无付费服务
 - 项目 / 任务（两层父子、五态、四级优先级）/ Milestone / 会议与行动项
 - 自研 SVG 甘特图：周/月/季度时间轴、finish-to-start 依赖、循环依赖与排期冲突检测
-- Dashboard 风险追踪：今日/本周/逾期、30 天 milestone、四类风险规则
+- Dashboard 风险追踪：今日/未来 7 天/逾期任务、近期会议与未完成行动项、30 天 milestone、四类派生风险
 - 月视图日历、文件与链接（仅 URL/路径）、JSON/CSV 导入导出、SQLite 备份恢复
 - 深色/浅色/跟随系统主题；界面简体中文
 
@@ -83,20 +83,20 @@ npm run format:check  # Prettier 格式检查
 | ------------------------------------------------------------ | ---------------------------------------------------------- |
 | [docs/product-spec.md](docs/product-spec.md)                 | 产品规格：范围内外、信息架构、核心流程、功能细则           |
 | [docs/architecture.md](docs/architecture.md)                 | 架构：分层设计、持久层策略、Gantt 方案、日期策略、目录结构 |
-| [docs/database-schema.md](docs/database-schema.md)           | 数据库：8 张表字段/约束/索引/外键/删除规则、Mermaid ER 图  |
+| [docs/database-schema.md](docs/database-schema.md)           | 数据库：9 张表字段/约束/索引/外键/删除规则、Mermaid ER 图  |
 | [docs/development-plan.md](docs/development-plan.md)         | 分阶段开发计划、测试计划、依赖候选清单                     |
 | [docs/acceptance-checklist.md](docs/acceptance-checklist.md) | 按阶段的验收清单                                           |
 
 ## 项目状态
 
-**阶段 5：Dashboard + 风险** — 已完成基础的结构化风险追踪与项目总览（Windows 本机启动与安装包验证待办，见下）。
+**阶段 5：Dashboard + 风险** — 已完成（Windows 本机启动与安装包验证仍待办，见下）。
 
 已具备：
 
 - Tauri 2 + React 18 + TypeScript strict 工程，Tailwind + shadcn/ui 基础组件
-- SQLite 迁移 0001（8 张表、索引、触发器、外键级联）与迁移 0002（任务生命周期列、索引、层级触发器）、
-  0003（依赖触发器）、0004（`meetings.start_time`、里程碑日期索引、行动项防重复转换与审计触发器），
-  0002–0004 **均为纯增量**；启动时断言 `PRAGMA foreign_keys = ON`
+- SQLite 迁移 0001（8 张基础表、索引、触发器、外键级联）与迁移 0002（任务生命周期列、索引、层级触发器）、
+  0003（依赖触发器）、0004（`meetings.start_time`、里程碑日期索引、行动项防重复转换与审计触发器）、
+  0005（结构化风险表）；0002–0005 **均为纯增量**；启动时断言 `PRAGMA foreign_keys = ON`
 - repository 层（SQL 仅存在于 `src/repositories/` 与迁移文件）与 Zod 行 schema 类型边界
 - Rust `execute_batch` 原子事务 command，任务批量修改经其单事务提交
 - **项目**：列表（搜索 / 状态 / 活动·已归档·全部 / 排序）、新建、编辑、归档、恢复、
@@ -128,12 +128,16 @@ npm run format:check  # Prettier 格式检查
   点击跳转对应详情，月份切换跨年正确，仅当前月显示「今天」标记；**只读视图**，不提供拖动改期
 - 设置页：主题切换（深色 / 浅色 / 跟随系统）与「清除示例数据」（二次确认，仅删 `is_sample = 1`）
 - 深色优先主题、6 项左侧导航；未实现能力一律为不可点击的「后续阶段」占位卡片
-- Dashboard：进行中项目、今日/近期/逾期任务与开放风险摘要；风险按项目集中查看
-- 风险：项目归属、分类、可能性、影响、自动等级、负责人、缓解计划、截止日期与生命周期追踪
+- **Dashboard（严格只读）**：进行中项目的真实完成率、今日/未来 7 天/逾期未完成任务、未来 7 天会议及其未完成行动项、
+  今日/逾期/未来 30 天（含第 30 天）的未达成 milestone；展示四类实时派生风险（逾期未完成、临期低进度、
+  blocked 依赖传导、14 天内 milestone 前置未完成），每项都可导航到来源任务或 milestone
+- **风险**：`/risks` 支持项目/状态/等级/分类筛选与标题/描述搜索，默认将开放、监控风险置顶；
+  可从风险页或项目详情的风险区创建、编辑、删除。字段包括项目归属、分类、可能性、影响、实时自动等级、
+  状态、负责人、缓解计划和截止日期；状态机为 open → monitoring/closed，monitoring → mitigated/closed，
+  mitigated/closed → open，进入已缓解/已关闭会写入 `resolved_at`
 
 尚未具备（后续阶段）：
 
-- Dashboard 四类风险卡与 30 天里程碑视图（阶段 5）
 - 甘特图内的里程碑菱形、关键路径与拖拽排期、项目链接（项目详情中仍为「后续阶段」占位）
 - 导入导出、备份恢复、提醒通知、数据库位置迁移（设置页中已列为「后续阶段」占位）
 - **任务归档界面**：迁移 0002 已添加 `tasks.archived_at`，查询与完成率也已正确排除归档任务，

@@ -16,6 +16,17 @@ export interface RiskServiceDeps {
   projects: ProjectRepository;
 }
 
+export const RISK_STATUS_TRANSITIONS: Readonly<Record<RiskStatus, readonly RiskStatus[]>> = {
+  open: ['monitoring', 'closed'],
+  monitoring: ['mitigated', 'closed'],
+  mitigated: ['open'],
+  closed: ['open'],
+};
+
+export function canTransitionRiskStatus(from: RiskStatus, to: RiskStatus): boolean {
+  return RISK_STATUS_TRANSITIONS[from].includes(to);
+}
+
 export function createRiskService(deps: RiskServiceDeps) {
   async function requireRisk(id: string): Promise<Risk> {
     const risk = await deps.risks.findById(id);
@@ -32,6 +43,7 @@ export function createRiskService(deps: RiskServiceDeps) {
   }
   return {
     listRisks: (query: RiskQuery = {}) => deps.risks.findByQuery(query),
+    getRisk: (id: string) => requireRisk(id),
     async createRisk(input: RiskInput): Promise<Risk> {
       const parsed = riskInputSchema.parse(input);
       await requireProject(parsed.project_id);
@@ -62,6 +74,12 @@ export function createRiskService(deps: RiskServiceDeps) {
       const parsed = riskInputSchema.parse(input);
       if (parsed.project_id !== existing.project_id)
         throw new AppError('validation', '风险不能移动到其他项目');
+      if (
+        parsed.status !== existing.status &&
+        !canTransitionRiskStatus(existing.status, parsed.status)
+      ) {
+        throw new AppError('validation', '当前风险状态不允许这样变更');
+      }
       const now = nowIso();
       await deps.risks.update(
         id,
@@ -84,13 +102,7 @@ export function createRiskService(deps: RiskServiceDeps) {
     },
     async setStatus(id: string, status: RiskStatus): Promise<Risk> {
       const existing = await requireRisk(id);
-      const allowed: Record<RiskStatus, readonly RiskStatus[]> = {
-        open: ['monitoring', 'closed'],
-        monitoring: ['mitigated', 'closed'],
-        mitigated: ['open'],
-        closed: ['open'],
-      };
-      if (!allowed[existing.status].includes(status)) {
+      if (!canTransitionRiskStatus(existing.status, status)) {
         throw new AppError('validation', '当前风险状态不允许这样变更');
       }
       const now = nowIso();

@@ -62,7 +62,13 @@ export function createRiskRepository(db: SqlExecutor) {
       const where = composeWhere(conditions(query));
       const rows = await db.select(
         `SELECT r.*, p.name AS project_name FROM risks r JOIN projects p ON p.id = r.project_id${where.sql}
-         ORDER BY CASE r.level WHEN 'critical' THEN 0 WHEN 'high' THEN 1 WHEN 'medium' THEN 2 ELSE 3 END,
+         ORDER BY CASE r.status
+            WHEN 'open' THEN 0
+            WHEN 'monitoring' THEN 1
+            WHEN 'mitigated' THEN 2
+            ELSE 3
+          END,
+          CASE r.level WHEN 'critical' THEN 0 WHEN 'high' THEN 1 WHEN 'medium' THEN 2 ELSE 3 END,
            r.due_date IS NULL, r.due_date ASC, r.updated_at DESC`,
         where.params,
       );

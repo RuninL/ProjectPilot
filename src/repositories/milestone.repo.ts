@@ -31,6 +31,17 @@ export function createMilestoneRepository(db: SqlExecutor) {
       return parseRows(milestoneRowSchema, rows);
     },
 
+    /** All non-terminal milestones through a bounded dashboard horizon, including overdue rows. */
+    async findPendingThrough(to: string): Promise<Milestone[]> {
+      const rows = await db.select(
+        `SELECT * FROM milestones
+          WHERE date <= ? AND status NOT IN ('achieved', 'cancelled')
+          ORDER BY date ASC, created_at ASC`,
+        [to],
+      );
+      return parseRows(milestoneRowSchema, rows);
+    },
+
     async findById(id: string): Promise<Milestone | null> {
       const rows = await db.select('SELECT * FROM milestones WHERE id = ?', [id]);
       return parseOptional(milestoneRowSchema, rows);

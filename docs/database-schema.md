@@ -54,7 +54,7 @@
 | is_sample               | INTEGER | NOT NULL DEFAULT 0                                                                                   |
 | created_at / updated_at | TEXT    | NOT NULL                                                                                             |
 
-索引：`idx_tasks_project_status(project_id, status)`、`idx_tasks_project_due(project_id, due_date)`、`idx_tasks_parent(parent_task_id)`、`idx_tasks_dashboard(status, due_date, progress)`（Dashboard 今日/本周/逾期/临期低进度均命中）
+索引：`idx_tasks_project_status(project_id, status)`、`idx_tasks_project_due(project_id, due_date)`、`idx_tasks_parent(parent_task_id)`、`idx_tasks_dashboard(status, due_date, progress)`（Dashboard 今日/未来 7 天/逾期/临期低进度均命中）
 migration 0002 追加：`idx_tasks_archived(archived_at)`（列表与完成率排除归档任务）、`idx_tasks_due_status(due_date, status)`（跨项目「我的任务」按截止日期排序 + 状态筛选）
 
 **两层父子限制（0001，触发器兜底 + service 校验）**：
@@ -237,11 +237,27 @@ WHEN EXISTS (
 
 ### 2.9 risks（migration 0005）
 
-结构化风险归属一个项目（`project_id → projects(id) ON DELETE CASCADE`），包含标题、描述、分类、
-可能性、影响、由两者确定的 `level`、状态、负责人、缓解计划、可选截止日和解决时间。
-`level` 由表级 CHECK 强制为可能性 × 影响的计算结果；开放/监控状态必须没有 `resolved_at`，
-已缓解/关闭状态必须有 `resolved_at`。索引为 `idx_risks_project`、
-`idx_risks_status_level_due`、`idx_risks_project_status`。
+结构化风险归属一个项目（`project_id → projects(id) ON DELETE CASCADE`）。
+
+| 字段                    | 类型    | 约束 / 语义                                                                  |
+| ----------------------- | ------- | ---------------------------------------------------------------------------- |
+| id                      | TEXT    | PK                                                                           |
+| project_id              | TEXT    | NOT NULL, FK→projects(id) **ON DELETE CASCADE**                              |
+| title / description     | TEXT    | 标题 NOT NULL，trim 后 1–160 字符；描述 NOT NULL DEFAULT ''                  |
+| category                | TEXT    | NOT NULL DEFAULT `other`，scope/schedule/resource/technical/external/other   |
+| likelihood / impact     | TEXT    | NOT NULL，low/medium/high                                                    |
+| level                   | TEXT    | NOT NULL，low/medium/high/critical；由 likelihood × impact 的表级 CHECK 确定 |
+| status                  | TEXT    | NOT NULL DEFAULT `open`，open/monitoring/mitigated/closed                    |
+| owner / mitigation_plan | TEXT    | NOT NULL DEFAULT ''；负责人和缓解计划                                        |
+| due_date                | TEXT    | NULL，业务日期格式                                                           |
+| resolved_at             | TEXT    | NULL；mitigated/closed 时必须非空，open/monitoring 时必须为空                |
+| is_sample               | INTEGER | NOT NULL DEFAULT 0                                                           |
+| created_at / updated_at | TEXT    | NOT NULL                                                                     |
+
+索引为 `idx_risks_project`、`idx_risks_status_level_due`、`idx_risks_project_status`。
+风险状态迁移是 service 规则而非 SQLite 状态机触发器：仅允许 `open → monitoring/closed`、
+`monitoring → mitigated/closed`、`mitigated/closed → open`；`risk.service.ts` 的 `updateRisk`
+和 `setStatus` 都执行此校验，防止编辑表单绕过生命周期。
 
 ## 3. Mermaid ER 图
 
@@ -249,6 +265,7 @@ WHEN EXISTS (
 erDiagram
   projects ||--o{ tasks : "owns (CASCADE)"
   projects ||--o{ milestones : "owns (CASCADE)"
+  projects ||--o{ risks : "owns (CASCADE)"
   projects |o--o{ meetings : "optional (CASCADE)"
   projects ||--o{ project_links : "owns (CASCADE)"
   tasks |o--o{ tasks : "parent_of (CASCADE, max 2 levels, same project)"
@@ -298,6 +315,18 @@ erDiagram
     TEXT name
     TEXT date
     TEXT status
+  }
+  risks {
+    TEXT id PK
+    TEXT project_id FK
+    TEXT title
+    TEXT category
+    TEXT likelihood
+    TEXT impact
+    TEXT level
+    TEXT status
+    TEXT due_date
+    TEXT resolved_at
   }
   meetings {
     TEXT id PK
@@ -361,6 +390,9 @@ erDiagram
   不新增表、不 DROP 任何对象、不重建任何表、不复制或删除任何既有行，0001/0002/0003 保持原样。
   会议、行动项、milestones 三张表在 0001 就已建好，阶段 4 只补齐 0001 未能表达的不变式与一个可选列。
   详见 [§2.5](#25-meetings)、[§2.6](#26-action_items)。
+- `src-tauri/migrations/0005_dashboard_risks.sql`：**纯增量**——新增 `risks` 表及其 3 个查询索引，
+  不修改或重建 0001–0004 的任何表、索引、触发器，也不复制或删除既有行。风险等级与
+  `status`/`resolved_at` 一致性由表级 CHECK 兜底；合法状态迁移由 service 层校验。
 - 每个 migration 幂等（CREATE TABLE IF NOT EXISTS 风格不用于变更，版本号单调递增，插件按 version 执行一次）
 - Down SQL 仅用于开发期回滚；发布后只前进不后退
 - schema 版本随 JSON 导出携带，导入时校验兼容性

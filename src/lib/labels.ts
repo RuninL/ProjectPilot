@@ -3,6 +3,9 @@ import type {
   ActionItemStatus,
   MilestoneStatus,
   ProjectStatus,
+  RiskCategory,
+  RiskLevel,
+  RiskStatus,
   TaskPriority,
   TaskStatus,
 } from '@/types';
@@ -83,6 +86,39 @@ export const MILESTONE_STATUS_OPTIONS = Object.entries(MILESTONE_STATUS_LABELS).
 export const ACTION_ITEM_STATUS_OPTIONS = Object.entries(ACTION_ITEM_STATUS_LABELS).map(
   ([value, label]) => ({ value: value as ActionItemStatus, label }),
 );
+
+export const RISK_CATEGORY_LABELS: Record<RiskCategory, string> = {
+  scope: '范围',
+  schedule: '进度',
+  resource: '资源',
+  technical: '技术',
+  external: '外部',
+  other: '其他',
+};
+
+export const RISK_LEVEL_LABELS: Record<RiskLevel, string> = {
+  low: '低',
+  medium: '中',
+  high: '高',
+  critical: '严重',
+};
+
+export const RISK_STATUS_LABELS: Record<RiskStatus, string> = {
+  open: '开放',
+  monitoring: '监控中',
+  mitigated: '已缓解',
+  closed: '已关闭',
+};
+
+export const RISK_CATEGORY_OPTIONS = Object.entries(RISK_CATEGORY_LABELS).map(([value, label]) => ({
+  value: value as RiskCategory,
+  label,
+}));
+
+export const RISK_STATUS_OPTIONS = Object.entries(RISK_STATUS_LABELS).map(([value, label]) => ({
+  value: value as RiskStatus,
+  label,
+}));
 
 export const PROJECT_STATUS_OPTIONS = Object.entries(PROJECT_STATUS_LABELS).map(
   ([value, label]) => ({ value: value as ProjectStatus, label }),

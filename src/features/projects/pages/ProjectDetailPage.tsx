@@ -11,6 +11,7 @@ import { DependencySection } from '@/features/dependencies/components/Dependency
 import { GanttSection } from '@/features/gantt/components/GanttSection';
 import { MeetingSection } from '@/features/meetings/components/MeetingSection';
 import { MilestoneSection } from '@/features/milestones/components/MilestoneSection';
+import { RiskSection } from '@/features/risks/components/RiskSection';
 import { TaskWorkspace } from '@/features/tasks/components/TaskWorkspace';
 import { formatDisplay, isOverdue } from '@/lib/date';
 import { toAppError } from '@/lib/errors';
@@ -263,12 +264,7 @@ export function ProjectDetailPage() {
 
       <section className="mb-6" id="project-risks">
         <h2 className="mb-3 text-lg font-medium">风险</h2>
-        <div className="rounded-lg border bg-card p-4 text-sm">
-          <p className="text-muted-foreground">在风险列表中集中查看、筛选和跟踪本项目风险。</p>
-          <Button className="mt-3" size="sm" variant="outline" asChild>
-            <Link to="/risks">查看风险</Link>
-          </Button>
-        </div>
+        <RiskSection project={project} />
       </section>
 
       <section className="mb-6" id="project-gantt">

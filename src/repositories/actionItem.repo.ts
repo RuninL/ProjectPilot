@@ -2,7 +2,7 @@ import { actionItemRowSchema } from '@/db/schemas';
 import type { BatchStatement } from '@/lib/commands';
 import type { SqlExecutor } from '@/lib/db';
 import type { ActionItem } from '@/types';
-import { buildUpdate, parseOptional, parseRows, runUpdate } from './_shared';
+import { buildUpdate, inClause, parseOptional, parseRows, runUpdate } from './_shared';
 
 /**
  * `converted_task_id` and `converted_at` are deliberately absent: they may only
@@ -28,6 +28,21 @@ export function createActionItemRepository(db: SqlExecutor) {
       const rows = await db.select(
         'SELECT * FROM action_items WHERE meeting_id = ? ORDER BY created_at ASC',
         [meetingId],
+      );
+      return parseRows(actionItemRowSchema, rows);
+    },
+
+    /** Unfinished items for a bounded meeting set, for the read-only dashboard. */
+    async findUnfinishedByMeetingIds(meetingIds: readonly string[]): Promise<ActionItem[]> {
+      if (meetingIds.length === 0) {
+        return [];
+      }
+      const meetings = inClause('meeting_id', meetingIds);
+      const rows = await db.select(
+        `SELECT * FROM action_items
+          WHERE ${meetings.sql} AND status NOT IN ('done', 'cancelled')
+          ORDER BY due_date IS NULL, due_date ASC, created_at ASC`,
+        meetings.params,
       );
       return parseRows(actionItemRowSchema, rows);
     },
