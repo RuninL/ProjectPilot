@@ -235,6 +235,14 @@ WHEN EXISTS (
 
 推荐 key：`theme`（dark/light/system）、`sample_data_seeded_at`、`last_backup_at`、`week_starts_on`。恢复数据库时整体替换，UI 不提供批量清空。
 
+### 2.9 risks（migration 0005）
+
+结构化风险归属一个项目（`project_id → projects(id) ON DELETE CASCADE`），包含标题、描述、分类、
+可能性、影响、由两者确定的 `level`、状态、负责人、缓解计划、可选截止日和解决时间。
+`level` 由表级 CHECK 强制为可能性 × 影响的计算结果；开放/监控状态必须没有 `resolved_at`，
+已缓解/关闭状态必须有 `resolved_at`。索引为 `idx_risks_project`、
+`idx_risks_status_level_due`、`idx_risks_project_status`。
+
 ## 3. Mermaid ER 图
 
 ```mermaid

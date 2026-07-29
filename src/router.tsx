@@ -6,6 +6,7 @@ import { MeetingDetailPage } from '@/features/meetings/pages/MeetingDetailPage';
 import { MeetingsPage } from '@/features/meetings/pages/MeetingsPage';
 import { ProjectDetailPage } from '@/features/projects/pages/ProjectDetailPage';
 import { ProjectListPage } from '@/features/projects/pages/ProjectListPage';
+import { RisksPage } from '@/features/risks/pages/RisksPage';
 import { SettingsPage } from '@/features/settings/pages/SettingsPage';
 import { MyTasksPage } from '@/features/tasks/pages/MyTasksPage';
 
@@ -18,6 +19,7 @@ export const router = createHashRouter([
       { index: true, element: <DashboardPage /> },
       { path: 'projects', element: <ProjectListPage /> },
       { path: 'projects/:projectId', element: <ProjectDetailPage /> },
+      { path: 'risks', element: <RisksPage /> },
       { path: 'tasks', element: <MyTasksPage /> },
       { path: 'calendar', element: <CalendarPage /> },
       { path: 'meetings', element: <MeetingsPage /> },

@@ -261,6 +261,16 @@ export function ProjectDetailPage() {
         <MeetingSection project={project} />
       </section>
 
+      <section className="mb-6" id="project-risks">
+        <h2 className="mb-3 text-lg font-medium">风险</h2>
+        <div className="rounded-lg border bg-card p-4 text-sm">
+          <p className="text-muted-foreground">在风险列表中集中查看、筛选和跟踪本项目风险。</p>
+          <Button className="mt-3" size="sm" variant="outline" asChild>
+            <Link to="/risks">查看风险</Link>
+          </Button>
+        </div>
+      </section>
+
       <section className="mb-6" id="project-gantt">
         <h2 className="mb-3 text-lg font-medium">甘特图</h2>
         <GanttSection

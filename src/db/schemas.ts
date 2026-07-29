@@ -31,6 +31,18 @@ export const milestoneStatusEnum = z.enum(['upcoming', 'achieved', 'missed', 'ca
 export const actionItemStatusEnum = z.enum(['open', 'in_progress', 'done', 'cancelled']);
 export const linkTypeEnum = z.enum(['url', 'file_path']);
 export const depTypeEnum = z.enum(['FS']);
+export const riskCategoryEnum = z.enum([
+  'scope',
+  'schedule',
+  'resource',
+  'technical',
+  'external',
+  'other',
+]);
+export const riskLikelihoodEnum = z.enum(['low', 'medium', 'high']);
+export const riskImpactEnum = z.enum(['low', 'medium', 'high']);
+export const riskLevelEnum = z.enum(['low', 'medium', 'high', 'critical']);
+export const riskStatusEnum = z.enum(['open', 'monitoring', 'mitigated', 'closed']);
 
 export const projectRowSchema = z.object({
   id: z.string(),
@@ -141,4 +153,26 @@ export const appSettingRowSchema = z.object({
   key: z.string(),
   value: z.string(),
   ...auditColumns,
+});
+
+export const riskRowSchema = z.object({
+  id: z.string(),
+  project_id: z.string(),
+  title: z.string(),
+  description: z.string(),
+  category: riskCategoryEnum,
+  likelihood: riskLikelihoodEnum,
+  impact: riskImpactEnum,
+  level: riskLevelEnum,
+  status: riskStatusEnum,
+  owner: z.string(),
+  mitigation_plan: z.string(),
+  due_date: dateString.nullable(),
+  resolved_at: z.string().nullable(),
+  is_sample: sqliteBool,
+  ...auditColumns,
+});
+
+export const riskWithProjectRowSchema = riskRowSchema.extend({
+  project_name: z.string(),
 });

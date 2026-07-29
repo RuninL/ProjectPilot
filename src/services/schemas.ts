@@ -4,6 +4,10 @@ import {
   actionItemStatusEnum,
   milestoneStatusEnum,
   projectStatusEnum,
+  riskCategoryEnum,
+  riskImpactEnum,
+  riskLikelihoodEnum,
+  riskStatusEnum,
   taskPriorityEnum,
   taskStatusEnum,
 } from '@/db/schemas';
@@ -204,6 +208,19 @@ export const milestoneInputSchema = z.object({
   status: milestoneStatusEnum.default('upcoming'),
 });
 
+export const riskInputSchema = z.object({
+  project_id: z.string().min(1, '必须选择所属项目'),
+  title: z.string().trim().min(1, '风险标题不能为空').max(160, '风险标题不能超过 160 个字符'),
+  description: z.string().trim().max(4000, '风险描述不能超过 4000 个字符').default(''),
+  category: riskCategoryEnum.default('other'),
+  likelihood: riskLikelihoodEnum,
+  impact: riskImpactEnum,
+  status: riskStatusEnum.default('open'),
+  owner: z.string().trim().max(120, '负责人不能超过 120 个字符').default(''),
+  mitigation_plan: z.string().trim().max(4000, '缓解计划不能超过 4000 个字符').default(''),
+  due_date: optionalDate,
+});
+
 export type ProjectInput = z.infer<typeof projectInputSchema>;
 export type TaskInput = z.infer<typeof taskInputSchema>;
 export type BulkTaskUpdate = z.infer<typeof bulkTaskUpdateSchema>;
@@ -212,3 +229,4 @@ export type MeetingInput = z.infer<typeof meetingInputSchema>;
 export type ActionItemInput = z.infer<typeof actionItemInputSchema>;
 export type ConvertActionItemInput = z.infer<typeof convertActionItemSchema>;
 export type MilestoneInput = z.infer<typeof milestoneInputSchema>;
+export type RiskInput = z.infer<typeof riskInputSchema>;

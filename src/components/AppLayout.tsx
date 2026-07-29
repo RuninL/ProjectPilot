@@ -3,6 +3,7 @@ import {
   CheckSquare,
   FolderKanban,
   LayoutDashboard,
+  ShieldAlert,
   Settings,
   Users,
 } from 'lucide-react';
@@ -22,6 +23,7 @@ const NAV_ITEMS: NavItem[] = [
   { to: '/tasks', label: '我的任务', icon: CheckSquare },
   { to: '/calendar', label: '日历', icon: CalendarDays },
   { to: '/meetings', label: '会议', icon: Users },
+  { to: '/risks', label: '风险', icon: ShieldAlert },
   { to: '/settings', label: '设置', icon: Settings },
 ];
 
