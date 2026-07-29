@@ -39,9 +39,8 @@
     ],
     "windows": {
       "webviewInstallMode": {
-        "OfflineInstaller": {
-          "silent": false
-        }
+        "type": "offlineInstaller",
+        "silent": false
       },
       "nsis": {
         "installMode": "currentUser"
