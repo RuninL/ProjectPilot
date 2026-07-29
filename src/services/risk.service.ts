@@ -1,7 +1,12 @@
 import { nowIso } from '@/lib/date';
 import { AppError } from '@/lib/errors';
 import { newId } from '@/lib/uuid';
-import { getRepositories, type ProjectRepository, type RiskQuery, type RiskRepository } from '@/repositories';
+import {
+  getRepositories,
+  type ProjectRepository,
+  type RiskQuery,
+  type RiskRepository,
+} from '@/repositories';
 import type { Risk, RiskStatus } from '@/types';
 import { calculateRiskLevel } from './riskLevel';
 import { riskInputSchema, type RiskInput } from './schemas';
@@ -23,7 +28,7 @@ export function createRiskService(deps: RiskServiceDeps) {
     }
   }
   function resolvedAt(status: RiskStatus, existing: Risk | null, now: string): string | null {
-    return status === 'mitigated' || status === 'closed' ? existing?.resolved_at ?? now : null;
+    return status === 'mitigated' || status === 'closed' ? (existing?.resolved_at ?? now) : null;
   }
   return {
     listRisks: (query: RiskQuery = {}) => deps.risks.findByQuery(query),
@@ -32,11 +37,22 @@ export function createRiskService(deps: RiskServiceDeps) {
       await requireProject(parsed.project_id);
       const now = nowIso();
       const risk: Risk = {
-        id: newId(), project_id: parsed.project_id, title: parsed.title, description: parsed.description,
-        category: parsed.category, likelihood: parsed.likelihood, impact: parsed.impact,
-        level: calculateRiskLevel(parsed.likelihood, parsed.impact), status: parsed.status, owner: parsed.owner,
-        mitigation_plan: parsed.mitigation_plan, due_date: parsed.due_date, resolved_at: resolvedAt(parsed.status, null, now),
-        is_sample: 0, created_at: now, updated_at: now,
+        id: newId(),
+        project_id: parsed.project_id,
+        title: parsed.title,
+        description: parsed.description,
+        category: parsed.category,
+        likelihood: parsed.likelihood,
+        impact: parsed.impact,
+        level: calculateRiskLevel(parsed.likelihood, parsed.impact),
+        status: parsed.status,
+        owner: parsed.owner,
+        mitigation_plan: parsed.mitigation_plan,
+        due_date: parsed.due_date,
+        resolved_at: resolvedAt(parsed.status, null, now),
+        is_sample: 0,
+        created_at: now,
+        updated_at: now,
       };
       await deps.risks.insert(risk);
       return risk;
@@ -44,15 +60,26 @@ export function createRiskService(deps: RiskServiceDeps) {
     async updateRisk(id: string, input: RiskInput): Promise<Risk> {
       const existing = await requireRisk(id);
       const parsed = riskInputSchema.parse(input);
-      if (parsed.project_id !== existing.project_id) throw new AppError('validation', '风险不能移动到其他项目');
+      if (parsed.project_id !== existing.project_id)
+        throw new AppError('validation', '风险不能移动到其他项目');
       const now = nowIso();
-      await deps.risks.update(id, {
-        title: parsed.title, description: parsed.description, category: parsed.category,
-        likelihood: parsed.likelihood, impact: parsed.impact,
-        level: calculateRiskLevel(parsed.likelihood, parsed.impact), status: parsed.status,
-        owner: parsed.owner, mitigation_plan: parsed.mitigation_plan, due_date: parsed.due_date,
-        resolved_at: resolvedAt(parsed.status, existing, now),
-      }, now);
+      await deps.risks.update(
+        id,
+        {
+          title: parsed.title,
+          description: parsed.description,
+          category: parsed.category,
+          likelihood: parsed.likelihood,
+          impact: parsed.impact,
+          level: calculateRiskLevel(parsed.likelihood, parsed.impact),
+          status: parsed.status,
+          owner: parsed.owner,
+          mitigation_plan: parsed.mitigation_plan,
+          due_date: parsed.due_date,
+          resolved_at: resolvedAt(parsed.status, existing, now),
+        },
+        now,
+      );
       return requireRisk(id);
     },
     async setStatus(id: string, status: RiskStatus): Promise<Risk> {

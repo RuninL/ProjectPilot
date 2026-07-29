@@ -1,11 +1,29 @@
 import { riskRowSchema, riskWithProjectRowSchema } from '@/db/schemas';
 import type { SqlExecutor } from '@/lib/db';
 import type { Risk, RiskCategory, RiskLevel, RiskStatus, RiskWithProject } from '@/types';
-import { buildUpdate, composeWhere, inClause, likeParam, parseOptional, parseRows, runUpdate, type SqlFragment } from './_shared';
+import {
+  buildUpdate,
+  composeWhere,
+  inClause,
+  likeParam,
+  parseOptional,
+  parseRows,
+  runUpdate,
+  type SqlFragment,
+} from './_shared';
 
 const UPDATABLE = [
-  'title', 'description', 'category', 'likelihood', 'impact', 'level', 'status',
-  'owner', 'mitigation_plan', 'due_date', 'resolved_at',
+  'title',
+  'description',
+  'category',
+  'likelihood',
+  'impact',
+  'level',
+  'status',
+  'owner',
+  'mitigation_plan',
+  'due_date',
+  'resolved_at',
 ] as const;
 
 export interface RiskQuery {
@@ -23,17 +41,22 @@ function conditions(query: RiskQuery): SqlFragment[] {
     inClause('r.status', query.statuses ?? []),
     inClause('r.level', query.levels ?? []),
     inClause('r.category', query.categories ?? []),
-    search === '' ? { sql: '', params: [] } : {
-      sql: "(r.title LIKE ? ESCAPE '\\' OR r.description LIKE ? ESCAPE '\\')",
-      params: [likeParam(search), likeParam(search)],
-    },
+    search === ''
+      ? { sql: '', params: [] }
+      : {
+          sql: "(r.title LIKE ? ESCAPE '\\' OR r.description LIKE ? ESCAPE '\\')",
+          params: [likeParam(search), likeParam(search)],
+        },
   ];
 }
 
 export function createRiskRepository(db: SqlExecutor) {
   return {
     async findById(id: string): Promise<Risk | null> {
-      return parseOptional(riskRowSchema, await db.select('SELECT * FROM risks WHERE id = ?', [id]));
+      return parseOptional(
+        riskRowSchema,
+        await db.select('SELECT * FROM risks WHERE id = ?', [id]),
+      );
     },
     async findByQuery(query: RiskQuery = {}): Promise<RiskWithProject[]> {
       const where = composeWhere(conditions(query));
@@ -57,9 +80,24 @@ export function createRiskRepository(db: SqlExecutor) {
         `INSERT INTO risks (id, project_id, title, description, category, likelihood, impact, level, status, owner,
           mitigation_plan, due_date, resolved_at, is_sample, created_at, updated_at)
          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-        [risk.id, risk.project_id, risk.title, risk.description, risk.category, risk.likelihood, risk.impact,
-          risk.level, risk.status, risk.owner, risk.mitigation_plan, risk.due_date, risk.resolved_at,
-          risk.is_sample, risk.created_at, risk.updated_at],
+        [
+          risk.id,
+          risk.project_id,
+          risk.title,
+          risk.description,
+          risk.category,
+          risk.likelihood,
+          risk.impact,
+          risk.level,
+          risk.status,
+          risk.owner,
+          risk.mitigation_plan,
+          risk.due_date,
+          risk.resolved_at,
+          risk.is_sample,
+          risk.created_at,
+          risk.updated_at,
+        ],
       );
     },
     async update(id: string, patch: Partial<Risk>, now: string): Promise<number> {

@@ -1,10 +1,7 @@
 import type { RiskImpact, RiskLevel, RiskLikelihood } from '@/types';
 
 /** The single risk-level rule used for UI preview and every persisted write. */
-export function calculateRiskLevel(
-  likelihood: RiskLikelihood,
-  impact: RiskImpact,
-): RiskLevel {
+export function calculateRiskLevel(likelihood: RiskLikelihood, impact: RiskImpact): RiskLevel {
   if (likelihood === 'high' && impact === 'high') {
     return 'critical';
   }
