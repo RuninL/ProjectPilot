@@ -18,6 +18,17 @@ jobs:
     steps:
       - uses: actions/checkout@v4.2.2
 
+      - name: Verify tag version
+        shell: pwsh
+        env:
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: |
+          $packageVersion = (Get-Content package.json -Raw | ConvertFrom-Json).version
+          $expectedTag = "v$packageVersion"
+          if ($env:RELEASE_TAG -ne $expectedTag) {
+            throw "Release tag '$env:RELEASE_TAG' must match package.json version '$expectedTag'."
+          }
+
       - uses: actions/setup-node@v4.4.0
         with:
           node-version: 22
@@ -64,7 +75,7 @@ jobs:
           name: ProjectPilot ${{ github.ref_name }}
           generate_release_notes: true
           body: |
-            ProjectPilot v1.0.0 提供完全离线的本机 SQLite 项目、任务、甘特图、会议、风险、Files & Links 与数据备份管理。
+            ProjectPilot ${{ github.ref_name }} 提供完全离线的本机 SQLite 项目、任务、甘特图、会议、风险、Files & Links 与数据备份管理。
 
             请使用随附 `SHA256SUMS.txt` 校验安装包。Windows 安装包未签名，SmartScreen 提示时仅在确认文件来自本官方 GitHub Release 后继续。
 

@@ -4,6 +4,14 @@
 
 **核心闭环**：项目 → 任务 → 甘特图 → Milestone → 会议记录 → 行动项 → 任务 → Dashboard 风险追踪
 
+## 下载与发布
+
+- 正式支持 **Windows 10/11 x64**。请从 [GitHub Releases](../../releases) 下载对应版本的 NSIS `.exe` 安装包及
+  `SHA256SUMS.txt`；请勿从第三方来源下载。
+- 每个发布标签必须与应用版本一致（例如 `v1.0.0`）。推送该标签会自动执行格式、lint、类型、测试、前端构建和 Rust
+  测试，并发布带离线 WebView2 安装程序的 Windows 安装包及 SHA-256 校验文件。
+- 安装包目前未签名。Windows SmartScreen 提示时，只应在确认文件来自官方 Release 且校验和一致后继续安装。
+
 ## 特性（第一版范围）
 
 - 完全离线，所有数据存本机 SQLite（Tauri app config 目录），无账号、无云同步、无付费服务
