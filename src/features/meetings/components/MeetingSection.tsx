@@ -5,10 +5,21 @@ import { ConfirmDialog } from '@/components/common/ConfirmDialog';
 import { ErrorState } from '@/components/common/ErrorState';
 import { LoadingState } from '@/components/common/LoadingState';
 import { Button } from '@/components/ui/button';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
 import { toAppError } from '@/lib/errors';
 import { useMeetingStore } from '@/stores/useMeetingStore';
+import { useCalendarStore } from '@/stores/useCalendarStore';
+import { useRecurrenceStore } from '@/stores/useRecurrenceStore';
 import type { Meeting, Project } from '@/types';
 import { MeetingForm } from './MeetingForm';
+import { RecurrenceRuleForm } from './RecurrenceRuleForm';
 
 interface PendingDelete {
   meeting: Meeting;
@@ -33,12 +44,16 @@ export function MeetingSection({ project }: MeetingSectionProps) {
   const updateMeeting = useMeetingStore((state) => state.updateMeeting);
   const deleteMeeting = useMeetingStore((state) => state.deleteMeeting);
   const countActionItems = useMeetingStore((state) => state.countActionItems);
+  const createRule = useRecurrenceStore((state) => state.createRule);
+  const refreshCalendar = useCalendarStore((state) => state.load);
 
   const [formOpen, setFormOpen] = useState(false);
   const [editing, setEditing] = useState<Meeting | null>(null);
   const [pendingDelete, setPendingDelete] = useState<PendingDelete | null>(null);
   const [busy, setBusy] = useState(false);
   const [sectionError, setSectionError] = useState<string | null>(null);
+  const [createChoiceOpen, setCreateChoiceOpen] = useState(false);
+  const [ruleFormOpen, setRuleFormOpen] = useState(false);
 
   useEffect(() => {
     void loadMeetings();
@@ -104,8 +119,7 @@ export function MeetingSection({ project }: MeetingSectionProps) {
         <Button
           size="sm"
           onClick={() => {
-            setEditing(null);
-            setFormOpen(true);
+            setCreateChoiceOpen(true);
           }}
         >
           <Plus className="h-4 w-4" aria-hidden />
@@ -188,10 +202,54 @@ export function MeetingSection({ project }: MeetingSectionProps) {
           } else {
             await updateMeeting(editing.id, input);
           }
+          await refreshCalendar();
         }}
         onClose={() => {
           setFormOpen(false);
           setEditing(null);
+        }}
+      />
+      <Dialog open={createChoiceOpen} onOpenChange={setCreateChoiceOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>创建会议</DialogTitle>
+            <DialogDescription>请选择普通会议或周期会议。</DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => {
+                setCreateChoiceOpen(false);
+                setRuleFormOpen(true);
+              }}
+            >
+              周期会议
+            </Button>
+            <Button
+              onClick={() => {
+                setCreateChoiceOpen(false);
+                setEditing(null);
+                setFormOpen(true);
+              }}
+            >
+              普通会议
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+      <RecurrenceRuleForm
+        open={ruleFormOpen}
+        rule={null}
+        projects={[project]}
+        defaultProjectId={project.id}
+        lockProject
+        onSubmit={async (input) => {
+          await createRule(input);
+          await loadMeetings();
+          await refreshCalendar();
+        }}
+        onClose={() => {
+          setRuleFormOpen(false);
         }}
       />
 

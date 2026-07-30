@@ -57,7 +57,8 @@ export const riskImpactEnum = z.enum(['low', 'medium', 'high']);
 export const riskLevelEnum = z.enum(['low', 'medium', 'high', 'critical']);
 export const riskStatusEnum = z.enum(['open', 'monitoring', 'mitigated', 'closed']);
 export const recurrenceKindEnum = z.enum(['task', 'meeting']);
-export const recurrenceActionEnum = z.enum(['skip', 'materialized']);
+/** `materialized` is retained only to read data created by older app versions. */
+export const recurrenceActionEnum = z.enum(['skip', 'rescheduled', 'materialized']);
 
 export const projectRowSchema = z.object({
   id: z.string(),
@@ -170,6 +171,7 @@ export const recurrenceExceptionRowSchema = z.object({
   rule_id: z.string(),
   occurrence_date: dateString,
   action: recurrenceActionEnum,
+  replacement_date: dateString.nullable().default(null),
   materialized_id: z.string().nullable(),
   ...auditColumns,
 });

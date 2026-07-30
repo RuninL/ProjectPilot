@@ -13,8 +13,10 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { cn } from '@/lib/cn';
+import { toAppError } from '@/lib/errors';
 import { getCalendarService, type CalendarAttentionTask } from '@/services/calendar.service';
 import { useCalendarStore } from '@/stores/useCalendarStore';
+import { useRecurrenceStore } from '@/stores/useRecurrenceStore';
 import { WEEKDAY_LABELS, type CalendarEntry, type CalendarEntryKind } from '../calendarModel';
 
 /** Entries shown before a busy day collapses into a count. */
@@ -28,10 +30,34 @@ const KIND_ICONS: Record<CalendarEntryKind, LucideIcon> = {
 
 interface EntryLinkProps {
   entry: CalendarEntry;
+  onOpenOccurrence: (entry: CalendarEntry) => void;
 }
 
-function EntryLink({ entry }: EntryLinkProps) {
+function EntryLink({ entry, onOpenOccurrence }: EntryLinkProps) {
   const Icon = KIND_ICONS[entry.kind];
+  if (entry.recurrence !== null && entry.kind === 'meeting') {
+    return (
+      <button
+        type="button"
+        className="flex w-full items-start gap-1 rounded px-1 py-0.5 text-left text-xs hover:bg-accent"
+        title={`${entry.kindLabel}：${entry.title}${entry.detail === '' ? '' : ` · ${entry.detail}`}`}
+        onClick={() => {
+          onOpenOccurrence(entry);
+        }}
+      >
+        <span
+          className="mt-1 h-2 w-2 shrink-0 rounded-full border"
+          style={entry.color === null ? undefined : { backgroundColor: entry.color }}
+          aria-hidden
+        />
+        <span className="min-w-0">
+          <span className="text-muted-foreground">{`[${entry.kindLabel}]`}</span>
+          <Icon className="mx-1 inline h-3 w-3" aria-hidden />
+          <span className="break-all">{entry.title}</span>
+        </span>
+      </button>
+    );
+  }
   return (
     <div className="rounded px-1 py-0.5 text-xs hover:bg-accent">
       <Link
@@ -62,11 +88,18 @@ export function CalendarPage() {
   const load = useCalendarStore((state) => state.load);
   const step = useCalendarStore((state) => state.step);
   const goToToday = useCalendarStore((state) => state.goToToday);
+  const skipOccurrence = useRecurrenceStore((state) => state.skip);
+  const rescheduleOccurrence = useRecurrenceStore((state) => state.reschedule);
 
   const [expandedDays, setExpandedDays] = useState<readonly string[]>([]);
   const [attentionDate, setAttentionDate] = useState<string | null>(null);
   const [attentionTasks, setAttentionTasks] = useState<readonly CalendarAttentionTask[]>([]);
   const [attentionLoading, setAttentionLoading] = useState(false);
+  const [occurrence, setOccurrence] = useState<CalendarEntry | null>(null);
+  const [replacementDate, setReplacementDate] = useState('');
+  const [occurrenceBusy, setOccurrenceBusy] = useState(false);
+  const [occurrenceError, setOccurrenceError] = useState<string | null>(null);
+  const recurrenceRuleId = occurrence?.recurrence?.ruleId ?? null;
 
   useEffect(() => {
     void load();
@@ -199,7 +232,15 @@ export function CalendarPage() {
                   </div>
                   <div className="mt-1 space-y-0.5">
                     {visible.map((entry) => (
-                      <EntryLink key={entry.key} entry={entry} />
+                      <EntryLink
+                        key={entry.key}
+                        entry={entry}
+                        onOpenOccurrence={(selected) => {
+                          setOccurrence(selected);
+                          setReplacementDate(selected.date);
+                          setOccurrenceError(null);
+                        }}
+                      />
                     ))}
                   </div>
                   {hidden > 0 && (
@@ -269,6 +310,79 @@ export function CalendarPage() {
               ))}
             </ul>
           )}
+        </DialogContent>
+      </Dialog>
+      <Dialog
+        open={occurrence !== null}
+        onOpenChange={(open) => {
+          if (!open) setOccurrence(null);
+        }}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>周期会议操作</DialogTitle>
+            <DialogDescription>
+              {occurrence === null
+                ? ''
+                : `正在处理 ${occurrence.date} 的「${occurrence.title}」。仅本次不会创建会议记录；整个系列操作会跳转到会议页。`}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="grid gap-2">
+            <label className="grid gap-1 text-sm" htmlFor="recurrence-replacement-date">
+              仅修改本次的新日期
+              <input
+                id="recurrence-replacement-date"
+                className="h-10 rounded-md border border-input bg-background px-3 text-sm"
+                type="date"
+                value={replacementDate}
+                onChange={(event) => {
+                  setReplacementDate(event.target.value);
+                }}
+              />
+            </label>
+            {occurrenceError !== null && <p className="text-sm text-destructive">{occurrenceError}</p>}
+          </div>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              disabled={occurrenceBusy}
+              onClick={() => {
+                const target = occurrence?.recurrence;
+                if (target === null || target === undefined) return;
+                setOccurrenceBusy(true);
+                void rescheduleOccurrence(target.ruleId, target.occurrenceDate, replacementDate)
+                  .then(() => load(month))
+                  .then(() => setOccurrence(null))
+                  .catch((caught: unknown) => setOccurrenceError(toAppError(caught).message))
+                  .finally(() => setOccurrenceBusy(false));
+              }}
+            >
+              仅修改本次
+            </Button>
+            <Button
+              variant="destructive"
+              disabled={occurrenceBusy}
+              onClick={() => {
+                const target = occurrence?.recurrence;
+                if (target === null || target === undefined) return;
+                setOccurrenceBusy(true);
+                void skipOccurrence(target.ruleId, target.occurrenceDate)
+                  .then(() => load(month))
+                  .then(() => setOccurrence(null))
+                  .catch((caught: unknown) => setOccurrenceError(toAppError(caught).message))
+                  .finally(() => setOccurrenceBusy(false));
+              }}
+            >
+              仅删除本次
+            </Button>
+            {recurrenceRuleId !== null && (
+              <Button variant="outline" asChild>
+                <Link to={`/meetings?series=${encodeURIComponent(recurrenceRuleId)}`}>
+                  整个系列
+                </Link>
+              </Button>
+            )}
+          </DialogFooter>
         </DialogContent>
       </Dialog>
     </div>

@@ -405,21 +405,25 @@ function validateSnapshot(snapshot: DatabaseSnapshot): void {
     if (rule === undefined) {
       throw validationError(`周期例外 ${exception.id} 的规则不存在`);
     }
-    if (exception.action === 'materialized') {
+    if (exception.action === 'rescheduled') {
+      if (exception.replacement_date === null || exception.materialized_id !== null) {
+        throw validationError(`周期例外 ${exception.id} 的改期数据无效`);
+      }
+    } else if (exception.action === 'materialized') {
       if (exception.materialized_id === null) {
-        throw validationError(`周期例外 ${exception.id} 缺少物化记录 ID`);
+        throw validationError(`周期例外 ${exception.id} 缺少旧版关联记录 ID`);
       }
       if (rule.kind === 'task') {
-        assertReference(exception.materialized_id, taskIds, `周期例外 ${exception.id} 的物化任务`);
+        assertReference(exception.materialized_id, taskIds, `周期例外 ${exception.id} 的旧版关联任务`);
       } else {
         assertReference(
           exception.materialized_id,
           meetingIds,
-          `周期例外 ${exception.id} 的物化会议`,
+          `周期例外 ${exception.id} 的旧版关联会议`,
         );
       }
-    } else if (exception.materialized_id !== null) {
-      throw validationError(`周期例外 ${exception.id} 的跳过动作不应包含物化记录 ID`);
+    } else if (exception.replacement_date !== null || exception.materialized_id !== null) {
+      throw validationError(`周期例外 ${exception.id} 的跳过动作不应包含关联记录 ID`);
     }
   }
   for (const milestone of snapshot.milestones) {

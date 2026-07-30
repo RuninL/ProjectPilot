@@ -72,8 +72,8 @@ const INSERTS = {
      duration_minutes, default_priority, note, is_active, is_sample, created_at, updated_at)
     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
   recurrenceException: `INSERT INTO recurrence_exceptions
-    (id, rule_id, occurrence_date, action, materialized_id, created_at, updated_at)
-    VALUES (?, ?, ?, ?, ?, ?, ?)`,
+    (id, rule_id, occurrence_date, action, replacement_date, materialized_id, created_at, updated_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
   milestone: `INSERT INTO milestones
     (id, project_id, linked_task_id, name, description, date, status, achieved_at,
      is_sample, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
@@ -315,6 +315,7 @@ function recurrenceExceptionStatement(row: RecurrenceException): BatchStatement 
       row.rule_id,
       row.occurrence_date,
       row.action,
+      row.replacement_date,
       row.materialized_id,
       row.created_at,
       row.updated_at,

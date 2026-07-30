@@ -1,6 +1,6 @@
 import { CalendarDays, Clock, Pencil, Plus, Trash2 } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 import { ConfirmDialog } from '@/components/common/ConfirmDialog';
 import { EmptyState } from '@/components/common/EmptyState';
 import { ErrorState } from '@/components/common/ErrorState';
@@ -23,6 +23,7 @@ import { useMeetingStore } from '@/stores/useMeetingStore';
 import { useProjectStore } from '@/stores/useProjectStore';
 import { useRecurrenceStore } from '@/stores/useRecurrenceStore';
 import type { Meeting, RecurrenceRule } from '@/types';
+import type { RecurrenceRuleInput } from '@/services/schemas';
 import { MeetingForm } from '../components/MeetingForm';
 import { RecurrenceRuleForm } from '../components/RecurrenceRuleForm';
 
@@ -75,12 +76,25 @@ export function MeetingsPage() {
   const [editingRule, setEditingRule] = useState<RecurrenceRule | null>(null);
   const [deletingRule, setDeletingRule] = useState<RecurrenceRule | null>(null);
   const [createChoiceOpen, setCreateChoiceOpen] = useState(false);
+  const [pendingRuleUpdate, setPendingRuleUpdate] = useState<{
+    rule: RecurrenceRule;
+    input: RecurrenceRuleInput;
+  } | null>(null);
+  const [searchParams] = useSearchParams();
 
   useEffect(() => {
     void loadMeetings();
     void loadOptions();
     void loadRules();
   }, [loadMeetings, loadOptions, loadRules]);
+
+  useEffect(() => {
+    const series = searchParams.get('series');
+    const rule = rules.find((item) => item.id === series);
+    if (rule !== undefined) {
+      setEditingRule(rule);
+    }
+  }, [rules, searchParams]);
 
   const projectName = useMemo(() => {
     const byId = new Map(projectOptions.map((project) => [project.id, project.name]));
@@ -198,7 +212,7 @@ export function MeetingsPage() {
                         setRuleFormOpen(true);
                       }}
                     >
-                      编辑规则
+                      修改整个系列
                     </Button>
                     <Button
                       size="sm"
@@ -207,7 +221,7 @@ export function MeetingsPage() {
                         setDeletingRule(rule);
                       }}
                     >
-                      删除规则
+                      删除整个系列
                     </Button>
                   </div>
                 </li>
@@ -366,8 +380,11 @@ export function MeetingsPage() {
         rule={editingRule}
         projects={projectOptions}
         onSubmit={async (input) => {
-          if (editingRule === null) await createRule(input);
-          else await updateRule(editingRule.id, input);
+          if (editingRule === null) {
+            await createRule(input);
+          } else {
+            setPendingRuleUpdate({ rule: editingRule, input });
+          }
         }}
         onClose={() => {
           setRuleFormOpen(false);
@@ -390,6 +407,34 @@ export function MeetingsPage() {
           setPendingDelete(null);
         }}
         onConfirm={confirmDelete}
+      />
+      <ConfirmDialog
+        open={pendingRuleUpdate !== null}
+        title="修改整个系列"
+        description={
+          pendingRuleUpdate === null
+            ? ''
+            : `确定修改整个周期会议「${pendingRuleUpdate.rule.title}」吗？新规则会立即重新展开；为避免旧日期被错误套用，历史单次调整将被清除。`
+        }
+        confirmLabel="修改整个系列"
+        busy={busy}
+        onCancel={() => {
+          setPendingRuleUpdate(null);
+        }}
+        onConfirm={() => {
+          const target = pendingRuleUpdate;
+          setPendingRuleUpdate(null);
+          if (target !== null) {
+            setBusy(true);
+            void updateRule(target.rule.id, target.input)
+              .catch((caught: unknown) => {
+                setActionError(toAppError(caught).message);
+              })
+              .finally(() => {
+                setBusy(false);
+              });
+          }
+        }}
       />
       <ConfirmDialog
         open={deletingRule !== null}

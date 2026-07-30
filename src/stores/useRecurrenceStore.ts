@@ -3,21 +3,17 @@ import { toAppError } from '@/lib/errors';
 import { getRecurrenceService } from '@/services/recurrence.service';
 import type { RecurrenceRule } from '@/types';
 import type { RecurrenceRuleInput } from '@/services/schemas';
-import type { RecurrenceExceptionInput } from '@/services/schemas';
 
 interface RecurrenceState {
   rules: RecurrenceRule[];
-  materializedCounts: Record<string, number>;
   loading: boolean;
   error: string | null;
   loadRules: () => Promise<void>;
   createRule: (input: RecurrenceRuleInput) => Promise<RecurrenceRule>;
   updateRule: (id: string, input: RecurrenceRuleInput) => Promise<RecurrenceRule>;
   deleteRule: (id: string) => Promise<void>;
-  materialize: (ruleId: string, date: string) => Promise<string>;
-  materializeMany: (ruleId: string, dates: readonly string[]) => Promise<number>;
   skip: (ruleId: string, date: string) => Promise<void>;
-  cancelMaterialization: (ruleId: string, date: string) => Promise<void>;
+  reschedule: (ruleId: string, date: string, replacementDate: string) => Promise<void>;
   reset: () => void;
 }
 
@@ -25,19 +21,11 @@ export const useRecurrenceStore = create<RecurrenceState>((set) => {
   async function reload(): Promise<void> {
     const service = await getRecurrenceService();
     const rules = await service.listRules();
-    const counts: readonly (readonly [string, number])[] = await Promise.all(
-      rules.map(async (rule): Promise<readonly [string, number]> => [
-        rule.id,
-        (await service.listExceptions(rule.id)).filter((item) => item.action === 'materialized')
-          .length,
-      ]),
-    );
-    set({ rules, materializedCounts: Object.fromEntries(counts), loading: false, error: null });
+    set({ rules, loading: false, error: null });
   }
 
   return {
     rules: [],
-    materializedCounts: {},
     loading: false,
     error: null,
     loadRules: async () => {
@@ -77,39 +65,18 @@ export const useRecurrenceStore = create<RecurrenceState>((set) => {
         throw caught;
       }
     },
-    materialize: async (ruleId, date) => {
-      try {
-        const entity = await (await getRecurrenceService()).materialize(ruleId, date);
-        await reload();
-        return entity.id;
-      } catch (caught) {
-        set({ error: toAppError(caught).message });
-        throw caught;
-      }
-    },
-    materializeMany: async (ruleId, dates) => {
-      try {
-        const entities = await (await getRecurrenceService()).materializeMany(ruleId, dates);
-        await reload();
-        return entities.length;
-      } catch (caught) {
-        set({ error: toAppError(caught).message });
-        throw caught;
-      }
-    },
     skip: async (ruleId, date) => {
-      const input: RecurrenceExceptionInput = { occurrence_date: date, action: 'skip' };
       try {
-        await (await getRecurrenceService()).createException(ruleId, input);
+        await (await getRecurrenceService()).skipOccurrence(ruleId, date);
         await reload();
       } catch (caught) {
         set({ error: toAppError(caught).message });
         throw caught;
       }
     },
-    cancelMaterialization: async (ruleId, date) => {
+    reschedule: async (ruleId, date, replacementDate) => {
       try {
-        await (await getRecurrenceService()).cancelMaterialization(ruleId, date);
+        await (await getRecurrenceService()).rescheduleOccurrence(ruleId, date, replacementDate);
         await reload();
       } catch (caught) {
         set({ error: toAppError(caught).message });
@@ -117,7 +84,7 @@ export const useRecurrenceStore = create<RecurrenceState>((set) => {
       }
     },
     reset: () => {
-      set({ rules: [], materializedCounts: {}, loading: false, error: null });
+      set({ rules: [], loading: false, error: null });
     },
   };
 });

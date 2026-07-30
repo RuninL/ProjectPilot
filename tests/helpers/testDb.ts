@@ -18,6 +18,7 @@ const MIGRATION_FILES = [
   '0008_postponed_people_fields.sql',
   '0009_recurrence_rules.sql',
   '0010_recurrence_standalone_meetings.sql',
+  '0011_recurrence_exceptions_reschedule.sql',
 ] as const;
 
 /**

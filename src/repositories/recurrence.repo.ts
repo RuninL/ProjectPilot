@@ -97,12 +97,13 @@ export function createRecurrenceRepository(db: SqlExecutor) {
     },
     buildInsertException(exception: RecurrenceException): BatchStatement {
       return {
-        sql: 'INSERT INTO recurrence_exceptions (id, rule_id, occurrence_date, action, materialized_id, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)',
+        sql: 'INSERT INTO recurrence_exceptions (id, rule_id, occurrence_date, action, replacement_date, materialized_id, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
         params: [
           exception.id,
           exception.rule_id,
           exception.occurrence_date,
           exception.action,
+          exception.replacement_date,
           exception.materialized_id,
           exception.created_at,
           exception.updated_at,

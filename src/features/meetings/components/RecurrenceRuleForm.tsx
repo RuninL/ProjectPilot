@@ -33,10 +33,10 @@ interface Values {
   note: string;
 }
 
-function initial(rule: RecurrenceRule | null): Values {
+function initial(rule: RecurrenceRule | null, defaultProjectId: string | null): Values {
   return {
     kind: 'meeting',
-    project_id: rule?.project_id ?? '',
+    project_id: rule?.project_id ?? defaultProjectId ?? '',
     title: rule?.title ?? '',
     byweekday: rule === null ? '' : String(rule.byweekday),
     interval: String(rule?.interval ?? 1),
@@ -51,11 +51,21 @@ interface Props {
   open: boolean;
   rule: RecurrenceRule | null;
   projects: readonly Project[];
+  defaultProjectId?: string | null;
+  lockProject?: boolean;
   onSubmit: (input: RecurrenceRuleInput) => Promise<void>;
   onClose: () => void;
 }
 
-export function RecurrenceRuleForm({ open, rule, projects, onSubmit, onClose }: Props) {
+export function RecurrenceRuleForm({
+  open,
+  rule,
+  projects,
+  defaultProjectId = null,
+  lockProject = false,
+  onSubmit,
+  onClose,
+}: Props) {
   const {
     register,
     handleSubmit,
@@ -64,12 +74,12 @@ export function RecurrenceRuleForm({ open, rule, projects, onSubmit, onClose }: 
     formState: { errors, isSubmitting },
   } = useForm<Values>({
     resolver: zodResolver(recurrenceRuleInputSchema, undefined, { raw: true }),
-    defaultValues: initial(rule),
+    defaultValues: initial(rule, defaultProjectId),
   });
 
   useEffect(() => {
-    if (open) reset(initial(rule));
-  }, [open, reset, rule]);
+    if (open) reset(initial(rule, defaultProjectId));
+  }, [defaultProjectId, open, reset, rule]);
 
   const submit = handleSubmit(async (values) => {
     try {
@@ -103,7 +113,12 @@ export function RecurrenceRuleForm({ open, rule, projects, onSubmit, onClose }: 
           </div>
           <div className="grid gap-1.5">
             <Label htmlFor="recurrence-project">所属项目</Label>
-            <select id="recurrence-project" className={SELECT_CLASS} {...register('project_id')}>
+            <select
+              id="recurrence-project"
+              className={SELECT_CLASS}
+              disabled={lockProject}
+              {...register('project_id')}
+            >
               <option value="">独立会议（不关联项目）</option>
               {projects.map((project) => (
                 <option key={project.id} value={project.id}>

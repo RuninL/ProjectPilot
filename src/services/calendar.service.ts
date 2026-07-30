@@ -100,7 +100,6 @@ export function createCalendarService(deps: CalendarServiceDeps) {
         if (rule.kind !== 'task' || rule.project_id === null) return [];
         const projectId = rule.project_id;
         return result.occurrences
-          .filter((occurrence) => occurrence.materialized_id === null)
           .map((occurrence) => ({
             id: `expected:${rule.id}:${occurrence.date}`,
             project_id: projectId,
@@ -118,7 +117,7 @@ export function createCalendarService(deps: CalendarServiceDeps) {
             archived_at: null,
             source_meeting_id: null,
             source_rule_id: rule.id,
-            source_occurrence_date: occurrence.date,
+            source_occurrence_date: occurrence.occurrenceDate,
             is_sample: 0 as const,
             created_at: rule.created_at,
             updated_at: rule.updated_at,
@@ -132,7 +131,6 @@ export function createCalendarService(deps: CalendarServiceDeps) {
       const recurringMeetings = expansions.flatMap(({ rule, result }) =>
         rule.kind === 'meeting'
           ? result.occurrences
-              .filter((occurrence) => occurrence.materialized_id === null)
               .map((occurrence) => ({
                 id: `expected:${rule.id}:${occurrence.date}`,
                 project_id: rule.project_id,
@@ -145,7 +143,7 @@ export function createCalendarService(deps: CalendarServiceDeps) {
                 decisions: '',
                 risks: '',
                 source_rule_id: rule.id,
-                source_occurrence_date: occurrence.date,
+                source_occurrence_date: occurrence.occurrenceDate,
                 is_sample: 0 as const,
                 created_at: rule.created_at,
                 updated_at: rule.updated_at,

@@ -64,5 +64,11 @@ pub fn migrations() -> Vec<Migration> {
             sql: include_str!("../migrations/0010_recurrence_standalone_meetings.sql"),
             kind: MigrationKind::Up,
         },
+        Migration {
+            version: 11,
+            description: "virtual one-off recurrence rescheduling",
+            sql: include_str!("../migrations/0011_recurrence_exceptions_reschedule.sql"),
+            kind: MigrationKind::Up,
+        },
     ]
 }

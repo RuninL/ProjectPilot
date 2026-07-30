@@ -31,7 +31,7 @@ export interface CalendarEntry {
   readonly href: string;
   /** Project colour, decoration only — never the sole carrier of meaning. */
   readonly color: string | null;
-  /** Present for recurrence-derived meetings so the calendar can expose series actions. */
+  /** Present for recurrence-derived meetings so the calendar can expose occurrence actions. */
   readonly recurrence: {
     readonly ruleId: string;
     readonly occurrenceDate: string;
