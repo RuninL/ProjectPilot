@@ -397,9 +397,9 @@ export function MeetingsPage() {
         description={
           deletingRule === null
             ? ''
-            : `确定删除规则「${deletingRule.title}」吗？已物化的真实会议会保留，尚未物化的预期项和例外记录会删除。`
+            : `确定删除整个周期会议「${deletingRule.title}」吗？这会删除全部未来重复会议设置；历史单次调整会一并清除，已保存的会议记录会保留。`
         }
-        confirmLabel="删除规则"
+        confirmLabel="删除整个系列"
         destructive
         onCancel={() => {
           setDeletingRule(null);

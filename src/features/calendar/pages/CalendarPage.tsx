@@ -155,7 +155,7 @@ export function CalendarPage() {
       {error !== null && <p className="mb-3 text-sm text-destructive">{error}</p>}
       {data?.recurrenceTruncated === true && (
         <p role="alert" className="mb-3 rounded-lg border border-amber-500 p-3 text-sm">
-          周期规则展开已达到 500 项上限，当前日历仅显示部分预期项。
+          周期会议展开已达到 500 项上限，当前日历仅显示部分会议。
         </p>
       )}
 

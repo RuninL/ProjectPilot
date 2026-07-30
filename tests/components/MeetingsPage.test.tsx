@@ -192,7 +192,8 @@ describe('MeetingsPage', () => {
 
     renderPage();
     await screen.findByText('还没有会议记录');
-    await user.click(screen.getAllByRole('button', { name: '创建周期会议' })[0] as HTMLElement);
+    await user.click(screen.getByRole('button', { name: '创建会议' }));
+    await user.click(screen.getByRole('button', { name: '周期会议' }));
     await user.type(screen.getByLabelText('会议主题'), '项目周会');
     await user.selectOptions(screen.getByLabelText('所属项目'), 'p1');
     await user.selectOptions(screen.getByLabelText('每周星期'), '2');
@@ -200,7 +201,7 @@ describe('MeetingsPage', () => {
     fireEvent.change(screen.getByLabelText('结束日期'), { target: { value: '2026-12-31' } });
     await user.click(screen.getByRole('button', { name: '保存规则' }));
 
-    expect(await screen.findByText(/每 1 周 周三，截止 2026-12-31/)).toBeInTheDocument();
+    expect(await screen.findByText(/每周三，至 2026-12-31/)).toBeInTheDocument();
     const first = (await repos.recurrence.findAll())[0];
     expect(first).toMatchObject({ kind: 'meeting', project_id: 'p1', title: '项目周会' });
     if (first === undefined) throw new Error('周期规则应已创建');
@@ -210,22 +211,23 @@ describe('MeetingsPage', () => {
     await user.clear(screen.getByLabelText('会议主题'));
     await user.type(screen.getByLabelText('会议主题'), '项目例会');
     await user.click(screen.getByRole('button', { name: '保存规则' }));
-    expect(await screen.findByText('项目例会')).toBeInTheDocument();
+    expect(await screen.findByText(/项目例会 \[周期会议\]/)).toBeInTheDocument();
 
     await user.click(screen.getByRole('button', { name: '删除规则' }));
-    expect(await screen.findByText(/已物化的真实会议会保留/)).toBeInTheDocument();
-    await user.click(screen.getByRole('button', { name: '删除规则' }));
+    expect(await screen.findByText(/删除整个周期会议/)).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: '删除整个系列' }));
     await waitFor(async () => {
       expect(await repos.recurrence.findById(first.id)).toBeNull();
     });
 
-    await user.click(screen.getAllByRole('button', { name: '创建周期会议' })[0] as HTMLElement);
+    await user.click(screen.getByRole('button', { name: '创建会议' }));
+    await user.click(screen.getByRole('button', { name: '周期会议' }));
     await user.type(screen.getByLabelText('会议主题'), '独立同步会');
     await user.selectOptions(screen.getByLabelText('每周星期'), '0');
     fireEvent.change(screen.getByLabelText('开始日期'), { target: { value: '2026-07-06' } });
     fireEvent.change(screen.getByLabelText('结束日期'), { target: { value: '2026-12-31' } });
     await user.click(screen.getByRole('button', { name: '保存规则' }));
-    expect(await screen.findByText('独立同步会')).toBeInTheDocument();
+    expect(await screen.findByText(/独立同步会 \[周期会议\]/)).toBeInTheDocument();
     expect((await repos.recurrence.findAll())[0]?.project_id).toBeNull();
   });
 });

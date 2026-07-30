@@ -139,7 +139,7 @@ describe('CalendarPage', () => {
     });
   });
 
-  it('renders the bar legend and truncates excess weekly bars', async () => {
+  it('keeps the month grid free from span bars', async () => {
     useRealDb();
     const repos = await getRepositories();
     await repos.projects.insert(makeProject({ id: 'p1', name: '内网门户重构' }));
@@ -156,9 +156,9 @@ describe('CalendarPage', () => {
 
     renderPage('2026-07');
 
-    expect(await screen.findByLabelText('日历色条图例')).toBeInTheDocument();
-    expect(screen.getByText('实线：普通任务或会议')).toBeInTheDocument();
-    expect(screen.getByText('+1 个色条')).toBeInTheDocument();
+    await screen.findByRole('link', { name: /色条会议1/ });
+    expect(screen.queryByLabelText('日历色条图例')).toBeNull();
+    expect(screen.queryByText('+1 个色条')).toBeNull();
   });
 
   it('steps forward across the year boundary', async () => {
