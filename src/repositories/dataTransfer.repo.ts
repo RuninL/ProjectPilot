@@ -3,10 +3,13 @@ import {
   appSettingRowSchema,
   meetingRowSchema,
   milestoneRowSchema,
+  personRowSchema,
   projectLinkRowSchema,
+  projectParticipantRowSchema,
   projectRowSchema,
   riskRowSchema,
   taskDependencyRowSchema,
+  taskParticipantRowSchema,
   taskRowSchema,
 } from '@/db/schemas';
 import type { BatchStatement } from '@/lib/commands';
@@ -16,11 +19,14 @@ import type {
   AppSetting,
   Meeting,
   Milestone,
+  Person,
   Project,
   ProjectLink,
+  ProjectParticipant,
   Risk,
   Task,
   TaskDependency,
+  TaskParticipant,
 } from '@/types';
 import { parseRows } from './_shared';
 
@@ -34,6 +40,9 @@ export interface DatabaseSnapshot {
   projectLinks: ProjectLink[];
   risks: Risk[];
   appSettings: AppSetting[];
+  people: Person[];
+  projectParticipants: ProjectParticipant[];
+  taskParticipants: TaskParticipant[];
 }
 
 const INSERTS = {
@@ -64,6 +73,12 @@ const INSERTS = {
      mitigation_plan, due_date, resolved_at, is_sample, created_at, updated_at)
     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
   appSetting: `INSERT INTO app_settings (key, value, created_at, updated_at) VALUES (?, ?, ?, ?)`,
+  person: `INSERT INTO people
+    (id, name, email, role, note, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)`,
+  projectParticipant: `INSERT INTO project_participants
+    (project_id, person_id, role, joined_at) VALUES (?, ?, ?, ?)`,
+  taskParticipant: `INSERT INTO task_participants
+    (task_id, person_id, assigned_at) VALUES (?, ?, ?)`,
 } as const;
 
 export function createDataTransferRepository(db: SqlExecutor) {
@@ -90,6 +105,15 @@ export function createDataTransferRepository(db: SqlExecutor) {
         appSettingRowSchema,
         await db.select('SELECT * FROM app_settings'),
       );
+      const people = parseRows(personRowSchema, await db.select('SELECT * FROM people'));
+      const projectParticipants = parseRows(
+        projectParticipantRowSchema,
+        await db.select('SELECT * FROM project_participants'),
+      );
+      const taskParticipants = parseRows(
+        taskParticipantRowSchema,
+        await db.select('SELECT * FROM task_participants'),
+      );
       return {
         projects,
         meetings,
@@ -100,11 +124,16 @@ export function createDataTransferRepository(db: SqlExecutor) {
         projectLinks,
         risks,
         appSettings,
+        people,
+        projectParticipants,
+        taskParticipants,
       };
     },
 
     buildClearStatements(): BatchStatement[] {
       return [
+        { sql: 'DELETE FROM task_participants' },
+        { sql: 'DELETE FROM project_participants' },
         { sql: 'DELETE FROM task_dependencies' },
         { sql: 'DELETE FROM action_items' },
         { sql: 'DELETE FROM milestones' },
@@ -113,6 +142,7 @@ export function createDataTransferRepository(db: SqlExecutor) {
         { sql: 'DELETE FROM tasks' },
         { sql: 'DELETE FROM meetings' },
         { sql: 'DELETE FROM projects' },
+        { sql: 'DELETE FROM people' },
         { sql: 'DELETE FROM app_settings' },
       ];
     },
@@ -122,6 +152,7 @@ export function createDataTransferRepository(db: SqlExecutor) {
       const children = snapshot.tasks.filter((task) => task.parent_task_id !== null);
       return [
         ...snapshot.projects.map(projectStatement),
+        ...snapshot.people.map(personStatement),
         ...snapshot.meetings.map(meetingStatement),
         ...roots.map(taskStatement),
         ...children.map(taskStatement),
@@ -130,6 +161,8 @@ export function createDataTransferRepository(db: SqlExecutor) {
         ...snapshot.actionItems.map(actionItemStatement),
         ...snapshot.projectLinks.map(projectLinkStatement),
         ...snapshot.risks.map(riskStatement),
+        ...snapshot.projectParticipants.map(projectParticipantStatement),
+        ...snapshot.taskParticipants.map(taskParticipantStatement),
         ...snapshot.appSettings.map(appSettingStatement),
       ];
     },
@@ -299,6 +332,27 @@ function appSettingStatement(row: AppSetting): BatchStatement {
   return {
     sql: INSERTS.appSetting,
     params: [row.key, row.value, row.created_at, row.updated_at],
+  };
+}
+
+function personStatement(row: Person): BatchStatement {
+  return {
+    sql: INSERTS.person,
+    params: [row.id, row.name, row.email, row.role, row.note, row.created_at, row.updated_at],
+  };
+}
+
+function projectParticipantStatement(row: ProjectParticipant): BatchStatement {
+  return {
+    sql: INSERTS.projectParticipant,
+    params: [row.project_id, row.person_id, row.role, row.joined_at],
+  };
+}
+
+function taskParticipantStatement(row: TaskParticipant): BatchStatement {
+  return {
+    sql: INSERTS.taskParticipant,
+    params: [row.task_id, row.person_id, row.assigned_at],
   };
 }
 

@@ -4,10 +4,13 @@ import {
   appSettingRowSchema,
   meetingRowSchema,
   milestoneRowSchema,
+  personRowSchema,
   projectLinkRowSchema,
+  projectParticipantRowSchema,
   projectRowSchema,
   riskRowSchema,
   taskDependencyRowSchema,
+  taskParticipantRowSchema,
   taskRowSchema,
 } from '@/db/schemas';
 
@@ -24,6 +27,9 @@ export const entityCountSchema = z
     projectLinks: z.number().int().nonnegative(),
     risks: z.number().int().nonnegative(),
     appSettings: z.number().int().nonnegative(),
+    people: z.number().int().nonnegative().default(0),
+    projectParticipants: z.number().int().nonnegative().default(0),
+    taskParticipants: z.number().int().nonnegative().default(0),
   })
   .strict();
 
@@ -38,6 +44,9 @@ export const exportDataSchema = z
     projectLinks: z.array(projectLinkRowSchema.strict()),
     risks: z.array(riskRowSchema.strict()),
     appSettings: z.array(appSettingRowSchema.strict()),
+    people: z.array(personRowSchema.strict()).default([]),
+    projectParticipants: z.array(projectParticipantRowSchema.strict()).default([]),
+    taskParticipants: z.array(taskParticipantRowSchema.strict()).default([]),
   })
   .strict();
 

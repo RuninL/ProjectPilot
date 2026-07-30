@@ -5,7 +5,7 @@ use rusqlite::Connection;
 
 use crate::backup::{pre_restore_path, validate_database};
 
-const REQUIRED_TABLES: [&str; 9] = [
+const REQUIRED_TABLES: [&str; 12] = [
     "projects",
     "tasks",
     "task_dependencies",
@@ -15,6 +15,9 @@ const REQUIRED_TABLES: [&str; 9] = [
     "project_links",
     "app_settings",
     "risks",
+    "people",
+    "project_participants",
+    "task_participants",
 ];
 
 fn temp_path(label: &str) -> std::path::PathBuf {
@@ -38,7 +41,7 @@ fn create_database(path: &Path, tables: &[&str]) -> Connection {
 #[test]
 fn rejects_valid_sqlite_missing_required_table_with_chinese_error() {
     let path = temp_path("missing-table");
-    let connection = create_database(&path, &REQUIRED_TABLES[..8]);
+    let connection = create_database(&path, &REQUIRED_TABLES[..11]);
     drop(connection);
 
     let error = validate_database(&path).expect_err("incomplete schema must be rejected");

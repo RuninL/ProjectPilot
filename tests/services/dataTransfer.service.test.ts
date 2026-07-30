@@ -155,6 +155,32 @@ function snapshot(projectId = 'project-1'): DatabaseSnapshot {
       },
     ],
     appSettings: [{ key: 'theme', value: 'dark', created_at: NOW, updated_at: NOW }],
+    people: [
+      {
+        id: `person-${projectId}`,
+        name: `成员-${projectId}`,
+        email: 'member@example.com',
+        role: '开发',
+        note: '',
+        created_at: NOW,
+        updated_at: NOW,
+      },
+    ],
+    projectParticipants: [
+      {
+        project_id: projectId,
+        person_id: `person-${projectId}`,
+        role: '开发',
+        joined_at: NOW,
+      },
+    ],
+    taskParticipants: [
+      {
+        task_id: `task-root-${projectId}`,
+        person_id: `person-${projectId}`,
+        assigned_at: NOW,
+      },
+    ],
   };
 }
 
@@ -211,6 +237,9 @@ describe('dataTransfer.service', () => {
       projectLinks: 1,
       risks: 1,
       appSettings: 1,
+      people: 1,
+      projectParticipants: 1,
+      taskParticipants: 1,
     });
     expect(file.data).toEqual(snapshot());
   });
@@ -228,6 +257,60 @@ describe('dataTransfer.service', () => {
     } finally {
       target.close();
     }
+  });
+
+  it('兼容旧版本缺少人员数组和统计字段的 JSON', async () => {
+    await seed(db, snapshot());
+    const { service } = serviceFor(db);
+    const exported = await service.exportData('1.0.0', NOW);
+    const raw = JSON.parse(JSON.stringify(exported)) as {
+      data: Record<string, unknown>;
+      statistics: Record<string, unknown>;
+    };
+    delete raw.data.people;
+    delete raw.data.projectParticipants;
+    delete raw.data.taskParticipants;
+    delete raw.statistics.people;
+    delete raw.statistics.projectParticipants;
+    delete raw.statistics.taskParticipants;
+
+    const parsed = service.parseImport(JSON.stringify(raw));
+
+    expect(parsed.data.people).toEqual([]);
+    expect(parsed.data.projectParticipants).toEqual([]);
+    expect(parsed.data.taskParticipants).toEqual([]);
+  });
+
+  it('安全忽略重复人员、重复关系和缺失引用', async () => {
+    await seed(db, snapshot());
+    const { service } = serviceFor(db);
+    const exported = await service.exportData('1.1.0', NOW);
+    const person = required(exported.data.people[0], '人员');
+    const projectParticipant = required(exported.data.projectParticipants[0], '项目参与关系');
+    exported.data.people.push({ ...person });
+    exported.data.projectParticipants.push(
+      { ...projectParticipant },
+      { ...projectParticipant, person_id: 'missing-person' },
+    );
+    exported.data.taskParticipants.push({
+      task_id: 'missing-task',
+      person_id: person.id,
+      assigned_at: NOW,
+    });
+    exported.statistics.people += 1;
+    exported.statistics.projectParticipants += 2;
+    exported.statistics.taskParticipants += 1;
+
+    const parsed = service.parseImport(JSON.stringify(exported));
+
+    expect(parsed.data.people).toHaveLength(1);
+    expect(parsed.data.projectParticipants).toHaveLength(1);
+    expect(parsed.data.taskParticipants).toHaveLength(1);
+    expect(parsed.statistics).toMatchObject({
+      people: 1,
+      projectParticipants: 1,
+      taskParticipants: 1,
+    });
   });
 
   it.each([
@@ -275,9 +358,37 @@ describe('dataTransfer.service', () => {
       projectLinks: 0,
       risks: 0,
       appSettings: 0,
+      people: 0,
+      projectParticipants: 0,
+      taskParticipants: 0,
     });
+
     expect(result.skipped).toEqual(file.statistics);
     expect(await repository.readSnapshot()).toEqual(snapshot());
+  });
+
+  it('合并时同名人员安全跳过且不推导或保留悬空参与关系', async () => {
+    await seed(db, snapshot('old'));
+    const source = createTestDb();
+    try {
+      const incoming = snapshot('new');
+      const incomingPerson = required(incoming.people[0], '人员');
+      incomingPerson.name = required(snapshot('old').people[0], '现有人员').name;
+      await seed(source, incoming);
+      const file = await serviceFor(source).service.exportData('1.1.0', NOW);
+      const { service, repository } = serviceFor(db);
+
+      const result = await service.importData(file, 'merge');
+      const after = await repository.readSnapshot();
+
+      expect(result.inserted.people).toBe(0);
+      expect(result.inserted.projectParticipants).toBe(0);
+      expect(result.inserted.taskParticipants).toBe(0);
+      expect(after.projects.some((row) => row.id === 'new')).toBe(true);
+      expect(after.people).toHaveLength(1);
+    } finally {
+      source.close();
+    }
   });
 
   it('替换模式清空旧数据并重建', async () => {

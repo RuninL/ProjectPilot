@@ -57,6 +57,9 @@ pub(crate) fn validate_database(path: &Path) -> CommandResult<Connection> {
         "project_links",
         "app_settings",
         "risks",
+        "people",
+        "project_participants",
+        "task_participants",
     ];
     for table in required {
         let exists: i64 = conn
