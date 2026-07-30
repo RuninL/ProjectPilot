@@ -56,6 +56,8 @@ export const riskLikelihoodEnum = z.enum(['low', 'medium', 'high']);
 export const riskImpactEnum = z.enum(['low', 'medium', 'high']);
 export const riskLevelEnum = z.enum(['low', 'medium', 'high', 'critical']);
 export const riskStatusEnum = z.enum(['open', 'monitoring', 'mitigated', 'closed']);
+export const recurrenceKindEnum = z.enum(['task', 'meeting']);
+export const recurrenceActionEnum = z.enum(['skip', 'materialized']);
 
 export const projectRowSchema = z.object({
   id: z.string(),
@@ -87,6 +89,8 @@ export const taskRowSchema = z.object({
   completed_at: z.string().nullable(),
   archived_at: z.string().nullable(),
   source_meeting_id: z.string().nullable(),
+  source_rule_id: z.string().nullable(),
+  source_occurrence_date: dateString.nullable(),
   is_sample: sqliteBool,
   ...auditColumns,
 });
@@ -137,7 +141,36 @@ export const meetingRowSchema = z.object({
   notes: z.string(),
   decisions: z.string(),
   risks: z.string(),
+  source_rule_id: z.string().nullable(),
+  source_occurrence_date: dateString.nullable(),
   is_sample: sqliteBool,
+  ...auditColumns,
+});
+
+export const recurrenceRuleRowSchema = z.object({
+  id: z.string(),
+  project_id: z.string(),
+  kind: recurrenceKindEnum,
+  title: z.string(),
+  byweekday: z.number().int().min(0).max(6),
+  interval: z.number().int().positive(),
+  start_date: dateString,
+  end_date: dateString.nullable(),
+  time_of_day: timeString.nullable(),
+  duration_minutes: z.number().int().positive().nullable(),
+  default_priority: taskPriorityEnum.nullable(),
+  note: z.string(),
+  is_active: sqliteBool,
+  is_sample: sqliteBool,
+  ...auditColumns,
+});
+
+export const recurrenceExceptionRowSchema = z.object({
+  id: z.string(),
+  rule_id: z.string(),
+  occurrence_date: dateString,
+  action: recurrenceActionEnum,
+  materialized_id: z.string().nullable(),
   ...auditColumns,
 });
 
