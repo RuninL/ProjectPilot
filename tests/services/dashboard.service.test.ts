@@ -60,6 +60,9 @@ describe('dashboard aggregation', () => {
     const today = '2028-02-28';
     const { repos, service } = useDashboardService();
     await repos.projects.insert(makeProject({ id: 'p1', name: '飞控升级' }));
+    await repos.projects.insert(
+      makeProject({ id: 'postponed-project', name: '已推迟项目', status: 'postponed' }),
+    );
     await repos.tasks.insert(makeTask({ id: 'overdue', due_date: '2028-02-27' }));
     await repos.tasks.insert(
       makeTask({ id: 'today-low', title: '今天低进度', due_date: today, progress: 49 }),
@@ -92,6 +95,14 @@ describe('dashboard aggregation', () => {
         id: 'postponed-upcoming',
         due_date: addDays(today, 3),
         status: 'postponed',
+        progress: 10,
+      }),
+    );
+    await repos.tasks.insert(
+      makeTask({
+        id: 'postponed-project-task',
+        project_id: 'postponed-project',
+        due_date: today,
         progress: 10,
       }),
     );
@@ -204,6 +215,7 @@ describe('dashboard aggregation', () => {
     expect(reminderIds).not.toContain('postponed-overdue');
     expect(reminderIds).not.toContain('postponed-today');
     expect(reminderIds).not.toContain('postponed-upcoming');
+    expect(reminderIds).not.toContain('postponed-project-task');
     expect(dashboard.blockedPropagationRisks.map((risk) => risk.task.id)).toEqual(['downstream']);
     expect(dashboard.milestonePredecessorRisks).toHaveLength(1);
     expect(dashboard.milestonePredecessorRisks[0]).toMatchObject({

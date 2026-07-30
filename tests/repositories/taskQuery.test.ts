@@ -133,6 +133,7 @@ describe('joined project fields', () => {
       id: 'undated',
       project_name: '项目二',
       project_color: '#222222',
+      project_status: 'active',
     });
   });
 });

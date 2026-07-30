@@ -95,6 +95,7 @@ export const taskRowSchema = z.object({
 export const taskWithProjectRowSchema = taskRowSchema.extend({
   project_name: z.string(),
   project_color: z.string(),
+  project_status: projectStatusEnum,
 });
 
 export const taskDependencyRowSchema = z.object({

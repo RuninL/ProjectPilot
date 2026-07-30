@@ -18,6 +18,7 @@ function withProject(task: Partial<TaskWithProject> = {}): TaskWithProject {
     ...makeTask(),
     project_name: '示例项目',
     project_color: '#2563EB',
+    project_status: 'active',
     ...task,
   };
 }

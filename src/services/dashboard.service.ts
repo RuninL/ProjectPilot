@@ -78,7 +78,11 @@ export interface DashboardData {
 }
 
 function isReminderEligible(task: TaskWithProject): boolean {
-  return task.archived_at === null && !REMINDER_EXCLUDED_TASK_STATUSES.has(task.status);
+  return (
+    task.archived_at === null &&
+    task.project_status !== 'postponed' &&
+    !REMINDER_EXCLUDED_TASK_STATUSES.has(task.status)
+  );
 }
 
 function unfinishedPredecessors(

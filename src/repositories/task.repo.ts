@@ -184,7 +184,7 @@ export function createTaskRepository(db: SqlExecutor) {
       const where = composeWhere(taskConditions(query));
       const orderBy = TASK_ORDER_BY[query.sort ?? 'due_date'];
       const rows = await db.select(
-        `SELECT t.*, p.name AS project_name, p.color AS project_color
+        `SELECT t.*, p.name AS project_name, p.color AS project_color, p.status AS project_status
            FROM tasks t
            JOIN projects p ON p.id = t.project_id${where.sql}
           ORDER BY ${orderBy}`,
@@ -200,7 +200,7 @@ export function createTaskRepository(db: SqlExecutor) {
      */
     async findInDateRange(from: string, to: string): Promise<TaskWithProject[]> {
       const rows = await db.select(
-        `SELECT t.*, p.name AS project_name, p.color AS project_color
+        `SELECT t.*, p.name AS project_name, p.color AS project_color, p.status AS project_status
            FROM tasks t
            JOIN projects p ON p.id = t.project_id
           WHERE t.archived_at IS NULL
