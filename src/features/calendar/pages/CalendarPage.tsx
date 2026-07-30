@@ -9,10 +9,16 @@ import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/cn';
 import { useCalendarStore } from '@/stores/useCalendarStore';
 import { useRecurrenceStore } from '@/stores/useRecurrenceStore';
-import { WEEKDAY_LABELS, type CalendarEntry, type CalendarEntryKind } from '../calendarModel';
+import {
+  WEEKDAY_LABELS,
+  type CalendarBar,
+  type CalendarEntry,
+  type CalendarEntryKind,
+} from '../calendarModel';
 
 /** Entries shown before a busy day collapses into a count. */
 const VISIBLE_PER_DAY = 3;
+const VISIBLE_BARS_PER_WEEK = 3;
 
 const KIND_ICONS: Record<CalendarEntryKind, LucideIcon> = {
   task: CheckSquare,
@@ -104,6 +110,32 @@ function EntryLink({
         </Button>
       )}
     </div>
+  );
+}
+
+function CalendarBarLink({ bar }: { bar: CalendarBar }) {
+  const stateClass =
+    bar.state === 'expected'
+      ? 'border-dashed'
+      : bar.state === 'materialized'
+        ? 'border-2'
+        : bar.state === 'blocked'
+          ? 'border-destructive bg-destructive/15'
+          : 'border';
+  return (
+    <Link
+      to={bar.href}
+      aria-label="打开日历色条详情"
+      className={`truncate rounded px-1.5 py-0.5 text-xs font-medium text-foreground ${stateClass}`}
+      style={
+        bar.color === null
+          ? undefined
+          : { backgroundColor: `${bar.color}33`, borderColor: bar.color }
+      }
+      title={`${bar.label}：${bar.title}`}
+    >
+      {`[${bar.label}] ${bar.title}`}
+    </Link>
   );
 }
 
@@ -265,6 +297,14 @@ export function CalendarPage() {
           周期规则展开已达到 500 项上限，当前日历仅显示部分预期项。
         </p>
       )}
+      <section className="mb-3 flex flex-wrap gap-2 text-xs" aria-label="日历色条图例">
+        <span className="rounded border bg-muted px-2 py-1">实线：普通任务或会议</span>
+        <span className="rounded border border-dashed bg-muted px-2 py-1">虚线：周期预期项</span>
+        <span className="rounded border-2 bg-muted px-2 py-1">双边框：已物化项</span>
+        <span className="rounded border border-destructive bg-destructive/15 px-2 py-1">
+          红色边框：受阻任务
+        </span>
+      </section>
 
       {data !== null && data.entryCount === 0 && (
         <p className="mb-3 rounded-lg border border-dashed bg-muted/30 p-4 text-center text-sm text-muted-foreground">
@@ -280,70 +320,96 @@ export function CalendarPage() {
             </div>
           ))}
         </div>
-        {(data?.weeks ?? []).map((week) => (
-          <div key={week[0]?.date ?? ''} className="grid grid-cols-7 border-b last:border-b-0">
-            {week.map((day) => {
-              const expanded = expandedDays.includes(day.date);
-              const visible = expanded ? day.entries : day.entries.slice(0, VISIBLE_PER_DAY);
-              const hidden = day.entries.length - visible.length;
-              return (
-                <div
-                  key={day.date}
-                  className={cn(
-                    'min-h-24 border-r p-1 last:border-r-0',
-                    day.inMonth ? '' : 'bg-muted/30 text-muted-foreground',
-                  )}
-                >
-                  <div className="flex items-center justify-between px-1">
-                    <span className={cn('text-xs', day.isToday && 'font-semibold text-primary')}>
-                      {day.dayOfMonth}
-                    </span>
-                    {day.isToday && (
-                      <span className="rounded bg-primary px-1 text-[10px] text-primary-foreground">
-                        今天
+        {(data?.weeks ?? []).map((week, weekIndex) => (
+          <div key={week[0]?.date ?? ''} className="border-b last:border-b-0">
+            <div className="grid grid-cols-7">
+              {week.map((day) => {
+                const expanded = expandedDays.includes(day.date);
+                const visible = expanded ? day.entries : day.entries.slice(0, VISIBLE_PER_DAY);
+                const hidden = day.entries.length - visible.length;
+                return (
+                  <div
+                    key={day.date}
+                    className={cn(
+                      'min-h-24 border-r p-1 last:border-r-0',
+                      day.inMonth ? '' : 'bg-muted/30 text-muted-foreground',
+                    )}
+                  >
+                    <div className="flex items-center justify-between px-1">
+                      <span className={cn('text-xs', day.isToday && 'font-semibold text-primary')}>
+                        {day.dayOfMonth}
                       </span>
+                      {day.isToday && (
+                        <span className="rounded bg-primary px-1 text-[10px] text-primary-foreground">
+                          今天
+                        </span>
+                      )}
+                    </div>
+                    <div className="mt-1 space-y-0.5">
+                      {visible.map((entry) => (
+                        <EntryLink
+                          key={entry.key}
+                          entry={entry}
+                          busy={busy}
+                          onMaterialize={materializeEntry}
+                          onSkip={skipEntry}
+                          onCancelMaterialization={cancelEntry}
+                          onBatch={(item) => {
+                            setBatchEntry(item);
+                          }}
+                        />
+                      ))}
+                    </div>
+                    {hidden > 0 && (
+                      <button
+                        type="button"
+                        className="mt-0.5 w-full rounded px-1 text-left text-xs text-muted-foreground hover:bg-accent"
+                        onClick={() => {
+                          setExpandedDays((current) => [...current, day.date]);
+                        }}
+                      >
+                        {`还有 ${String(hidden)} 项`}
+                      </button>
+                    )}
+                    {expanded && day.entries.length > VISIBLE_PER_DAY && (
+                      <button
+                        type="button"
+                        className="mt-0.5 w-full rounded px-1 text-left text-xs text-muted-foreground hover:bg-accent"
+                        onClick={() => {
+                          setExpandedDays((current) => current.filter((date) => date !== day.date));
+                        }}
+                      >
+                        收起
+                      </button>
                     )}
                   </div>
-                  <div className="mt-1 space-y-0.5">
-                    {visible.map((entry) => (
-                      <EntryLink
-                        key={entry.key}
-                        entry={entry}
-                        busy={busy}
-                        onMaterialize={materializeEntry}
-                        onSkip={skipEntry}
-                        onCancelMaterialization={cancelEntry}
-                        onBatch={(item) => {
-                          setBatchEntry(item);
-                        }}
-                      />
-                    ))}
-                  </div>
-                  {hidden > 0 && (
-                    <button
-                      type="button"
-                      className="mt-0.5 w-full rounded px-1 text-left text-xs text-muted-foreground hover:bg-accent"
-                      onClick={() => {
-                        setExpandedDays((current) => [...current, day.date]);
+                );
+              })}
+            </div>
+            {(() => {
+              const bars = (data?.bars ?? []).filter((bar) => bar.week === weekIndex);
+              const visibleBars = bars.slice(0, VISIBLE_BARS_PER_WEEK);
+              return (
+                <div className="grid grid-cols-7 gap-y-1 border-t bg-muted/20 p-1">
+                  {visibleBars.map((bar) => (
+                    <div
+                      key={bar.key}
+                      className="min-w-0"
+                      style={{
+                        gridColumn: `${String(bar.startColumn)} / span ${String(bar.span)}`,
                       }}
                     >
-                      {`还有 ${String(hidden)} 项`}
-                    </button>
-                  )}
-                  {expanded && day.entries.length > VISIBLE_PER_DAY && (
-                    <button
-                      type="button"
-                      className="mt-0.5 w-full rounded px-1 text-left text-xs text-muted-foreground hover:bg-accent"
-                      onClick={() => {
-                        setExpandedDays((current) => current.filter((date) => date !== day.date));
-                      }}
-                    >
-                      收起
-                    </button>
+                      <CalendarBarLink bar={bar} />
+                    </div>
+                  ))}
+                  {bars.length > VISIBLE_BARS_PER_WEEK && (
+                    <span className="col-span-7 text-xs text-muted-foreground">
+                      {`+${String(bars.length - VISIBLE_BARS_PER_WEEK)} 个色条`}
+                    </span>
                   )}
                 </div>
               );
-            })}
+            })()}
           </div>
         ))}
       </div>

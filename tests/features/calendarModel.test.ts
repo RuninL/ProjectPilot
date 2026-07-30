@@ -269,6 +269,42 @@ describe('buildCalendarMonth', () => {
     expect(details).toEqual(['09:30 · 示例项目', '独立会议']);
   });
 
+  it('builds a cross-week bar with explicit expected and blocked semantics', () => {
+    const month = buildCalendarMonth(
+      '2026-07',
+      data({
+        tasks: [
+          withProject({
+            id: 'span',
+            title: '跨周任务',
+            start_date: '2026-07-03',
+            due_date: '2026-07-08',
+            status: 'blocked',
+          }),
+        ],
+        meetings: [
+          makeMeeting({
+            id: 'expected:rule:2026-07-08',
+            topic: '周期周会',
+            date: '2026-07-08',
+            source_rule_id: 'rule',
+            source_occurrence_date: '2026-07-08',
+          }),
+        ],
+      }),
+      TODAY,
+    );
+
+    expect(month.bars.filter((bar) => bar.title === '跨周任务')).toMatchObject([
+      { week: 0, startColumn: 5, span: 3, state: 'blocked' },
+      { week: 1, startColumn: 1, span: 3, state: 'blocked' },
+    ]);
+    expect(month.bars.find((bar) => bar.title === '周期周会')).toMatchObject({
+      label: '周期预期会议',
+      state: 'expected',
+    });
+  });
+
   it('shows the milestone status as text in its detail line', () => {
     const month = buildCalendarMonth(
       '2026-07',

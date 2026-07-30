@@ -60,6 +60,19 @@ export interface CalendarMonth {
   /** Entries inside the month proper, for the empty state. */
   readonly entryCount: number;
   readonly recurrenceTruncated: boolean;
+  readonly bars: readonly CalendarBar[];
+}
+
+export interface CalendarBar {
+  readonly key: string;
+  readonly week: number;
+  readonly startColumn: number;
+  readonly span: number;
+  readonly title: string;
+  readonly href: string;
+  readonly color: string | null;
+  readonly label: string;
+  readonly state: 'normal' | 'expected' | 'materialized' | 'blocked';
 }
 
 export interface CalendarData {
@@ -110,6 +123,46 @@ const MILESTONE_STATUS_LABELS: Record<Milestone['status'], string> = {
 
 /** Meetings read first, then milestones, then tasks; ties broken by title. */
 const KIND_ORDER: Record<CalendarEntryKind, number> = { meeting: 0, milestone: 1, task: 2 };
+
+function barsForRange(
+  key: string,
+  title: string,
+  href: string,
+  color: string | null,
+  label: string,
+  state: CalendarBar['state'],
+  start: string,
+  end: string,
+  rangeStart: string,
+  rangeEnd: string,
+): CalendarBar[] {
+  const from = start < rangeStart ? rangeStart : start;
+  const to = end > rangeEnd ? rangeEnd : end;
+  if (from > to) return [];
+  const bars: CalendarBar[] = [];
+  let cursor = from;
+  while (cursor <= to) {
+    const offset = inclusiveDays(rangeStart, cursor) - 1;
+    const week = Math.floor(offset / DAYS_IN_WEEK);
+    const startColumn = (offset % DAYS_IN_WEEK) + 1;
+    const daysInWeek = DAYS_IN_WEEK - startColumn + 1;
+    const remaining = inclusiveDays(cursor, to);
+    const span = Math.min(daysInWeek, remaining);
+    bars.push({
+      key: `${key}:${String(week)}`,
+      week,
+      startColumn,
+      span,
+      title,
+      href,
+      color,
+      label,
+      state,
+    });
+    cursor = addDays(cursor, span);
+  }
+  return bars;
+}
 
 function taskEntries(tasks: readonly TaskWithProject[]): CalendarEntry[] {
   const entries: CalendarEntry[] = [];
@@ -268,6 +321,57 @@ export function buildCalendarMonth(
     weeks.push(days);
   }
 
+  const bars = [
+    ...data.tasks.flatMap((task) => {
+      const date = task.due_date ?? task.start_date;
+      if (date === null) return [];
+      const start = task.start_date ?? date;
+      const end = task.due_date ?? date;
+      const state: CalendarBar['state'] =
+        task.status === 'blocked'
+          ? 'blocked'
+          : task.source_rule_id === null
+            ? 'normal'
+            : task.id.startsWith('expected:')
+              ? 'expected'
+              : 'materialized';
+      return barsForRange(
+        `task:${task.id}`,
+        task.title,
+        `/tasks?taskId=${encodeURIComponent(task.id)}`,
+        task.project_color,
+        state === 'expected' ? '周期预期任务' : state === 'materialized' ? '已物化任务' : '任务',
+        state,
+        start,
+        end,
+        from,
+        to,
+      );
+    }),
+    ...data.meetings.map((meeting) =>
+      barsForRange(
+        `meeting:${meeting.id}`,
+        meeting.topic,
+        `/meetings/${encodeURIComponent(meeting.id)}`,
+        meeting.project_id === null ? null : (projectsById.get(meeting.project_id)?.color ?? null),
+        meeting.source_rule_id === null
+          ? '会议'
+          : meeting.id.startsWith('expected:')
+            ? '周期预期会议'
+            : '已物化会议',
+        meeting.source_rule_id === null
+          ? 'normal'
+          : meeting.id.startsWith('expected:')
+            ? 'expected'
+            : 'materialized',
+        meeting.date,
+        meeting.date,
+        from,
+        to,
+      ),
+    ),
+  ].flat();
+
   return {
     month,
     label: formatMonthLabel(`${month}-01`),
@@ -276,6 +380,7 @@ export function buildCalendarMonth(
     weeks,
     entryCount,
     recurrenceTruncated: data.recurrenceTruncated ?? false,
+    bars,
   };
 }
 
