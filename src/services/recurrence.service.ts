@@ -31,7 +31,9 @@ export function expandRule(
   const to = effectiveEnd < windowEnd ? effectiveEnd : windowEnd;
   if (from > to) return { occurrences: [], truncated: false };
 
-  const exceptionsByDate = new Map(exceptions.map((exception) => [exception.occurrence_date, exception]));
+  const exceptionsByDate = new Map(
+    exceptions.map((exception) => [exception.occurrence_date, exception]),
+  );
   const anchorWeek = startOfWeekStr(rule.start_date);
   const offset = (rule.byweekday - weekday(rule.start_date) + 7) % 7;
   let candidate = addDays(rule.start_date, offset);
