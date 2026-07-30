@@ -1,14 +1,25 @@
 -- ProjectPilot migration 0008: postponed statuses and optional people fields.
--- SQLite cannot alter CHECK constraints in place, so projects and tasks are
--- rebuilt in one transaction. All existing columns, indexes, and triggers are
--- preserved; no status values are rewritten.
-
-PRAGMA foreign_keys = OFF;
-BEGIN TRANSACTION;
+--
+-- tauri-plugin-sql/sqlx owns the transaction around this script and enables
+-- foreign keys on its migration connection. Rebuilding a referenced parent
+-- table therefore fires its configured cascades. Preserve every affected child
+-- row in temporary tables, rebuild the two status tables, then restore the rows
+-- in foreign-key order. This keeps the migration atomic without nesting a
+-- transaction or trying to change PRAGMA foreign_keys inside one.
 
 ALTER TABLE people ADD COLUMN email TEXT DEFAULT NULL;
 ALTER TABLE people ADD COLUMN role TEXT DEFAULT NULL;
 ALTER TABLE people ADD COLUMN note TEXT DEFAULT NULL;
+
+CREATE TEMP TABLE migration_0008_tasks AS SELECT * FROM tasks;
+CREATE TEMP TABLE migration_0008_task_dependencies AS SELECT * FROM task_dependencies;
+CREATE TEMP TABLE migration_0008_milestones AS SELECT * FROM milestones;
+CREATE TEMP TABLE migration_0008_meetings AS SELECT * FROM meetings;
+CREATE TEMP TABLE migration_0008_action_items AS SELECT * FROM action_items;
+CREATE TEMP TABLE migration_0008_project_links AS SELECT * FROM project_links;
+CREATE TEMP TABLE migration_0008_risks AS SELECT * FROM risks;
+CREATE TEMP TABLE migration_0008_project_participants AS SELECT * FROM project_participants;
+CREATE TEMP TABLE migration_0008_task_participants AS SELECT * FROM task_participants;
 
 CREATE TABLE projects_new (
   id              TEXT PRIMARY KEY,
@@ -32,20 +43,25 @@ INSERT INTO projects_new
 SELECT id, name, description, status, color, start_date, target_end_date,
        archived_at, is_sample, created_at, updated_at
   FROM projects;
+
+-- Deleting the old parent rows cascades through the existing foreign keys.
+-- All rows that can be affected were copied above and are restored below.
 DROP TABLE projects;
 ALTER TABLE projects_new RENAME TO projects;
 CREATE INDEX idx_projects_status ON projects (status);
 CREATE INDEX idx_projects_archived ON projects (archived_at);
 
--- These triggers belong to task_dependencies but reference tasks. SQLite
--- validates their bodies while the replacement table is renamed.
+-- Project deletion emptied tasks and all project-owned tables. Recreate tasks
+-- so its CHECK constraint accepts postponed, then restore parents before
+-- children to satisfy the self-reference.
 DROP TRIGGER trg_deps_same_project_insert;
 DROP TRIGGER trg_deps_same_project_update;
+DROP TABLE tasks;
 
-CREATE TABLE tasks_new (
+CREATE TABLE tasks (
   id                TEXT PRIMARY KEY,
   project_id        TEXT NOT NULL REFERENCES projects (id) ON DELETE CASCADE,
-  parent_task_id    TEXT REFERENCES tasks_new (id) ON DELETE CASCADE,
+  parent_task_id    TEXT REFERENCES tasks (id) ON DELETE CASCADE,
   title             TEXT NOT NULL CHECK (length(trim(title)) BETWEEN 1 AND 160),
   description       TEXT NOT NULL DEFAULT '',
   status            TEXT NOT NULL DEFAULT 'todo'
@@ -65,16 +81,12 @@ CREATE TABLE tasks_new (
   source_meeting_id TEXT DEFAULT NULL REFERENCES meetings (id) ON DELETE SET NULL,
   CHECK (start_date IS NULL OR due_date IS NULL OR start_date <= due_date)
 );
-INSERT INTO tasks_new
-  (id, project_id, parent_task_id, title, description, status, priority,
-   start_date, due_date, progress, estimated_hours, actual_hours, is_sample,
-   created_at, updated_at, completed_at, archived_at, source_meeting_id)
-SELECT id, project_id, parent_task_id, title, description, status, priority,
-       start_date, due_date, progress, estimated_hours, actual_hours, is_sample,
-       created_at, updated_at, completed_at, archived_at, source_meeting_id
-  FROM tasks;
-DROP TABLE tasks;
-ALTER TABLE tasks_new RENAME TO tasks;
+
+INSERT INTO meetings SELECT * FROM migration_0008_meetings;
+INSERT INTO tasks
+SELECT * FROM migration_0008_tasks WHERE parent_task_id IS NULL;
+INSERT INTO tasks
+SELECT * FROM migration_0008_tasks WHERE parent_task_id IS NOT NULL;
 
 CREATE INDEX idx_tasks_project_status ON tasks (project_id, status);
 CREATE INDEX idx_tasks_project_due ON tasks (project_id, due_date);
@@ -143,6 +155,16 @@ BEGIN
   SELECT RAISE(ABORT, 'CROSS_PROJECT_PARENT');
 END;
 
+-- Restore the remaining cascaded or SET NULL rows only after both parent tables
+-- are back. Task participation remains independent from project participation.
+INSERT INTO milestones SELECT * FROM migration_0008_milestones;
+INSERT INTO action_items SELECT * FROM migration_0008_action_items;
+INSERT INTO project_links SELECT * FROM migration_0008_project_links;
+INSERT INTO risks SELECT * FROM migration_0008_risks;
+INSERT INTO project_participants SELECT * FROM migration_0008_project_participants;
+INSERT INTO task_participants SELECT * FROM migration_0008_task_participants;
+INSERT INTO task_dependencies SELECT * FROM migration_0008_task_dependencies;
+
 CREATE TRIGGER trg_deps_same_project_insert
 BEFORE INSERT ON task_dependencies
 WHEN EXISTS (
@@ -163,5 +185,12 @@ BEGIN
   SELECT RAISE(ABORT, 'CROSS_PROJECT_DEPENDENCY');
 END;
 
-COMMIT;
-PRAGMA foreign_keys = ON;
+DROP TABLE migration_0008_tasks;
+DROP TABLE migration_0008_task_dependencies;
+DROP TABLE migration_0008_milestones;
+DROP TABLE migration_0008_meetings;
+DROP TABLE migration_0008_action_items;
+DROP TABLE migration_0008_project_links;
+DROP TABLE migration_0008_risks;
+DROP TABLE migration_0008_project_participants;
+DROP TABLE migration_0008_task_participants;

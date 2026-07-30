@@ -91,10 +91,59 @@ describe('migration 0008 upgrade', () => {
     raw
       .prepare(
         `INSERT INTO tasks
-          (id, project_id, title, description, progress, created_at, updated_at)
+          (id, project_id, title, description, progress, source_meeting_id, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+      )
+      .run('task', 'project', '旧任务', '保留描述', 42, null, NOW, NOW);
+    raw
+      .prepare(
+        `INSERT INTO meetings (id, project_id, topic, date, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?)`,
+      )
+      .run('meeting', 'project', '旧会议', '2026-07-01', NOW, NOW);
+    raw.prepare('UPDATE tasks SET source_meeting_id = ? WHERE id = ?').run('meeting', 'task');
+    raw
+      .prepare(
+        `INSERT INTO tasks
+          (id, project_id, parent_task_id, title, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?)`,
+      )
+      .run('child-task', 'project', 'task', '旧子任务', NOW, NOW);
+    raw
+      .prepare(
+        `INSERT INTO task_dependencies
+          (id, predecessor_id, successor_id, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?)`,
+      )
+      .run('dependency', 'task', 'child-task', NOW, NOW);
+    raw
+      .prepare(
+        `INSERT INTO milestones
+          (id, project_id, linked_task_id, name, date, created_at, updated_at)
          VALUES (?, ?, ?, ?, ?, ?, ?)`,
       )
-      .run('task', 'project', '旧任务', '保留描述', 42, NOW, NOW);
+      .run('milestone', 'project', 'child-task', '旧里程碑', '2026-08-01', NOW, NOW);
+    raw
+      .prepare(
+        `INSERT INTO action_items
+          (id, meeting_id, content, converted_task_id, converted_at, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?)`,
+      )
+      .run('action', 'meeting', '旧行动项', 'child-task', NOW, NOW, NOW);
+    raw
+      .prepare(
+        `INSERT INTO project_links
+          (id, project_id, label, link_type, target, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?)`,
+      )
+      .run('link', 'project', '旧资料', 'url', 'https://example.com', NOW, NOW);
+    raw
+      .prepare(
+        `INSERT INTO risks
+          (id, project_id, title, likelihood, impact, level, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+      )
+      .run('risk', 'project', '旧风险', 'low', 'low', 'low', NOW, NOW);
     raw
       .prepare('INSERT INTO people (id, name, created_at, updated_at) VALUES (?, ?, ?, ?)')
       .run('person', '旧人员', NOW, NOW);
@@ -110,21 +159,59 @@ describe('migration 0008 upgrade', () => {
     const before = {
       projects: raw.prepare('SELECT COUNT(*) AS count FROM projects').get(),
       tasks: raw.prepare('SELECT COUNT(*) AS count FROM tasks').get(),
+      dependencies: raw.prepare('SELECT COUNT(*) AS count FROM task_dependencies').get(),
+      milestones: raw.prepare('SELECT COUNT(*) AS count FROM milestones').get(),
+      meetings: raw.prepare('SELECT COUNT(*) AS count FROM meetings').get(),
+      actions: raw.prepare('SELECT COUNT(*) AS count FROM action_items').get(),
+      links: raw.prepare('SELECT COUNT(*) AS count FROM project_links').get(),
+      risks: raw.prepare('SELECT COUNT(*) AS count FROM risks').get(),
       people: raw.prepare('SELECT COUNT(*) AS count FROM people').get(),
       projectParticipants: raw.prepare('SELECT COUNT(*) AS count FROM project_participants').get(),
       taskParticipants: raw.prepare('SELECT COUNT(*) AS count FROM task_participants').get(),
     };
 
-    raw.exec(readFileSync(join(MIGRATION_DIR, '0008_postponed_people_fields.sql'), 'utf8'));
+    raw.transaction(() => {
+      raw.exec(readFileSync(join(MIGRATION_DIR, '0008_postponed_people_fields.sql'), 'utf8'));
+    })();
 
     const after = {
       projects: raw.prepare('SELECT COUNT(*) AS count FROM projects').get(),
       tasks: raw.prepare('SELECT COUNT(*) AS count FROM tasks').get(),
+      dependencies: raw.prepare('SELECT COUNT(*) AS count FROM task_dependencies').get(),
+      milestones: raw.prepare('SELECT COUNT(*) AS count FROM milestones').get(),
+      meetings: raw.prepare('SELECT COUNT(*) AS count FROM meetings').get(),
+      actions: raw.prepare('SELECT COUNT(*) AS count FROM action_items').get(),
+      links: raw.prepare('SELECT COUNT(*) AS count FROM project_links').get(),
+      risks: raw.prepare('SELECT COUNT(*) AS count FROM risks').get(),
       people: raw.prepare('SELECT COUNT(*) AS count FROM people').get(),
       projectParticipants: raw.prepare('SELECT COUNT(*) AS count FROM project_participants').get(),
       taskParticipants: raw.prepare('SELECT COUNT(*) AS count FROM task_participants').get(),
     };
     expect(after).toStrictEqual(before);
+    expect(
+      raw
+        .prepare(
+          `SELECT t.parent_task_id, t.source_meeting_id, d.predecessor_id,
+                  m.linked_task_id, a.converted_task_id
+             FROM tasks t
+             JOIN task_dependencies d ON d.successor_id = t.id
+             JOIN milestones m ON m.linked_task_id = t.id
+             JOIN action_items a ON a.converted_task_id = t.id
+            WHERE t.id = ?`,
+        )
+        .get('child-task'),
+    ).toStrictEqual({
+      parent_task_id: 'task',
+      source_meeting_id: null,
+      predecessor_id: 'task',
+      linked_task_id: 'child-task',
+      converted_task_id: 'child-task',
+    });
+    expect(
+      raw.prepare('SELECT source_meeting_id FROM tasks WHERE id = ?').get('task'),
+    ).toStrictEqual({
+      source_meeting_id: 'meeting',
+    });
     expect(
       raw
         .prepare(

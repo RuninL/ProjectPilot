@@ -53,7 +53,9 @@ export function createTestDb(): TestDb {
   const raw = new BetterSqlite3(':memory:');
   raw.pragma('foreign_keys = ON');
   for (const file of MIGRATION_FILES) {
-    raw.exec(readFileSync(join(MIGRATION_DIR, file), 'utf8'));
+    raw.transaction(() => {
+      raw.exec(readFileSync(join(MIGRATION_DIR, file), 'utf8'));
+    })();
   }
 
   const runBatch = (statements: BatchStatement[]): number => {
