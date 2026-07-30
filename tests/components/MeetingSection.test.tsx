@@ -176,7 +176,7 @@ describe('MeetingSection', () => {
       `/meetings?series=${encodeURIComponent(alpha.id)}`,
     );
     const orderedTitles = [...container.querySelectorAll('li')]
-      .map((item) => item.textContent ?? '')
+      .map((item) => item.textContent)
       .filter((text) => /例会|会议/.test(text));
     expect(orderedTitles).toEqual(
       expect.arrayContaining([
