@@ -57,11 +57,13 @@ const INSERTS = {
      is_sample, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
   meeting: `INSERT INTO meetings
     (id, project_id, topic, date, start_time, attendees, agenda, notes, decisions, risks,
-     is_sample, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+     source_rule_id, source_occurrence_date, is_sample, created_at, updated_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
   task: `INSERT INTO tasks
     (id, project_id, parent_task_id, title, description, status, priority, start_date, due_date,
      progress, estimated_hours, actual_hours, completed_at, archived_at, source_meeting_id,
-     is_sample, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+     source_rule_id, source_occurrence_date, is_sample, created_at, updated_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
   dependency: `INSERT INTO task_dependencies
     (id, predecessor_id, successor_id, dep_type, lag_days, created_at, updated_at)
     VALUES (?, ?, ?, ?, ?, ?, ?)`,
@@ -229,6 +231,8 @@ function meetingStatement(row: Meeting): BatchStatement {
       row.notes,
       row.decisions,
       row.risks,
+      row.source_rule_id,
+      row.source_occurrence_date,
       row.is_sample,
       row.created_at,
       row.updated_at,
@@ -255,6 +259,8 @@ function taskStatement(row: Task): BatchStatement {
       row.completed_at,
       row.archived_at,
       row.source_meeting_id,
+      row.source_rule_id,
+      row.source_occurrence_date,
       row.is_sample,
       row.created_at,
       row.updated_at,
