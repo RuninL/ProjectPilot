@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { meetingRowSchema } from '@/db/schemas';
+import { meetingRowSchema, taskRowSchema } from '@/db/schemas';
 import { normalizeRow } from '@/db/rowNormalization';
 import type { QueryResult, SqlExecutor } from '@/lib/db';
 import {
@@ -82,6 +82,30 @@ describe('driver-shape normalization of select rows', () => {
 
     expect(meeting?.project_id).toBeNull();
     expect(meeting?.start_time).toBeNull();
+  });
+
+  it('parses explicit NULL recurrence source columns as NULL', () => {
+    const meeting = meetingRowSchema.parse(
+      makeMeeting({ source_rule_id: null, source_occurrence_date: null }),
+    );
+    const task = taskRowSchema.parse(
+      makeTask({ source_rule_id: null, source_occurrence_date: null }),
+    );
+
+    expect(meeting.source_rule_id).toBeNull();
+    expect(meeting.source_occurrence_date).toBeNull();
+    expect(task.source_rule_id).toBeNull();
+    expect(task.source_occurrence_date).toBeNull();
+  });
+
+  it('defaults missing recurrence source columns to NULL for pre-0009 result rows', () => {
+    const meeting = meetingRowSchema.parse(makeMeeting());
+    const task = taskRowSchema.parse(makeTask());
+
+    expect(meeting.source_rule_id).toBeNull();
+    expect(meeting.source_occurrence_date).toBeNull();
+    expect(task.source_rule_id).toBeNull();
+    expect(task.source_occurrence_date).toBeNull();
   });
 
   it('stringifies numbers and booleans decoded for TEXT columns', async () => {
