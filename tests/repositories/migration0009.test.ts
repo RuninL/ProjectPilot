@@ -159,8 +159,10 @@ describe('migration 0009', () => {
     db.exec(migration);
 
     for (const table of existingTables) {
+      const columnNames = oldColumns[table];
+      if (columnNames === undefined) throw new Error(`Missing snapshot columns for ${table}`);
       expect(
-        db.prepare(`SELECT ${oldColumns[table].join(', ')} FROM ${table} ORDER BY 1`).all(),
+        db.prepare(`SELECT ${columnNames.join(', ')} FROM ${table} ORDER BY 1`).all(),
       ).toStrictEqual(oldRows[table]);
     }
     expect(columns(db, 'tasks').slice(0, oldTaskColumns.length)).toStrictEqual(oldTaskColumns);

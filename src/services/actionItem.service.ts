@@ -173,6 +173,8 @@ export function createActionItemService(deps: ActionItemServiceDeps) {
         completed_at: null,
         archived_at: null,
         source_meeting_id: meeting.id,
+        source_rule_id: null,
+        source_occurrence_date: null,
         is_sample: 0,
         created_at: now,
         updated_at: now,
