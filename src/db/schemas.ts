@@ -178,3 +178,32 @@ export const riskWithProjectRowSchema = riskRowSchema.extend({
   project_name: z.string(),
   project_color: z.string(),
 });
+
+export const personRowSchema = z.object({
+  id: z.string(),
+  name: z.string(),
+  ...auditColumns,
+});
+
+export const projectParticipantRowSchema = z.object({
+  project_id: z.string(),
+  person_id: z.string(),
+  role: z.string(),
+  joined_at: timestamp,
+});
+
+export const taskParticipantRowSchema = z.object({
+  task_id: z.string(),
+  person_id: z.string(),
+  assigned_at: timestamp,
+});
+
+export const personProjectParticipationRowSchema = projectParticipantRowSchema.extend({
+  project_name: z.string(),
+});
+
+export const personTaskParticipationRowSchema = taskParticipantRowSchema.extend({
+  task_title: z.string(),
+  project_id: z.string().nullable(),
+  project_name: z.string().nullable(),
+});

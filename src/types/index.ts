@@ -8,7 +8,11 @@ import type {
   meetingRowSchema,
   milestoneRowSchema,
   milestoneStatusEnum,
+  personProjectParticipationRowSchema,
+  personRowSchema,
+  personTaskParticipationRowSchema,
   projectLinkRowSchema,
+  projectParticipantRowSchema,
   projectRowSchema,
   projectStatusEnum,
   riskCategoryEnum,
@@ -19,6 +23,7 @@ import type {
   riskStatusEnum,
   riskWithProjectRowSchema,
   taskDependencyRowSchema,
+  taskParticipantRowSchema,
   taskPriorityEnum,
   taskRowSchema,
   taskStatusEnum,
@@ -37,6 +42,11 @@ export type ProjectLink = z.infer<typeof projectLinkRowSchema>;
 export type AppSetting = z.infer<typeof appSettingRowSchema>;
 export type Risk = z.infer<typeof riskRowSchema>;
 export type RiskWithProject = z.infer<typeof riskWithProjectRowSchema>;
+export type Person = z.infer<typeof personRowSchema>;
+export type ProjectParticipant = z.infer<typeof projectParticipantRowSchema>;
+export type TaskParticipant = z.infer<typeof taskParticipantRowSchema>;
+export type PersonProjectParticipation = z.infer<typeof personProjectParticipationRowSchema>;
+export type PersonTaskParticipation = z.infer<typeof personTaskParticipationRowSchema>;
 
 export type ProjectStatus = z.infer<typeof projectStatusEnum>;
 export type TaskStatus = z.infer<typeof taskStatusEnum>;

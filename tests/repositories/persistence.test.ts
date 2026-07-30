@@ -27,7 +27,7 @@ afterEach(() => {
 });
 
 describe('migration 0001 schema', () => {
-  it('creates all 8 tables', () => {
+  it('creates all application tables', () => {
     const names = db.raw
       .prepare("SELECT name FROM sqlite_master WHERE type = 'table' ORDER BY name")
       .all()
@@ -37,10 +37,13 @@ describe('migration 0001 schema', () => {
       'app_settings',
       'meetings',
       'milestones',
+      'people',
       'project_links',
+      'project_participants',
       'projects',
       'risks',
       'task_dependencies',
+      'task_participants',
       'tasks',
     ]);
   });

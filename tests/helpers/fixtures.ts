@@ -1,4 +1,15 @@
-import type { ActionItem, Meeting, Milestone, Project, ProjectLink, Risk, Task } from '@/types';
+import type {
+  ActionItem,
+  Meeting,
+  Milestone,
+  Person,
+  Project,
+  ProjectLink,
+  ProjectParticipant,
+  Risk,
+  Task,
+  TaskParticipant,
+} from '@/types';
 import { NOW } from './testDb';
 
 /** Row fixtures shared by the repository and service test suites. */
@@ -129,6 +140,39 @@ export function makeRisk(overrides: Partial<Risk> = {}): Risk {
     is_sample: 0,
     created_at: NOW,
     updated_at: NOW,
+    ...overrides,
+  };
+}
+
+export function makePerson(overrides: Partial<Person> = {}): Person {
+  return {
+    id: 'person-1',
+    name: '张三',
+    created_at: NOW,
+    updated_at: NOW,
+    ...overrides,
+  };
+}
+
+export function makeProjectParticipant(
+  overrides: Partial<ProjectParticipant> = {},
+): ProjectParticipant {
+  return {
+    project_id: 'p1',
+    person_id: 'person-1',
+    role: '开发',
+    joined_at: NOW,
+    ...overrides,
+  };
+}
+
+export function makeTaskParticipant(
+  overrides: Partial<TaskParticipant> = {},
+): TaskParticipant {
+  return {
+    task_id: 't1',
+    person_id: 'person-1',
+    assigned_at: NOW,
     ...overrides,
   };
 }
