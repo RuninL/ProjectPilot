@@ -309,6 +309,50 @@ export function createRecurrenceService(deps: RecurrenceServiceDeps) {
       return entity;
     },
 
+    /** Materialize several occurrences as one batch: either all meetings exist or none do. */
+    async materializeMany(
+      ruleId: string,
+      occurrenceDates: readonly string[],
+    ): Promise<(Task | Meeting)[]> {
+      if (occurrenceDates.length === 0) {
+        throw new AppError('validation', '请至少选择一次周期会议');
+      }
+      const uniqueDates = [...new Set(occurrenceDates)];
+      if (uniqueDates.length !== occurrenceDates.length) {
+        throw new AppError('validation', '批量物化日期不能重复');
+      }
+      const rule = await requireRule(ruleId);
+      await Promise.all(uniqueDates.map((date) => requireUnmaterialized(ruleId, date)));
+      const now = nowIso();
+      const entities = uniqueDates.map((date) =>
+        rule.kind === 'task'
+          ? buildMaterializedTask(rule, date, now)
+          : buildMaterializedMeeting(rule, date, now),
+      );
+      const exceptions = entities.map((entity, index): RecurrenceException => ({
+        id: newId(),
+        rule_id: rule.id,
+        occurrence_date: uniqueDates[index] ?? '',
+        action: 'materialized',
+        materialized_id: entity.id,
+        created_at: now,
+        updated_at: now,
+      }));
+      try {
+        await deps.runBatch([
+          ...entities.map((entity) =>
+            rule.kind === 'task'
+              ? deps.tasks.buildInsert(entity as Task)
+              : deps.meetings.buildInsert(entity as Meeting),
+          ),
+          ...exceptions.map((exception) => deps.recurrence.buildInsertException(exception)),
+        ]);
+      } catch (cause) {
+        throw new AppError('db', '批量物化周期记录失败，未写入任何数据', { cause });
+      }
+      return entities;
+    },
+
     /**
      * Cancelling a materialization deletes both the generated record and its
      * exception in one transaction. Removing the exception makes that date an

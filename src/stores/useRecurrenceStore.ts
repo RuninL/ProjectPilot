@@ -3,6 +3,7 @@ import { toAppError } from '@/lib/errors';
 import { getRecurrenceService } from '@/services/recurrence.service';
 import type { RecurrenceRule } from '@/types';
 import type { RecurrenceRuleInput } from '@/services/schemas';
+import type { RecurrenceExceptionInput } from '@/services/schemas';
 
 interface RecurrenceState {
   rules: RecurrenceRule[];
@@ -13,6 +14,10 @@ interface RecurrenceState {
   createRule: (input: RecurrenceRuleInput) => Promise<RecurrenceRule>;
   updateRule: (id: string, input: RecurrenceRuleInput) => Promise<RecurrenceRule>;
   deleteRule: (id: string) => Promise<void>;
+  materialize: (ruleId: string, date: string) => Promise<string>;
+  materializeMany: (ruleId: string, dates: readonly string[]) => Promise<number>;
+  skip: (ruleId: string, date: string) => Promise<void>;
+  cancelMaterialization: (ruleId: string, date: string) => Promise<void>;
   reset: () => void;
 }
 
@@ -66,6 +71,45 @@ export const useRecurrenceStore = create<RecurrenceState>((set) => {
     deleteRule: async (id) => {
       try {
         await (await getRecurrenceService()).deleteRule(id);
+        await reload();
+      } catch (caught) {
+        set({ error: toAppError(caught).message });
+        throw caught;
+      }
+    },
+    materialize: async (ruleId, date) => {
+      try {
+        const entity = await (await getRecurrenceService()).materialize(ruleId, date);
+        await reload();
+        return entity.id;
+      } catch (caught) {
+        set({ error: toAppError(caught).message });
+        throw caught;
+      }
+    },
+    materializeMany: async (ruleId, dates) => {
+      try {
+        const entities = await (await getRecurrenceService()).materializeMany(ruleId, dates);
+        await reload();
+        return entities.length;
+      } catch (caught) {
+        set({ error: toAppError(caught).message });
+        throw caught;
+      }
+    },
+    skip: async (ruleId, date) => {
+      const input: RecurrenceExceptionInput = { occurrence_date: date, action: 'skip' };
+      try {
+        await (await getRecurrenceService()).createException(ruleId, input);
+        await reload();
+      } catch (caught) {
+        set({ error: toAppError(caught).message });
+        throw caught;
+      }
+    },
+    cancelMaterialization: async (ruleId, date) => {
+      try {
+        await (await getRecurrenceService()).cancelMaterialization(ruleId, date);
         await reload();
       } catch (caught) {
         set({ error: toAppError(caught).message });

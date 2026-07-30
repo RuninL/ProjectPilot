@@ -31,6 +31,12 @@ export interface CalendarEntry {
   readonly href: string;
   /** Project colour, decoration only — never the sole carrier of meaning. */
   readonly color: string | null;
+  /** Present for recurrence-derived entries so the calendar can expose occurrence actions. */
+  readonly recurrence: {
+    readonly ruleId: string;
+    readonly occurrenceDate: string;
+    readonly state: 'expected' | 'materialized';
+  } | null;
 }
 
 export interface CalendarDay {
@@ -123,6 +129,14 @@ function taskEntries(tasks: readonly TaskWithProject[]): CalendarEntry[] {
             : `来源周期规则 · ${task.project_name} · ${task.id.startsWith('expected:') ? '预期项' : '已物化'}`,
         href,
         color: task.project_color,
+        recurrence:
+          task.source_rule_id === null || task.source_occurrence_date === null
+            ? null
+            : {
+                ruleId: task.source_rule_id,
+                occurrenceDate: task.source_occurrence_date,
+                state: task.id.startsWith('expected:') ? 'expected' : 'materialized',
+              },
       });
     }
     // A same-day start and due collapse into the single截止 entry above.
@@ -137,6 +151,7 @@ function taskEntries(tasks: readonly TaskWithProject[]): CalendarEntry[] {
         detail: task.project_name,
         href,
         color: task.project_color,
+        recurrence: null,
       });
     }
   }
@@ -165,6 +180,14 @@ function meetingEntries(
           : `${parts.join(' · ')} · 来源周期规则 · ${meeting.id.startsWith('expected:') ? '预期项' : '已物化'}`,
       href: `/meetings/${encodeURIComponent(meeting.id)}`,
       color: project?.color ?? null,
+      recurrence:
+        meeting.source_rule_id === null || meeting.source_occurrence_date === null
+          ? null
+          : {
+              ruleId: meeting.source_rule_id,
+              occurrenceDate: meeting.source_occurrence_date,
+              state: meeting.id.startsWith('expected:') ? 'expected' : 'materialized',
+            },
     };
   });
 }
@@ -187,6 +210,7 @@ function milestoneEntries(
         .join(' · '),
       href: `/projects/${encodeURIComponent(milestone.project_id)}#project-milestones`,
       color: project?.color ?? null,
+      recurrence: null,
     };
   });
 }

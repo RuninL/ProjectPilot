@@ -2,11 +2,13 @@ import { CalendarDays, ChevronLeft, ChevronRight, CheckSquare, Flag, Users } fro
 import type { LucideIcon } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
+import { ConfirmDialog } from '@/components/common/ConfirmDialog';
 import { ErrorState } from '@/components/common/ErrorState';
 import { LoadingState } from '@/components/common/LoadingState';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/cn';
 import { useCalendarStore } from '@/stores/useCalendarStore';
+import { useRecurrenceStore } from '@/stores/useRecurrenceStore';
 import { WEEKDAY_LABELS, type CalendarEntry, type CalendarEntryKind } from '../calendarModel';
 
 /** Entries shown before a busy day collapses into a count. */
@@ -18,26 +20,90 @@ const KIND_ICONS: Record<CalendarEntryKind, LucideIcon> = {
   milestone: Flag,
 };
 
-function EntryLink({ entry }: { entry: CalendarEntry }) {
+interface EntryLinkProps {
+  entry: CalendarEntry;
+  busy: boolean;
+  onMaterialize: (entry: CalendarEntry) => void;
+  onSkip: (entry: CalendarEntry) => void;
+  onCancelMaterialization: (entry: CalendarEntry) => void;
+  onBatch: (entry: CalendarEntry) => void;
+}
+
+function EntryLink({
+  entry,
+  busy,
+  onMaterialize,
+  onSkip,
+  onCancelMaterialization,
+  onBatch,
+}: EntryLinkProps) {
   const Icon = KIND_ICONS[entry.kind];
   return (
-    <Link
-      to={entry.href}
-      className="flex items-start gap-1 rounded px-1 py-0.5 text-xs hover:bg-accent"
-      title={`${entry.kindLabel}：${entry.title}${entry.detail === '' ? '' : ` · ${entry.detail}`}`}
-    >
-      <span
-        className="mt-1 h-2 w-2 shrink-0 rounded-full border"
-        style={entry.color === null ? undefined : { backgroundColor: entry.color }}
-        aria-hidden
-      />
-      <span className="min-w-0">
-        {/* The type is always spelled out, so colour is never the only cue. */}
-        <span className="text-muted-foreground">{`[${entry.kindLabel}]`}</span>
-        <Icon className="mx-1 inline h-3 w-3" aria-hidden />
-        <span className="break-all">{entry.title}</span>
-      </span>
-    </Link>
+    <div className="rounded px-1 py-0.5 text-xs hover:bg-accent">
+      <Link
+        to={entry.href}
+        className="flex items-start gap-1"
+        title={`${entry.kindLabel}：${entry.title}${entry.detail === '' ? '' : ` · ${entry.detail}`}`}
+      >
+        <span
+          className="mt-1 h-2 w-2 shrink-0 rounded-full border"
+          style={entry.color === null ? undefined : { backgroundColor: entry.color }}
+          aria-hidden
+        />
+        <span className="min-w-0">
+          <span className="text-muted-foreground">{`[${entry.kindLabel}]`}</span>
+          <Icon className="mx-1 inline h-3 w-3" aria-hidden />
+          <span className="break-all">{entry.title}</span>
+        </span>
+      </Link>
+      {entry.recurrence?.state === 'expected' && entry.kind === 'meeting' && (
+        <div className="mt-1 flex flex-wrap gap-1">
+          <Button
+            size="sm"
+            variant="outline"
+            disabled={busy}
+            onClick={() => {
+              onMaterialize(entry);
+            }}
+          >
+            物化本次
+          </Button>
+          <Button
+            size="sm"
+            variant="outline"
+            disabled={busy}
+            onClick={() => {
+              onSkip(entry);
+            }}
+          >
+            跳过本次
+          </Button>
+          <Button
+            size="sm"
+            variant="outline"
+            disabled={busy}
+            onClick={() => {
+              onBatch(entry);
+            }}
+          >
+            物化未来 3 次
+          </Button>
+        </div>
+      )}
+      {entry.recurrence?.state === 'materialized' && entry.kind === 'meeting' && (
+        <Button
+          className="mt-1"
+          size="sm"
+          variant="outline"
+          disabled={busy}
+          onClick={() => {
+            onCancelMaterialization(entry);
+          }}
+        >
+          取消物化
+        </Button>
+      )}
+    </div>
   );
 }
 
@@ -49,8 +115,15 @@ export function CalendarPage() {
   const load = useCalendarStore((state) => state.load);
   const step = useCalendarStore((state) => state.step);
   const goToToday = useCalendarStore((state) => state.goToToday);
+  const materialize = useRecurrenceStore((state) => state.materialize);
+  const materializeMany = useRecurrenceStore((state) => state.materializeMany);
+  const skip = useRecurrenceStore((state) => state.skip);
+  const cancelMaterialization = useRecurrenceStore((state) => state.cancelMaterialization);
 
   const [expandedDays, setExpandedDays] = useState<readonly string[]>([]);
+  const [busy, setBusy] = useState(false);
+  const [toast, setToast] = useState<string | null>(null);
+  const [batchEntry, setBatchEntry] = useState<CalendarEntry | null>(null);
 
   useEffect(() => {
     void load();
@@ -77,6 +150,63 @@ export function CalendarPage() {
       </div>
     );
   }
+
+  const refreshAfter = async (run: () => Promise<void>, success: string): Promise<void> => {
+    setBusy(true);
+    setToast(null);
+    try {
+      await run();
+      await load(month);
+      setToast(success);
+    } catch (caught) {
+      setToast(caught instanceof Error ? caught.message : '操作失败，请重试');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const materializeEntry = (entry: CalendarEntry): void => {
+    const recurrence = entry.recurrence;
+    if (recurrence === null) return;
+    void refreshAfter(async () => {
+      await materialize(recurrence.ruleId, recurrence.occurrenceDate);
+    }, '已物化为真实会议，可点击标题打开详情。');
+  };
+
+  const skipEntry = (entry: CalendarEntry): void => {
+    const recurrence = entry.recurrence;
+    if (recurrence === null) return;
+    void refreshAfter(async () => {
+      await skip(recurrence.ruleId, recurrence.occurrenceDate);
+    }, '已跳过本次周期会议。');
+  };
+
+  const cancelEntry = (entry: CalendarEntry): void => {
+    const recurrence = entry.recurrence;
+    if (recurrence === null) return;
+    void refreshAfter(async () => {
+      await cancelMaterialization(recurrence.ruleId, recurrence.occurrenceDate);
+    }, '已取消物化，日期恢复为预期项。');
+  };
+
+  const batchDates = (entry: CalendarEntry): readonly string[] => {
+    const recurrence = entry.recurrence;
+    if (recurrence === null || data === null) return [];
+    return data.weeks
+      .flat()
+      .flatMap((day) => day.entries)
+      .filter(
+        (item) =>
+          item.kind === 'meeting' &&
+          item.recurrence?.state === 'expected' &&
+          item.recurrence.ruleId === recurrence.ruleId &&
+          item.recurrence.occurrenceDate >= recurrence.occurrenceDate,
+      )
+      .map((item) => item.recurrence?.occurrenceDate)
+      .filter((date): date is string => date !== undefined)
+      .sort()
+      .slice(0, 3);
+  };
 
   return (
     <div className="p-6">
@@ -125,6 +255,11 @@ export function CalendarPage() {
       </header>
 
       {error !== null && <p className="mb-3 text-sm text-destructive">{error}</p>}
+      {toast !== null && (
+        <p role="status" className="mb-3 rounded-lg border bg-card p-3 text-sm shadow-sm">
+          {toast}
+        </p>
+      )}
       {data?.recurrenceTruncated === true && (
         <p role="alert" className="mb-3 rounded-lg border border-amber-500 p-3 text-sm">
           周期规则展开已达到 500 项上限，当前日历仅显示部分预期项。
@@ -171,7 +306,17 @@ export function CalendarPage() {
                   </div>
                   <div className="mt-1 space-y-0.5">
                     {visible.map((entry) => (
-                      <EntryLink key={entry.key} entry={entry} />
+                      <EntryLink
+                        key={entry.key}
+                        entry={entry}
+                        busy={busy}
+                        onMaterialize={materializeEntry}
+                        onSkip={skipEntry}
+                        onCancelMaterialization={cancelEntry}
+                        onBatch={(item) => {
+                          setBatchEntry(item);
+                        }}
+                      />
                     ))}
                   </div>
                   {hidden > 0 && (
@@ -202,6 +347,28 @@ export function CalendarPage() {
           </div>
         ))}
       </div>
+      <ConfirmDialog
+        open={batchEntry !== null}
+        title="批量物化周期会议"
+        description={`将从当前日期起创建 ${String(batchEntry === null ? 0 : batchDates(batchEntry).length)} 场真实会议（最多 3 场）。创建失败时会整体回滚。`}
+        confirmLabel="确认物化"
+        busy={busy}
+        onCancel={() => {
+          setBatchEntry(null);
+        }}
+        onConfirm={() => {
+          const entry = batchEntry;
+          setBatchEntry(null);
+          if (entry === null || entry.recurrence === null) return;
+          const dates = batchDates(entry);
+          void refreshAfter(
+            async () => {
+              await materializeMany(entry.recurrence?.ruleId ?? '', dates);
+            },
+            `已物化 ${String(dates.length)} 场真实会议。`,
+          );
+        }}
+      />
     </div>
   );
 }

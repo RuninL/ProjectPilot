@@ -177,6 +177,24 @@ describe('expandRule', () => {
         count: 0,
       });
     });
+
+    it('batch materializes meetings atomically and rejects duplicate occurrences', async () => {
+      const service = createService();
+      await seedProject();
+      const created = await service.createRule({ ...validInput, kind: 'meeting' });
+
+      const entities = await service.materializeMany(created.id, ['2027-01-06', '2027-01-13']);
+
+      expect(entities).toHaveLength(2);
+      expect(
+        db?.raw
+          .prepare('SELECT COUNT(*) AS count FROM meetings WHERE source_rule_id = ?')
+          .get(created.id),
+      ).toEqual({ count: 2 });
+      await expect(service.materializeMany(created.id, ['2027-01-06'])).rejects.toThrow(
+        '该周期已处理，不能重复物化',
+      );
+    });
   });
   it('uses the start week as the interval anchor and applies exceptions', () => {
     const result = expandRule(
