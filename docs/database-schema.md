@@ -261,6 +261,20 @@ WHEN EXISTS (
 `monitoring → mitigated/closed`、`mitigated/closed → open`；`risk.service.ts` 的 `updateRisk`
 和 `setStatus` 都执行此校验，防止编辑表单绕过生命周期。
 
+### 2.10 people 与参与关系（migration 0007）
+
+`people` 是独立人员主数据；项目参与和任务参与是两种互不推导的关系。把人员加入任务不会自动加入
+任务所属项目，反之亦然。
+
+| 表                   | 字段                                   | 约束 / 语义                                           |
+| -------------------- | -------------------------------------- | ----------------------------------------------------- |
+| people               | id, name, created_at, updated_at       | id PK；name trim 后 1–120 字符                        |
+| project_participants | project_id, person_id, role, joined_at | 复合 PK；项目和人员 FK 均 CASCADE；role 最多 120 字符 |
+| task_participants    | task_id, person_id, assigned_at        | 复合 PK；任务和人员 FK 均 CASCADE                     |
+
+两张关联表分别按外键两端建立索引。删除项目只级联其项目关系、所属任务及这些任务的关系；删除任务不影响
+项目关系；删除人员只删除该人员的两类关系，不删除项目或任务。
+
 ## 3. Mermaid ER 图
 
 ```mermaid
@@ -277,6 +291,10 @@ erDiagram
   tasks |o--o{ milestones : "linked (SET NULL)"
   meetings ||--o{ action_items : "contains (CASCADE)"
   action_items |o--|| tasks : "converted_to (SET NULL, UNIQUE)"
+  projects ||--o{ project_participants : "participation (CASCADE)"
+  people ||--o{ project_participants : "participation (CASCADE)"
+  tasks ||--o{ task_participants : "participation (CASCADE)"
+  people ||--o{ task_participants : "participation (CASCADE)"
 
   projects {
     TEXT id PK
@@ -359,6 +377,23 @@ erDiagram
     TEXT key PK
     TEXT value
   }
+  people {
+    TEXT id PK
+    TEXT name
+    TEXT created_at
+    TEXT updated_at
+  }
+  project_participants {
+    TEXT project_id PK,FK
+    TEXT person_id PK,FK
+    TEXT role
+    TEXT joined_at
+  }
+  task_participants {
+    TEXT task_id PK,FK
+    TEXT person_id PK,FK
+    TEXT assigned_at
+  }
 ```
 
 ## 4. JSON 交换格式（schemaVersion 1）
@@ -383,6 +418,9 @@ erDiagram
 - `risks[]`: `id,project_id,title,description,category,likelihood,impact,level,status,owner,mitigation_plan,due_date,resolved_at,is_sample,created_at,updated_at`
 - `appSettings[]`: `key,value,created_at,updated_at`
 
+schemaVersion 1 暂不包含 `people`、`project_participants` 或 `task_participants`；导入导出该数据需要
+先升级交换格式版本，避免旧客户端静默丢弃人员数据。
+
 导入顺序为 projects → meetings → 根 tasks → 子 tasks →
 taskDependencies/milestones/actionItems/projectLinks/risks → appSettings。替换模式先按反向依赖顺序清空；
 合并模式对所有数组统一按主键（设置按 key）跳过。写入前校验统计、重复键、外键、同项目关系、
@@ -398,6 +436,8 @@ taskDependencies/milestones/actionItems/projectLinks/risks → appSettings。替
 | 任务删除               | service 与 UI 均**拦截仍有子任务的任务**（提示真实子任务数量，要求先处理子任务）；DB 的 CASCADE 仅作兜底。删除后关联 action_item 的 converted_task_id SET NULL（converted_at 保留）、milestone 的 linked_task_id SET NULL | 二次确认；有子任务时禁止删除         |
 | 任务批量修改           | 通过 Rust `execute_batch` 单事务提交（状态 / 优先级 / 截止日期），任一条失败整批回滚                                                                                                                                      | **二次确认**（列出将执行的修改）     |
 | 会议删除               | 级联删 action_items（已转换任务不受影响）                                                                                                                                                                                 | 二次确认                             |
+| 人员删除               | 级联删该人员的项目和任务参与关系；项目、任务不受影响                                                                                                                                                                      | 单次确认                             |
+| 项目/任务参与关系删除  | 只删除所选关系；另一类参与关系和核心实体均不受影响                                                                                                                                                                        | 无需确认                             |
 | 里程碑/链接/行动项删除 | 直接删除                                                                                                                                                                                                                  | 单次确认                             |
 | 清除示例数据           | 单事务删除所有 is_sample=1 行                                                                                                                                                                                             | 二次确认                             |
 | 恢复数据库             | 自动备份当前库 → 二次确认 → 替换文件 → 重建连接                                                                                                                                                                           | **二次确认**                         |
@@ -423,6 +463,8 @@ taskDependencies/milestones/actionItems/projectLinks/risks → appSettings。替
 - `src-tauri/migrations/0005_dashboard_risks.sql`：**纯增量**——新增 `risks` 表及其 3 个查询索引，
   不修改或重建 0001–0004 的任何表、索引、触发器，也不复制或删除既有行。风险等级与
   `status`/`resolved_at` 一致性由表级 CHECK 兜底；合法状态迁移由 service 层校验。
+- `src-tauri/migrations/0007_people.sql`：**纯增量**——新增 `people`、`project_participants`、
+  `task_participants` 三张表及查询索引；不修改、复制或删除任何既有行。
 - 每个 migration 幂等（CREATE TABLE IF NOT EXISTS 风格不用于变更，版本号单调递增，插件按 version 执行一次）
 - Down SQL 仅用于开发期回滚；发布后只前进不后退
 - schema 版本随 JSON 导出携带，导入时校验兼容性

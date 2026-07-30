@@ -263,6 +263,19 @@ export const projectLinkInputSchema = z
     }
   });
 
+export const personInputSchema = z.object({
+  name: z.string().trim().min(1, '姓名不能为空').max(120, '姓名不能超过 120 个字符'),
+});
+
+export const projectParticipantInputSchema = z.object({
+  project_id: z.string().trim().min(1, '必须选择项目'),
+  role: z.string().trim().max(120, '项目角色不能超过 120 个字符').default(''),
+});
+
+export const taskParticipantInputSchema = z.object({
+  task_id: z.string().trim().min(1, '必须选择任务'),
+});
+
 export type ProjectInput = z.infer<typeof projectInputSchema>;
 export type TaskInput = z.infer<typeof taskInputSchema>;
 export type BulkTaskUpdate = z.infer<typeof bulkTaskUpdateSchema>;
@@ -273,3 +286,6 @@ export type ConvertActionItemInput = z.infer<typeof convertActionItemSchema>;
 export type MilestoneInput = z.infer<typeof milestoneInputSchema>;
 export type RiskInput = z.infer<typeof riskInputSchema>;
 export type ProjectLinkInput = z.infer<typeof projectLinkInputSchema>;
+export type PersonInput = z.infer<typeof personInputSchema>;
+export type ProjectParticipantInput = z.infer<typeof projectParticipantInputSchema>;
+export type TaskParticipantInput = z.infer<typeof taskParticipantInputSchema>;

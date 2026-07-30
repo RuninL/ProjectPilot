@@ -4,10 +4,13 @@ import {
   actionItemInputSchema,
   meetingInputSchema,
   milestoneInputSchema,
+  personInputSchema,
+  projectParticipantInputSchema,
   projectLinkInputSchema,
   projectInputSchema,
   riskInputSchema,
   taskInputSchema,
+  taskParticipantInputSchema,
 } from '@/services/schemas';
 
 /**
@@ -80,6 +83,21 @@ const cases: SchemaCase[] = [
       impact: 'medium',
       due_date: '',
     },
+  },
+  {
+    name: 'personInputSchema',
+    schema: personInputSchema,
+    raw: { name: ' 张三 ' },
+  },
+  {
+    name: 'projectParticipantInputSchema',
+    schema: projectParticipantInputSchema,
+    raw: { project_id: 'p1', role: ' 开发 ' },
+  },
+  {
+    name: 'taskParticipantInputSchema',
+    schema: taskParticipantInputSchema,
+    raw: { task_id: 't1' },
   },
   {
     name: 'projectLinkInputSchema',
