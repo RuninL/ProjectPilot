@@ -46,5 +46,11 @@ pub fn migrations() -> Vec<Migration> {
             sql: include_str!("../migrations/0007_people.sql"),
             kind: MigrationKind::Up,
         },
+        Migration {
+            version: 8,
+            description: "postponed statuses and optional people fields",
+            sql: include_str!("../migrations/0008_postponed_people_fields.sql"),
+            kind: MigrationKind::Up,
+        },
     ]
 }
