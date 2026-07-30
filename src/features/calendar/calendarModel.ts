@@ -171,9 +171,9 @@ function meetingEntries(
       kindLabel: meeting.source_rule_id === null ? KIND_LABELS.meeting : '周期会议',
       detail: parts.join(' · '),
       href:
-      meeting.source_rule_id === null
-        ? `/meetings/${encodeURIComponent(meeting.id)}`
-        : `/meetings?series=${encodeURIComponent(meeting.source_rule_id)}`,
+        meeting.source_rule_id === null
+          ? `/meetings/${encodeURIComponent(meeting.id)}`
+          : `/meetings?series=${encodeURIComponent(meeting.source_rule_id)}`,
       color: project?.color ?? null,
       recurrence:
         meeting.source_rule_id === null || meeting.source_occurrence_date === null

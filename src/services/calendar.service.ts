@@ -36,15 +36,20 @@ const PRIORITY_ORDER: Record<TaskPriority, number> = {
 };
 
 function taskAttention(task: TaskWithProject, date: string): CalendarAttentionTask | null {
-  if (task.status === 'done' || task.status === 'cancelled' || task.archived_at !== null) return null;
+  if (task.status === 'done' || task.status === 'cancelled' || task.archived_at !== null)
+    return null;
   const labels = [
-    ...(task.status === 'blocked' && ((task.start_date ?? '') <= date || (task.due_date ?? '') < date)
+    ...(task.status === 'blocked' &&
+    ((task.start_date ?? '') <= date || (task.due_date ?? '') < date)
       ? ['受阻任务']
       : []),
     ...(task.due_date !== null && task.due_date < date ? ['已逾期'] : []),
     ...(task.due_date === date ? ['今日截止'] : []),
     ...(task.start_date === date ? ['今日开始'] : []),
-    ...(task.start_date !== null && task.due_date !== null && task.start_date <= date && date <= task.due_date
+    ...(task.start_date !== null &&
+    task.due_date !== null &&
+    task.start_date <= date &&
+    date <= task.due_date
       ? ['今日进行中']
       : []),
   ];

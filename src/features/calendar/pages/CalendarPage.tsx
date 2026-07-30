@@ -15,11 +15,7 @@ import {
 import { cn } from '@/lib/cn';
 import { getCalendarService, type CalendarAttentionTask } from '@/services/calendar.service';
 import { useCalendarStore } from '@/stores/useCalendarStore';
-import {
-  WEEKDAY_LABELS,
-  type CalendarEntry,
-  type CalendarEntryKind,
-} from '../calendarModel';
+import { WEEKDAY_LABELS, type CalendarEntry, type CalendarEntryKind } from '../calendarModel';
 
 /** Entries shown before a busy day collapses into a count. */
 const VISIBLE_PER_DAY = 3;
@@ -83,7 +79,9 @@ export function CalendarPage() {
     void getCalendarService()
       .then((service) => service.loadAttentionTasks(date))
       .then(setAttentionTasks)
-      .finally(() => setAttentionLoading(false));
+      .finally(() => {
+        setAttentionLoading(false);
+      });
   };
 
   if (loading && data === null) {
@@ -177,97 +175,102 @@ export function CalendarPage() {
         </div>
         {(data?.weeks ?? []).map((week) => (
           <div key={week[0]?.date ?? ''} className="grid grid-cols-7 border-b last:border-b-0">
-              {week.map((day) => {
-                const expanded = expandedDays.includes(day.date);
-                const visible = expanded ? day.entries : day.entries.slice(0, VISIBLE_PER_DAY);
-                const hidden = day.entries.length - visible.length;
-                return (
-                  <div
-                    key={day.date}
-                    className={cn(
-                      'min-h-24 border-r p-1 last:border-r-0',
-                      day.inMonth ? '' : 'bg-muted/30 text-muted-foreground',
-                    )}
-                  >
-                    <div className="flex items-center justify-between px-1">
-                      <span className={cn('text-xs', day.isToday && 'font-semibold text-primary')}>
-                        {day.dayOfMonth}
+            {week.map((day) => {
+              const expanded = expandedDays.includes(day.date);
+              const visible = expanded ? day.entries : day.entries.slice(0, VISIBLE_PER_DAY);
+              const hidden = day.entries.length - visible.length;
+              return (
+                <div
+                  key={day.date}
+                  className={cn(
+                    'min-h-24 border-r p-1 last:border-r-0',
+                    day.inMonth ? '' : 'bg-muted/30 text-muted-foreground',
+                  )}
+                >
+                  <div className="flex items-center justify-between px-1">
+                    <span className={cn('text-xs', day.isToday && 'font-semibold text-primary')}>
+                      {day.dayOfMonth}
+                    </span>
+                    {day.isToday && (
+                      <span className="rounded bg-primary px-1 text-[10px] text-primary-foreground">
+                        今天
                       </span>
-                      {day.isToday && (
-                        <span className="rounded bg-primary px-1 text-[10px] text-primary-foreground">
-                          今天
-                        </span>
-                      )}
-                    </div>
-                    <div className="mt-1 space-y-0.5">
-                      {visible.map((entry) => (
-                        <EntryLink key={entry.key} entry={entry} />
-                      ))}
-                    </div>
-                    {hidden > 0 && (
-                      <button
-                        type="button"
-                        className="mt-0.5 w-full rounded px-1 text-left text-xs text-muted-foreground hover:bg-accent"
-                        onClick={() => {
-                          setExpandedDays((current) => [...current, day.date]);
-                        }}
-                      >
-                        {`还有 ${String(hidden)} 项`}
-                      </button>
                     )}
-                    {expanded && day.entries.length > VISIBLE_PER_DAY && (
-                      <button
-                        type="button"
-                        className="mt-0.5 w-full rounded px-1 text-left text-xs text-muted-foreground hover:bg-accent"
-                        onClick={() => {
-                          setExpandedDays((current) => current.filter((date) => date !== day.date));
-                        }}
-                      >
-                        收起
-                      </button>
-                    )}
+                  </div>
+                  <div className="mt-1 space-y-0.5">
+                    {visible.map((entry) => (
+                      <EntryLink key={entry.key} entry={entry} />
+                    ))}
+                  </div>
+                  {hidden > 0 && (
                     <button
                       type="button"
-                      className="mt-1 w-full rounded px-1 text-left text-xs text-primary hover:bg-accent"
-                      onClick={() => openAttention(day.date)}
+                      className="mt-0.5 w-full rounded px-1 text-left text-xs text-muted-foreground hover:bg-accent"
+                      onClick={() => {
+                        setExpandedDays((current) => [...current, day.date]);
+                      }}
                     >
-                      查看当日任务
+                      {`还有 ${String(hidden)} 项`}
                     </button>
-                  </div>
-                );
-              })}
+                  )}
+                  {expanded && day.entries.length > VISIBLE_PER_DAY && (
+                    <button
+                      type="button"
+                      className="mt-0.5 w-full rounded px-1 text-left text-xs text-muted-foreground hover:bg-accent"
+                      onClick={() => {
+                        setExpandedDays((current) => current.filter((date) => date !== day.date));
+                      }}
+                    >
+                      收起
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    className="mt-1 w-full rounded px-1 text-left text-xs text-primary hover:bg-accent"
+                    onClick={() => {
+                      openAttention(day.date);
+                    }}
+                  >
+                    查看当日任务
+                  </button>
+                </div>
+              );
+            })}
           </div>
-          <Dialog
-            open={attentionDate !== null}
-            onOpenChange={(open) => {
-              if (!open) setAttentionDate(null);
-            }}
-          >
-            <DialogContent className="max-h-[80vh] overflow-y-auto">
-              <DialogHeader>
-                <DialogTitle>当日任务</DialogTitle>
-                <DialogDescription>{attentionDate ?? ''}</DialogDescription>
-              </DialogHeader>
-              {attentionLoading ? (
-                <p className="text-sm text-muted-foreground">正在加载任务…</p>
-              ) : attentionTasks.length === 0 ? (
-                <p className="text-sm text-muted-foreground">当天没有需要关注的任务。</p>
-              ) : (
-                <ul className="space-y-2">
-                  {attentionTasks.map(({ task, labels }) => (
-                    <li key={task.id} className="rounded border p-3">
-                      <Link to={`/tasks?taskId=${encodeURIComponent(task.id)}`} className="font-medium hover:underline">
-                        {task.title}
-                      </Link>
-                      <p className="mt-1 text-xs text-muted-foreground">{labels.join(' · ')}</p>
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </DialogContent>
-          </Dialog>
         ))}
       </div>
+      <Dialog
+        open={attentionDate !== null}
+        onOpenChange={(open) => {
+          if (!open) setAttentionDate(null);
+        }}
+      >
+        <DialogContent className="max-h-[80vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>当日任务</DialogTitle>
+            <DialogDescription>{attentionDate ?? ''}</DialogDescription>
+          </DialogHeader>
+          {attentionLoading ? (
+            <p className="text-sm text-muted-foreground">正在加载任务…</p>
+          ) : attentionTasks.length === 0 ? (
+            <p className="text-sm text-muted-foreground">当天没有需要关注的任务。</p>
+          ) : (
+            <ul className="space-y-2">
+              {attentionTasks.map(({ task, labels }) => (
+                <li key={task.id} className="rounded border p-3">
+                  <Link
+                    to={`/tasks?taskId=${encodeURIComponent(task.id)}`}
+                    className="font-medium hover:underline"
+                  >
+                    {task.title}
+                  </Link>
+                  <p className="mt-1 text-xs text-muted-foreground">{labels.join(' · ')}</p>
+                </li>
+              ))}
+            </ul>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

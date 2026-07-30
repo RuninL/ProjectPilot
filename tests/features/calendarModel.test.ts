@@ -269,7 +269,7 @@ describe('buildCalendarMonth', () => {
     expect(details).toEqual(['09:30 · 示例项目', '独立会议']);
   });
 
-  it('builds a cross-week bar with explicit expected and blocked semantics', () => {
+  it('keeps cross-date tasks to their original start and due date entries', () => {
     const month = buildCalendarMonth(
       '2026-07',
       data({
@@ -295,14 +295,12 @@ describe('buildCalendarMonth', () => {
       TODAY,
     );
 
-    expect(month.bars.filter((bar) => bar.title === '跨周任务')).toMatchObject([
-      { week: 0, startColumn: 5, span: 3, state: 'blocked' },
-      { week: 1, startColumn: 1, span: 3, state: 'blocked' },
-    ]);
-    expect(month.bars.find((bar) => bar.title === '周期周会')).toMatchObject({
-      label: '周期预期会议',
-      state: 'expected',
-    });
+    expect(dayOf(month, '2026-07-03').entries.map((entry) => entry.title)).toContain('跨周任务');
+    expect(dayOf(month, '2026-07-08').entries.map((entry) => entry.title)).toContain('跨周任务');
+    expect(dayOf(month, '2026-07-06').entries.map((entry) => entry.title)).not.toContain(
+      '跨周任务',
+    );
+    expect(dayOf(month, '2026-07-08').entries.map((entry) => entry.title)).toContain('周期周会');
   });
 
   it('shows the milestone status as text in its detail line', () => {

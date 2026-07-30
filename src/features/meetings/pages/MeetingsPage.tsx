@@ -148,7 +148,11 @@ export function MeetingsPage() {
             记录会议纪要与决议，并把行动项转成任务。
           </p>
         </div>
-        <Button onClick={() => setCreateChoiceOpen(true)}>
+        <Button
+          onClick={() => {
+            setCreateChoiceOpen(true);
+          }}
+        >
           <Plus className="h-4 w-4" aria-hidden />
           创建会议
         </Button>
@@ -163,9 +167,7 @@ export function MeetingsPage() {
         <div className="mb-3">
           <div>
             <h2 className="text-lg font-medium">周期会议</h2>
-            <p className="text-sm text-muted-foreground">
-              日历会根据重复设置直接显示各次会议。
-            </p>
+            <p className="text-sm text-muted-foreground">日历会根据重复设置直接显示各次会议。</p>
           </div>
         </div>
         {rules.length === 0 ? (
@@ -235,63 +237,70 @@ export function MeetingsPage() {
             .sort(
               (a, b) =>
                 a.date.localeCompare(b.date) ||
-                (a.start_time === null ? 1 : b.start_time === null ? -1 : a.start_time.localeCompare(b.start_time)) ||
+                (a.start_time === null
+                  ? 1
+                  : b.start_time === null
+                    ? -1
+                    : a.start_time.localeCompare(b.start_time)) ||
                 a.topic.localeCompare(b.topic, 'zh-CN', { sensitivity: 'base' }),
             )
             .map((meeting) => (
-            <li key={meeting.id} className="flex flex-wrap items-center justify-between gap-3 p-4">
-              <div className="min-w-0">
-                <div className="flex flex-wrap items-center gap-2">
-                  <Link
-                    to={`/meetings/${meeting.id}`}
-                    className="text-sm font-medium hover:underline"
-                  >
-                    {meeting.topic}
-                  </Link>
-                  <Badge variant="outline">{projectName(meeting.project_id)}</Badge>
-                  {meeting.is_sample === 1 && <SampleBadge />}
-                </div>
-                <div className="mt-1 flex flex-wrap items-center gap-3 text-xs text-muted-foreground">
-                  <span className="inline-flex items-center gap-1">
-                    <CalendarDays className="h-3.5 w-3.5" aria-hidden />
-                    {meeting.date}
-                  </span>
-                  {meeting.start_time !== null && (
+              <li
+                key={meeting.id}
+                className="flex flex-wrap items-center justify-between gap-3 p-4"
+              >
+                <div className="min-w-0">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <Link
+                      to={`/meetings/${meeting.id}`}
+                      className="text-sm font-medium hover:underline"
+                    >
+                      {meeting.topic}
+                    </Link>
+                    <Badge variant="outline">{projectName(meeting.project_id)}</Badge>
+                    {meeting.is_sample === 1 && <SampleBadge />}
+                  </div>
+                  <div className="mt-1 flex flex-wrap items-center gap-3 text-xs text-muted-foreground">
                     <span className="inline-flex items-center gap-1">
-                      <Clock className="h-3.5 w-3.5" aria-hidden />
-                      {meeting.start_time}
+                      <CalendarDays className="h-3.5 w-3.5" aria-hidden />
+                      {meeting.date}
                     </span>
-                  )}
+                    {meeting.start_time !== null && (
+                      <span className="inline-flex items-center gap-1">
+                        <Clock className="h-3.5 w-3.5" aria-hidden />
+                        {meeting.start_time}
+                      </span>
+                    )}
+                  </div>
                 </div>
-              </div>
-              <div className="flex shrink-0 items-center gap-1">
-                <Button size="sm" variant="outline" asChild>
-                  <Link to={`/meetings/${meeting.id}`}>打开</Link>
-                </Button>
-                <Button
-                  size="sm"
-                  variant="ghost"
-                  aria-label={`编辑会议：${meeting.topic}`}
-                  onClick={() => {
-                    setEditing(meeting);
-                    setFormOpen(true);
-                  }}
-                >
-                  <Pencil className="h-4 w-4" aria-hidden />
-                </Button>
-                <Button
-                  size="sm"
-                  variant="ghost"
-                  aria-label={`删除会议：${meeting.topic}`}
-                  disabled={busy}
-                  onClick={() => {
-                    askDelete(meeting);
-                  }}
-                >
-                  <Trash2 className="h-4 w-4" aria-hidden />
-                </Button>
-              </div>
-            </li>
+                <div className="flex shrink-0 items-center gap-1">
+                  <Button size="sm" variant="outline" asChild>
+                    <Link to={`/meetings/${meeting.id}`}>打开</Link>
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    aria-label={`编辑会议：${meeting.topic}`}
+                    onClick={() => {
+                      setEditing(meeting);
+                      setFormOpen(true);
+                    }}
+                  >
+                    <Pencil className="h-4 w-4" aria-hidden />
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    aria-label={`删除会议：${meeting.topic}`}
+                    disabled={busy}
+                    onClick={() => {
+                      askDelete(meeting);
+                    }}
+                  >
+                    <Trash2 className="h-4 w-4" aria-hidden />
+                  </Button>
+                </div>
+              </li>
             ))}
         </ul>
       )}
@@ -324,7 +333,9 @@ export function MeetingsPage() {
         <DialogContent>
           <DialogHeader>
             <DialogTitle>创建会议</DialogTitle>
-            <DialogDescription>请选择普通会议或周期会议。周期会议会按重复设置直接显示在日历中。</DialogDescription>
+            <DialogDescription>
+              请选择普通会议或周期会议。周期会议会按重复设置直接显示在日历中。
+            </DialogDescription>
           </DialogHeader>
           <DialogFooter>
             <Button
