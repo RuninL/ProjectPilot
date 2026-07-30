@@ -212,7 +212,7 @@ export const milestoneInputSchema = z.object({
 
 export const recurrenceRuleInputSchema = z
   .object({
-    project_id: z.string().trim().min(1, '必须选择所属项目'),
+    project_id: optionalId,
     kind: z.enum(['task', 'meeting'], {
       errorMap: () => ({ message: '周期规则类型必须是任务或会议' }),
     }),
@@ -243,6 +243,10 @@ export const recurrenceRuleInputSchema = z
   .refine((value) => value.end_date >= value.start_date, {
     message: '结束日期不得早于开始日期',
     path: ['end_date'],
+  })
+  .refine((value) => value.kind === 'meeting' || value.project_id !== null, {
+    message: '周期任务必须选择所属项目',
+    path: ['project_id'],
   });
 
 export const recurrenceExceptionInputSchema = z.object({

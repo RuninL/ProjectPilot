@@ -5,6 +5,7 @@ import type { BatchStatement } from '@/lib/commands';
 import { buildUpdate, parseOptional, parseRows, runUpdate } from './_shared';
 
 const RULE_UPDATABLE = [
+  'project_id',
   'kind',
   'title',
   'byweekday',
@@ -35,12 +36,19 @@ export function createRecurrenceRepository(db: SqlExecutor) {
         ),
       );
     },
+    async findAll(): Promise<RecurrenceRule[]> {
+      return parseRows(
+        recurrenceRuleRowSchema,
+        await db.select('SELECT * FROM recurrence_rules ORDER BY created_at ASC'),
+      );
+    },
     async findActiveByProjectIds(projectIds: readonly string[]): Promise<RecurrenceRule[]> {
-      if (projectIds.length === 0) return [];
       return parseRows(
         recurrenceRuleRowSchema,
         await db.select(
-          `SELECT * FROM recurrence_rules WHERE is_active = 1 AND project_id IN (${projectIds.map(() => '?').join(', ')})`,
+          projectIds.length === 0
+            ? 'SELECT * FROM recurrence_rules WHERE is_active = 1 AND project_id IS NULL'
+            : `SELECT * FROM recurrence_rules WHERE is_active = 1 AND (project_id IS NULL OR project_id IN (${projectIds.map(() => '?').join(', ')}))`,
           [...projectIds],
         ),
       );

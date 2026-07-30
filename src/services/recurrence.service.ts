@@ -144,6 +144,9 @@ export function createRecurrenceService(deps: RecurrenceServiceDeps) {
   }
 
   function buildMaterializedTask(rule: RecurrenceRule, occurrenceDate: string, now: string): Task {
+    if (rule.project_id === null) {
+      throw new AppError('validation', '独立会议规则不能物化为任务');
+    }
     return {
       id: newId(),
       project_id: rule.project_id,
@@ -195,7 +198,7 @@ export function createRecurrenceService(deps: RecurrenceServiceDeps) {
   return {
     async createRule(input: RecurrenceRuleInput): Promise<RecurrenceRule> {
       const parsed = parseRuleInput(input);
-      await requireProject(parsed.project_id);
+      if (parsed.project_id !== null) await requireProject(parsed.project_id);
       const rule = buildRule(parsed);
       await deps.recurrence.insert(rule);
       return rule;
@@ -205,14 +208,21 @@ export function createRecurrenceService(deps: RecurrenceServiceDeps) {
       return requireRule(id);
     },
 
-    async listRules(projectId: string): Promise<RecurrenceRule[]> {
-      return deps.recurrence.findByProject(projectId);
+    async listExceptions(ruleId: string): Promise<RecurrenceException[]> {
+      await requireRule(ruleId);
+      return deps.recurrence.findExceptions(ruleId);
+    },
+
+    async listRules(projectId?: string): Promise<RecurrenceRule[]> {
+      return projectId === undefined
+        ? deps.recurrence.findAll()
+        : deps.recurrence.findByProject(projectId);
     },
 
     async updateRule(id: string, input: RecurrenceRuleInput): Promise<RecurrenceRule> {
       await requireRule(id);
       const parsed = parseRuleInput(input);
-      await requireProject(parsed.project_id);
+      if (parsed.project_id !== null) await requireProject(parsed.project_id);
       await deps.recurrence.update(id, buildRule(parsed, id), nowIso());
       return requireRule(id);
     },

@@ -291,7 +291,7 @@ function withoutSampleData(snapshot: DatabaseSnapshot): DatabaseSnapshot {
   );
   const taskIds = new Set(tasks.map((row) => row.id));
   const recurrenceRules = snapshot.recurrenceRules.filter(
-    (row) => row.is_sample === 0 && projectIds.has(row.project_id),
+    (row) => row.is_sample === 0 && (row.project_id === null || projectIds.has(row.project_id)),
   );
   const recurrenceRuleIds = new Set(recurrenceRules.map((row) => row.id));
 
@@ -396,7 +396,9 @@ function validateSnapshot(snapshot: DatabaseSnapshot): void {
     }
   }
   for (const rule of snapshot.recurrenceRules) {
-    assertReference(rule.project_id, projectIds, `周期规则 ${rule.id} 的项目`);
+    if (rule.project_id !== null) {
+      assertReference(rule.project_id, projectIds, `周期规则 ${rule.id} 的项目`);
+    }
   }
   for (const exception of snapshot.recurrenceExceptions) {
     const rule = recurrenceRules.get(exception.rule_id);

@@ -149,7 +149,7 @@ export const meetingRowSchema = z.object({
 
 export const recurrenceRuleRowSchema = z.object({
   id: z.string(),
-  project_id: z.string(),
+  project_id: z.string().nullable(),
   kind: recurrenceKindEnum,
   title: z.string(),
   byweekday: z.number().int().min(0).max(6),

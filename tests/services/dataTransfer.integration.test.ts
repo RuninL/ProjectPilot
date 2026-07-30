@@ -111,7 +111,7 @@ function prefixedSnapshot(prefix: string): DatabaseSnapshot {
     recurrenceRules: snapshot.recurrenceRules.map((row) => ({
       ...row,
       id: recurrenceRuleId(row.id),
-      project_id: projectId(row.project_id),
+      project_id: row.project_id === null ? null : projectId(row.project_id),
     })),
     recurrenceExceptions: snapshot.recurrenceExceptions.map((row) => ({
       ...row,
