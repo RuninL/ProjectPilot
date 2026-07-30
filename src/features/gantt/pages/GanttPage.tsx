@@ -13,16 +13,20 @@ import {
   type ProjectDependencyAnalysis,
 } from '@/services/dependency.service';
 import { getTaskService } from '@/services/task.service';
+import { useGanttStore, type GanttScale } from '@/stores/useGanttStore';
 import { useProjectStore } from '@/stores/useProjectStore';
 import type { Project, ProjectStatus, TaskWithProject } from '@/types';
 import { ParallelGanttChart } from '../components/ParallelGanttChart';
 import { GanttSection } from '../components/GanttSection';
+import { GANTT_SCALE_LABELS } from '../ganttViewModel';
 import { buildParallelGanttViewModel } from '../parallelGanttViewModel';
 
 interface ProjectGantt {
   readonly project: Project;
   readonly analysis: ProjectDependencyAnalysis;
 }
+
+const GANTT_SCALES: GanttScale[] = ['week', 'month', 'quarter'];
 
 /**
  * Global read-only Gantt overview: every active project's chart on one page,
@@ -33,6 +37,8 @@ interface ProjectGantt {
 export function GanttPage() {
   const loadOptions = useProjectStore((state) => state.loadOptions);
   const projects = useProjectStore((state) => state.options);
+  const scale = useGanttStore((state) => state.scale);
+  const setScale = useGanttStore((state) => state.setScale);
   const [charts, setCharts] = useState<readonly ProjectGantt[] | null>(null);
   const [tasks, setTasks] = useState<readonly TaskWithProject[]>([]);
   const [error, setError] = useState<string | null>(null);
@@ -72,13 +78,14 @@ export function GanttPage() {
         projects,
         tasks,
         today: todayHK(),
+        scale,
         filters: {
           statuses: status === '' ? [] : [status],
           hideCompleted,
           hidePostponed,
         },
       }),
-    [hideCompleted, hidePostponed, projects, status, tasks],
+    [hideCompleted, hidePostponed, projects, scale, status, tasks],
   );
 
   if (error !== null) {
@@ -117,10 +124,28 @@ export function GanttPage() {
           <h2 className="text-lg font-semibold">并行甘特图</h2>
           <p className="text-sm text-muted-foreground">
             所有项目共享同一时间轴；点击项目名称进入该项目甘特图。缺失日期会按任务日期推算，
-            仍无可用日期时按今天单日显示。
+            仍无可用日期时按今天单日显示。时间轴两端保留完整刻度，避免边界日期被截断。
           </p>
         </div>
         <div className="flex flex-wrap items-end gap-4">
+          <div className="grid gap-1.5">
+            <Label>时间刻度</Label>
+            <div className="flex items-center gap-1" role="group" aria-label="并行甘特图时间刻度">
+              {GANTT_SCALES.map((option) => (
+                <Button
+                  key={option}
+                  size="sm"
+                  variant={option === scale ? 'default' : 'outline'}
+                  aria-pressed={option === scale}
+                  onClick={() => {
+                    setScale(option);
+                  }}
+                >
+                  {GANTT_SCALE_LABELS[option]}
+                </Button>
+              ))}
+            </div>
+          </div>
           <div className="grid gap-1.5">
             <Label htmlFor="parallel-gantt-status">项目状态</Label>
             <select

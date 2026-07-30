@@ -49,8 +49,13 @@ export function ParallelGanttChart({ model }: ParallelGanttChartProps) {
             </Link>
           ))}
         </div>
-        <div className="min-w-0 flex-1 overflow-x-auto">
+        <div
+          className="min-w-0 flex-1 overflow-x-auto"
+          tabIndex={0}
+          aria-label="可横向滚动的并行甘特图时间轴"
+        >
           <svg
+            className="block"
             width={model.width}
             height={HEADER_HEIGHT + model.height}
             role="img"

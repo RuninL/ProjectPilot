@@ -23,6 +23,45 @@ describe('buildParallelGanttViewModel', () => {
     expect(model.todayX).toBeGreaterThan(0);
   });
 
+  it('switches between week, month, and quarter layouts without clipping edge dates', () => {
+    const project = makeProject({
+      id: 'edge',
+      start_date: '2026-08-03',
+      target_end_date: '2026-08-31',
+    });
+    const week = buildParallelGanttViewModel({
+      projects: [project],
+      tasks: [],
+      today: '2026-08-12',
+      filters,
+      scale: 'week',
+    });
+    const month = buildParallelGanttViewModel({
+      projects: [project],
+      tasks: [],
+      today: '2026-08-12',
+      filters,
+      scale: 'month',
+    });
+    const quarter = buildParallelGanttViewModel({
+      projects: [project],
+      tasks: [],
+      today: '2026-08-12',
+      filters,
+      scale: 'quarter',
+    });
+
+    expect(week.ticks.map((tick) => tick.label)).toContain('8月3日');
+    expect(month.ticks.map((tick) => tick.label)).toEqual(['2026年8月', '2026年9月']);
+    expect(quarter.ticks.map((tick) => tick.label)).toEqual(['2026 Q3']);
+    for (const model of [week, month, quarter]) {
+      const row = model.rows[0];
+      expect(model.rangeStart < (row?.startDate ?? '')).toBe(true);
+      expect(model.rangeEnd > (row?.endDate ?? '')).toBe(true);
+      expect((row?.x ?? 0) + (row?.width ?? 0)).toBeLessThan(model.width);
+    }
+  });
+
   it('uses task dates then today as explicit missing-date fallbacks', () => {
     const model = buildParallelGanttViewModel({
       projects: [

@@ -1,10 +1,15 @@
 import {
   addDays,
+  formatDayLabel,
   formatMonthLabel,
+  formatQuarterLabel,
   inclusiveDays,
   startOfMonthStr,
   startOfNextMonthStr,
+  startOfQuarterStr,
+  startOfWeekStr,
 } from '@/lib/date';
+import type { GanttScale } from '@/stores/useGanttStore';
 import type { Project, ProjectStatus, Task } from '@/types';
 
 export type ParallelGanttTask = Pick<
@@ -40,6 +45,7 @@ export interface ParallelGanttRow {
 }
 
 export interface ParallelGanttViewModel {
+  readonly scale: GanttScale;
   readonly rangeStart: string;
   readonly rangeEnd: string;
   readonly width: number;
@@ -51,8 +57,40 @@ export interface ParallelGanttViewModel {
   readonly rows: readonly ParallelGanttRow[];
 }
 
-const DAY_WIDTH = 4;
+const DAY_WIDTH: Record<GanttScale, number> = { week: 16, month: 4, quarter: 2 };
 export const PARALLEL_GANTT_ROW_HEIGHT = 38;
+const RANGE_PADDING_DAYS = 1;
+
+function periodStart(date: string, scale: GanttScale): string {
+  if (scale === 'week') {
+    return startOfWeekStr(date);
+  }
+  if (scale === 'month') {
+    return startOfMonthStr(date);
+  }
+  return startOfQuarterStr(date);
+}
+
+function nextPeriodStart(date: string, scale: GanttScale): string {
+  if (scale === 'week') {
+    return addDays(startOfWeekStr(date), 7);
+  }
+  if (scale === 'month') {
+    return startOfNextMonthStr(date);
+  }
+  const quarter = startOfQuarterStr(date);
+  return startOfNextMonthStr(startOfNextMonthStr(startOfNextMonthStr(quarter)));
+}
+
+function tickLabel(date: string, scale: GanttScale): string {
+  if (scale === 'week') {
+    return formatDayLabel(date);
+  }
+  if (scale === 'month') {
+    return formatMonthLabel(date);
+  }
+  return formatQuarterLabel(date);
+}
 
 function taskDates(task: ParallelGanttTask): string[] {
   if (task.archived_at !== null) {
@@ -115,7 +153,10 @@ export function buildParallelGanttViewModel(params: {
   readonly tasks: readonly ParallelGanttTask[];
   readonly today: string;
   readonly filters: ParallelGanttFilters;
+  readonly scale?: GanttScale;
 }): ParallelGanttViewModel {
+  const scale = params.scale ?? 'month';
+  const dayWidth = DAY_WIDTH[scale];
   const tasksByProject = new Map<string, ParallelGanttTask[]>();
   for (const task of params.tasks) {
     const current = tasksByProject.get(task.project_id);
@@ -140,19 +181,19 @@ export function buildParallelGanttViewModel(params: {
     (date, range) => (range.end > date ? range.end : date),
     params.today,
   );
-  const rangeStart = startOfMonthStr(earliest);
-  const rangeEnd = addDays(startOfNextMonthStr(latest), -1);
-  const xOf = (date: string): number => (inclusiveDays(rangeStart, date) - 1) * DAY_WIDTH;
+  const rangeStart = periodStart(addDays(earliest, -RANGE_PADDING_DAYS), scale);
+  const rangeEnd = addDays(nextPeriodStart(addDays(latest, RANGE_PADDING_DAYS), scale), -1);
+  const xOf = (date: string): number => (inclusiveDays(rangeStart, date) - 1) * dayWidth;
 
   const ticks: ParallelGanttTick[] = [];
   let cursor = rangeStart;
   while (cursor <= rangeEnd) {
-    const next = startOfNextMonthStr(cursor);
+    const next = nextPeriodStart(cursor, scale);
     ticks.push({
       key: cursor,
-      label: formatMonthLabel(cursor),
+      label: tickLabel(cursor, scale),
       x: xOf(cursor),
-      width: inclusiveDays(cursor, addDays(next, -1)) * DAY_WIDTH,
+      width: inclusiveDays(cursor, addDays(next, -1)) * dayWidth,
     });
     cursor = next;
   }
@@ -165,19 +206,20 @@ export function buildParallelGanttViewModel(params: {
     startDate: start,
     endDate: end,
     x: xOf(start),
-    width: inclusiveDays(start, end) * DAY_WIDTH,
+    width: inclusiveDays(start, end) * dayWidth,
     y: index * PARALLEL_GANTT_ROW_HEIGHT,
     progress: projectProgress(tasks),
     fallback,
   }));
 
   return {
+    scale,
     rangeStart,
     rangeEnd,
-    width: inclusiveDays(rangeStart, rangeEnd) * DAY_WIDTH,
+    width: inclusiveDays(rangeStart, rangeEnd) * dayWidth,
     height: rows.length * PARALLEL_GANTT_ROW_HEIGHT,
     rowHeight: PARALLEL_GANTT_ROW_HEIGHT,
-    dayWidth: DAY_WIDTH,
+    dayWidth,
     todayX: xOf(params.today),
     ticks,
     rows,
