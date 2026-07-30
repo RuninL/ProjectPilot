@@ -249,6 +249,8 @@ describe('数据导入拒绝与零写入保证', () => {
     expect(snapshot.projects).toHaveLength(2);
     expect(snapshot.tasks).toHaveLength(4);
     expect(snapshot.taskDependencies).toHaveLength(2);
+    expect(snapshot.recurrenceRules).toHaveLength(3);
+    expect(snapshot.recurrenceExceptions).toHaveLength(3);
     expect(snapshot.milestones).toHaveLength(2);
     expect(snapshot.meetings).toHaveLength(2);
     expect(snapshot.actionItems).toHaveLength(4);

@@ -47,6 +47,17 @@ async function insertUserTask(id: string, projectId: string): Promise<void> {
   );
 }
 
+function insertRecurrenceRule(id: string, projectId: string, isSample: 0 | 1): void {
+  db.raw
+    .prepare(
+      `INSERT INTO recurrence_rules
+      (id, project_id, kind, title, byweekday, interval, start_date, end_date, time_of_day,
+       duration_minutes, default_priority, note, is_active, is_sample, created_at, updated_at)
+      VALUES (?, ?, 'task', '周期任务', 1, 1, '2026-07-01', NULL, NULL, NULL, 'medium', '', 1, ?, ?, ?)`,
+    )
+    .run(id, projectId, isSample, '2026-07-14T00:00:00Z', '2026-07-14T00:00:00Z');
+}
+
 describe('seedSampleData', () => {
   it('creates one sample project with sample tasks, all flagged is_sample = 1', async () => {
     expect(await service.seedSampleData()).toBe(true);
@@ -109,15 +120,31 @@ describe('seedSampleData', () => {
 describe('clearSampleData', () => {
   it('deletes only is_sample = 1 rows and leaves user data untouched', async () => {
     await service.seedSampleData();
+    const sampleProject = await service.findSampleProject();
+    if (sampleProject === null) {
+      throw new Error('示例项目应存在');
+    }
     await insertUserProject('user-p');
     await insertUserTask('user-t', 'user-p');
+    insertRecurrenceRule('sample-rule', sampleProject.id, 1);
+    insertRecurrenceRule('user-rule', 'user-p', 0);
+    db.raw
+      .prepare(
+        `INSERT INTO recurrence_exceptions
+         (id, rule_id, occurrence_date, action, materialized_id, created_at, updated_at)
+         VALUES ('sample-exception', 'sample-rule', '2026-07-08', 'skip', NULL, ?, ?)`,
+      )
+      .run('2026-07-14T00:00:00Z', '2026-07-14T00:00:00Z');
 
     await service.clearSampleData();
 
     expect(countRows('projects', 'is_sample = 1')).toBe(0);
     expect(countRows('tasks', 'is_sample = 1')).toBe(0);
+    expect(countRows('recurrence_rules', 'is_sample = 1')).toBe(0);
+    expect(countRows('recurrence_exceptions')).toBe(0);
     expect(countRows('projects', 'is_sample = 0')).toBe(1);
     expect(countRows('tasks', 'is_sample = 0')).toBe(1);
+    expect(countRows('recurrence_rules', 'is_sample = 0')).toBe(1);
   });
 
   it('keeps the seeded flag so cleared data never reappears', async () => {

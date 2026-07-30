@@ -4,6 +4,8 @@ import {
   meetingRowSchema,
   milestoneRowSchema,
   personRowSchema,
+  recurrenceExceptionRowSchema,
+  recurrenceRuleRowSchema,
   projectLinkRowSchema,
   projectParticipantRowSchema,
   projectRowSchema,
@@ -23,6 +25,8 @@ import type {
   Project,
   ProjectLink,
   ProjectParticipant,
+  RecurrenceException,
+  RecurrenceRule,
   Risk,
   Task,
   TaskDependency,
@@ -35,6 +39,8 @@ export interface DatabaseSnapshot {
   meetings: Meeting[];
   tasks: Task[];
   taskDependencies: TaskDependency[];
+  recurrenceRules: RecurrenceRule[];
+  recurrenceExceptions: RecurrenceException[];
   milestones: Milestone[];
   actionItems: ActionItem[];
   projectLinks: ProjectLink[];
@@ -58,6 +64,13 @@ const INSERTS = {
      is_sample, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
   dependency: `INSERT INTO task_dependencies
     (id, predecessor_id, successor_id, dep_type, lag_days, created_at, updated_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?)`,
+  recurrenceRule: `INSERT INTO recurrence_rules
+    (id, project_id, kind, title, byweekday, interval, start_date, end_date, time_of_day,
+     duration_minutes, default_priority, note, is_active, is_sample, created_at, updated_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+  recurrenceException: `INSERT INTO recurrence_exceptions
+    (id, rule_id, occurrence_date, action, materialized_id, created_at, updated_at)
     VALUES (?, ?, ?, ?, ?, ?, ?)`,
   milestone: `INSERT INTO milestones
     (id, project_id, linked_task_id, name, description, date, status, achieved_at,
@@ -91,6 +104,14 @@ export function createDataTransferRepository(db: SqlExecutor) {
         taskDependencyRowSchema,
         await db.select('SELECT * FROM task_dependencies'),
       );
+      const recurrenceRules = parseRows(
+        recurrenceRuleRowSchema,
+        await db.select('SELECT * FROM recurrence_rules'),
+      );
+      const recurrenceExceptions = parseRows(
+        recurrenceExceptionRowSchema,
+        await db.select('SELECT * FROM recurrence_exceptions'),
+      );
       const milestones = parseRows(milestoneRowSchema, await db.select('SELECT * FROM milestones'));
       const actionItems = parseRows(
         actionItemRowSchema,
@@ -119,6 +140,8 @@ export function createDataTransferRepository(db: SqlExecutor) {
         meetings,
         tasks,
         taskDependencies,
+        recurrenceRules,
+        recurrenceExceptions,
         milestones,
         actionItems,
         projectLinks,
@@ -141,6 +164,8 @@ export function createDataTransferRepository(db: SqlExecutor) {
         { sql: 'DELETE FROM risks' },
         { sql: 'DELETE FROM tasks' },
         { sql: 'DELETE FROM meetings' },
+        { sql: 'DELETE FROM recurrence_exceptions' },
+        { sql: 'DELETE FROM recurrence_rules' },
         { sql: 'DELETE FROM projects' },
         { sql: 'DELETE FROM people' },
         { sql: 'DELETE FROM app_settings' },
@@ -153,10 +178,12 @@ export function createDataTransferRepository(db: SqlExecutor) {
       return [
         ...snapshot.projects.map(projectStatement),
         ...snapshot.people.map(personStatement),
+        ...snapshot.recurrenceRules.map(recurrenceRuleStatement),
         ...snapshot.meetings.map(meetingStatement),
         ...roots.map(taskStatement),
         ...children.map(taskStatement),
         ...snapshot.taskDependencies.map(dependencyStatement),
+        ...snapshot.recurrenceExceptions.map(recurrenceExceptionStatement),
         ...snapshot.milestones.map(milestoneStatement),
         ...snapshot.actionItems.map(actionItemStatement),
         ...snapshot.projectLinks.map(projectLinkStatement),
@@ -244,6 +271,45 @@ function dependencyStatement(row: TaskDependency): BatchStatement {
       row.successor_id,
       row.dep_type,
       row.lag_days,
+      row.created_at,
+      row.updated_at,
+    ],
+  };
+}
+
+function recurrenceRuleStatement(row: RecurrenceRule): BatchStatement {
+  return {
+    sql: INSERTS.recurrenceRule,
+    params: [
+      row.id,
+      row.project_id,
+      row.kind,
+      row.title,
+      row.byweekday,
+      row.interval,
+      row.start_date,
+      row.end_date,
+      row.time_of_day,
+      row.duration_minutes,
+      row.default_priority,
+      row.note,
+      row.is_active,
+      row.is_sample,
+      row.created_at,
+      row.updated_at,
+    ],
+  };
+}
+
+function recurrenceExceptionStatement(row: RecurrenceException): BatchStatement {
+  return {
+    sql: INSERTS.recurrenceException,
+    params: [
+      row.id,
+      row.rule_id,
+      row.occurrence_date,
+      row.action,
+      row.materialized_id,
       row.created_at,
       row.updated_at,
     ],

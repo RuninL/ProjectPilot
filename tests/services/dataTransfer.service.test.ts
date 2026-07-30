@@ -34,8 +34,8 @@ function snapshot(projectId = 'project-1'): DatabaseSnapshot {
         notes: '纪要',
         decisions: '决定',
         risks: '风险',
-        source_rule_id: null,
-        source_occurrence_date: null,
+        source_rule_id: `rule-meeting-${projectId}`,
+        source_occurrence_date: '2026-07-14',
         is_sample: 0,
         created_at: NOW,
         updated_at: NOW,
@@ -58,8 +58,8 @@ function snapshot(projectId = 'project-1'): DatabaseSnapshot {
         completed_at: null,
         archived_at: null,
         source_meeting_id: `meeting-${projectId}`,
-        source_rule_id: null,
-        source_occurrence_date: null,
+        source_rule_id: `rule-task-${projectId}`,
+        source_occurrence_date: '2026-07-20',
         is_sample: 0,
         created_at: NOW,
         updated_at: NOW,
@@ -94,6 +94,64 @@ function snapshot(projectId = 'project-1'): DatabaseSnapshot {
         successor_id: `task-child-${projectId}`,
         dep_type: 'FS',
         lag_days: 0,
+        created_at: NOW,
+        updated_at: NOW,
+      },
+    ],
+    recurrenceRules: [
+      {
+        id: `rule-task-${projectId}`,
+        project_id: projectId,
+        kind: 'task',
+        title: '每周任务',
+        byweekday: 0,
+        interval: 1,
+        start_date: '2026-07-01',
+        end_date: '2026-12-31',
+        time_of_day: null,
+        duration_minutes: null,
+        default_priority: 'high',
+        note: '周期任务说明',
+        is_active: 1,
+        is_sample: 0,
+        created_at: NOW,
+        updated_at: NOW,
+      },
+      {
+        id: `rule-meeting-${projectId}`,
+        project_id: projectId,
+        kind: 'meeting',
+        title: '每周会议',
+        byweekday: 1,
+        interval: 1,
+        start_date: '2026-07-01',
+        end_date: null,
+        time_of_day: '09:30',
+        duration_minutes: 60,
+        default_priority: null,
+        note: '周期会议说明',
+        is_active: 1,
+        is_sample: 0,
+        created_at: NOW,
+        updated_at: NOW,
+      },
+    ],
+    recurrenceExceptions: [
+      {
+        id: `exception-task-${projectId}`,
+        rule_id: `rule-task-${projectId}`,
+        occurrence_date: '2026-07-20',
+        action: 'materialized',
+        materialized_id: `task-root-${projectId}`,
+        created_at: NOW,
+        updated_at: NOW,
+      },
+      {
+        id: `exception-meeting-${projectId}`,
+        rule_id: `rule-meeting-${projectId}`,
+        occurrence_date: '2026-07-14',
+        action: 'materialized',
+        materialized_id: `meeting-${projectId}`,
         created_at: NOW,
         updated_at: NOW,
       },
@@ -238,6 +296,8 @@ describe('dataTransfer.service', () => {
       meetings: 1,
       tasks: 2,
       taskDependencies: 1,
+      recurrenceRules: 2,
+      recurrenceExceptions: 2,
       milestones: 1,
       actionItems: 1,
       projectLinks: 1,
@@ -265,7 +325,7 @@ describe('dataTransfer.service', () => {
     }
   });
 
-  it('兼容旧版本缺少人员数组和统计字段的 JSON', async () => {
+  it('兼容旧版本缺少新增数组和统计字段的 JSON', async () => {
     await seed(db, snapshot());
     const { service } = serviceFor(db);
     const exported = await service.exportData('1.0.0', NOW);
@@ -276,15 +336,21 @@ describe('dataTransfer.service', () => {
     delete raw.data.people;
     delete raw.data.projectParticipants;
     delete raw.data.taskParticipants;
+    delete raw.data.recurrenceRules;
+    delete raw.data.recurrenceExceptions;
     delete raw.statistics.people;
     delete raw.statistics.projectParticipants;
     delete raw.statistics.taskParticipants;
+    delete raw.statistics.recurrenceRules;
+    delete raw.statistics.recurrenceExceptions;
 
     const parsed = service.parseImport(JSON.stringify(raw));
 
     expect(parsed.data.people).toEqual([]);
     expect(parsed.data.projectParticipants).toEqual([]);
     expect(parsed.data.taskParticipants).toEqual([]);
+    expect(parsed.data.recurrenceRules).toEqual([]);
+    expect(parsed.data.recurrenceExceptions).toEqual([]);
   });
 
   it('安全忽略重复人员、重复关系和缺失引用', async () => {
@@ -359,6 +425,8 @@ describe('dataTransfer.service', () => {
       meetings: 0,
       tasks: 0,
       taskDependencies: 0,
+      recurrenceRules: 0,
+      recurrenceExceptions: 0,
       milestones: 0,
       actionItems: 0,
       projectLinks: 0,

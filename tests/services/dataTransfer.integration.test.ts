@@ -17,6 +17,8 @@ const ZERO_COUNTS: EntityCounts = {
   meetings: 0,
   tasks: 0,
   taskDependencies: 0,
+  recurrenceRules: 0,
+  recurrenceExceptions: 0,
   milestones: 0,
   actionItems: 0,
   projectLinks: 0,
@@ -33,6 +35,8 @@ function countSnapshot(snapshot: DatabaseSnapshot): EntityCounts {
     meetings: snapshot.meetings.length,
     tasks: snapshot.tasks.length,
     taskDependencies: snapshot.taskDependencies.length,
+    recurrenceRules: snapshot.recurrenceRules.length,
+    recurrenceExceptions: snapshot.recurrenceExceptions.length,
     milestones: snapshot.milestones.length,
     actionItems: snapshot.actionItems.length,
     projectLinks: snapshot.projectLinks.length,
@@ -52,6 +56,8 @@ function sortedSnapshot(snapshot: DatabaseSnapshot): DatabaseSnapshot {
     meetings: byId(snapshot.meetings),
     tasks: byId(snapshot.tasks),
     taskDependencies: byId(snapshot.taskDependencies),
+    recurrenceRules: byId(snapshot.recurrenceRules),
+    recurrenceExceptions: byId(snapshot.recurrenceExceptions),
     milestones: byId(snapshot.milestones),
     actionItems: byId(snapshot.actionItems),
     projectLinks: byId(snapshot.projectLinks),
@@ -76,7 +82,9 @@ function prefixedSnapshot(prefix: string): DatabaseSnapshot {
   const projectId = (id: string) => `${prefix}-${id}`;
   const meetingId = (id: string) => `${prefix}-${id}`;
   const taskId = (id: string) => `${prefix}-${id}`;
+  const recurrenceRuleId = (id: string) => `${prefix}-${id}`;
   const personId = (id: string) => `${prefix}-${id}`;
+  const ruleKindById = new Map(snapshot.recurrenceRules.map((row) => [row.id, row.kind]));
 
   return {
     projects: snapshot.projects.map((row) => ({ ...row, id: projectId(row.id) })),
@@ -84,6 +92,7 @@ function prefixedSnapshot(prefix: string): DatabaseSnapshot {
       ...row,
       id: meetingId(row.id),
       project_id: row.project_id === null ? null : projectId(row.project_id),
+      source_rule_id: row.source_rule_id === null ? null : recurrenceRuleId(row.source_rule_id),
     })),
     tasks: snapshot.tasks.map((row) => ({
       ...row,
@@ -91,12 +100,31 @@ function prefixedSnapshot(prefix: string): DatabaseSnapshot {
       project_id: projectId(row.project_id),
       parent_task_id: row.parent_task_id === null ? null : taskId(row.parent_task_id),
       source_meeting_id: row.source_meeting_id === null ? null : meetingId(row.source_meeting_id),
+      source_rule_id: row.source_rule_id === null ? null : recurrenceRuleId(row.source_rule_id),
     })),
     taskDependencies: snapshot.taskDependencies.map((row) => ({
       ...row,
       id: `${prefix}-${row.id}`,
       predecessor_id: taskId(row.predecessor_id),
       successor_id: taskId(row.successor_id),
+    })),
+    recurrenceRules: snapshot.recurrenceRules.map((row) => ({
+      ...row,
+      id: recurrenceRuleId(row.id),
+      project_id: projectId(row.project_id),
+    })),
+    recurrenceExceptions: snapshot.recurrenceExceptions.map((row) => ({
+      ...row,
+      id: `${prefix}-${row.id}`,
+      rule_id: recurrenceRuleId(row.rule_id),
+      materialized_id:
+        row.materialized_id === null
+          ? null
+          : row.action === 'materialized' && ruleKindById.get(row.rule_id) === 'meeting'
+            ? meetingId(row.materialized_id)
+            : row.action === 'materialized'
+              ? taskId(row.materialized_id)
+              : row.materialized_id,
     })),
     milestones: snapshot.milestones.map((row) => ({
       ...row,
@@ -163,6 +191,8 @@ describe('数据交换真实 SQLite 集成', () => {
 
       expect(after).toEqual(before);
       expect(after.taskDependencies).toEqual(before.taskDependencies);
+      expect(after.recurrenceRules).toEqual(before.recurrenceRules);
+      expect(after.recurrenceExceptions).toEqual(before.recurrenceExceptions);
       const converted = after.actionItems.find((row) => row.id === 'action-converted');
       expect(converted).toMatchObject({
         converted_task_id: 'task-converted',
@@ -278,6 +308,8 @@ describe('数据交换真实 SQLite 集成', () => {
         meetings: [...existing.meetings, ...added.meetings],
         tasks: [...existing.tasks, ...added.tasks],
         taskDependencies: [...existing.taskDependencies, ...added.taskDependencies],
+        recurrenceRules: [...existing.recurrenceRules, ...added.recurrenceRules],
+        recurrenceExceptions: [...existing.recurrenceExceptions, ...added.recurrenceExceptions],
         milestones: [...existing.milestones, ...added.milestones],
         actionItems: [...existing.actionItems, ...added.actionItems],
         projectLinks: [...existing.projectLinks, ...added.projectLinks],
@@ -311,6 +343,8 @@ describe('数据交换真实 SQLite 集成', () => {
         'DELETE FROM risks',
         'DELETE FROM tasks',
         'DELETE FROM meetings',
+        'DELETE FROM recurrence_exceptions',
+        'DELETE FROM recurrence_rules',
         'DELETE FROM projects',
         'DELETE FROM people',
         'DELETE FROM app_settings',
@@ -329,9 +363,17 @@ describe('数据交换真实 SQLite 集成', () => {
       const firstDependency = sql.findIndex((statement) =>
         statement.includes('INSERT INTO task_dependencies'),
       );
+      const firstRecurrenceRule = sql.findIndex((statement) =>
+        statement.includes('INSERT INTO recurrence_rules'),
+      );
+      const firstRecurrenceException = sql.findIndex((statement) =>
+        statement.includes('INSERT INTO recurrence_exceptions'),
+      );
 
       expect(lastProject).toBeLessThan(firstMeeting);
+      expect(lastProject).toBeLessThan(firstRecurrenceRule);
       expect(Math.max(...taskIndexes)).toBeLessThan(firstDependency);
+      expect(firstRecurrenceRule).toBeLessThan(firstRecurrenceException);
       const firstProjectParticipant = sql.findIndex((statement) =>
         statement.includes('INSERT INTO project_participants'),
       );

@@ -7,6 +7,8 @@ function emptySnapshot(): DatabaseSnapshot {
     meetings: [],
     tasks: [],
     taskDependencies: [],
+    recurrenceRules: [],
+    recurrenceExceptions: [],
     milestones: [],
     actionItems: [],
     projectLinks: [],

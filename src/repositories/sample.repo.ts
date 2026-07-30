@@ -11,6 +11,7 @@ import { parseRows } from './_shared';
  */
 const CLEAR_SQL = [
   'DELETE FROM tasks WHERE is_sample = 1',
+  'DELETE FROM recurrence_rules WHERE is_sample = 1',
   'DELETE FROM milestones WHERE is_sample = 1',
   'DELETE FROM project_links WHERE is_sample = 1',
   'DELETE FROM meetings WHERE is_sample = 1',
