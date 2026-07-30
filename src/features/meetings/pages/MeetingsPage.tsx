@@ -1,4 +1,4 @@
-import { CalendarDays, Clock, Pencil, Plus, Repeat2, Trash2 } from 'lucide-react';
+import { CalendarDays, Clock, Pencil, Plus, Trash2 } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { ConfirmDialog } from '@/components/common/ConfirmDialog';
@@ -8,6 +8,14 @@ import { LoadingState } from '@/components/common/LoadingState';
 import { SampleBadge } from '@/components/common/SampleBadge';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
 import { toAppError } from '@/lib/errors';
 import { todayHK } from '@/lib/date';
 import { expandRule } from '@/services/recurrence.service';
@@ -28,7 +36,8 @@ const WEEKDAY_LABELS = ['周一', '周二', '周三', '周四', '周五', '周�
 
 function recurrenceSummary(rule: RecurrenceRule): string {
   const weekday = WEEKDAY_LABELS[rule.byweekday] ?? '未知星期';
-  return `每 ${String(rule.interval)} 周 ${weekday}，截止 ${rule.end_date ?? '未设置'}`;
+  const frequency = rule.interval === 1 ? `每${weekday}` : `每${String(rule.interval)}周${weekday}`;
+  return `${frequency}${rule.time_of_day === null ? '' : ` ${rule.time_of_day}`}，至 ${rule.end_date ?? '未设置'}`;
 }
 
 function nextOccurrence(rule: RecurrenceRule): string {
@@ -53,7 +62,6 @@ export function MeetingsPage() {
   const createRule = useRecurrenceStore((state) => state.createRule);
   const updateRule = useRecurrenceStore((state) => state.updateRule);
   const deleteRule = useRecurrenceStore((state) => state.deleteRule);
-  const materializedCounts = useRecurrenceStore((state) => state.materializedCounts);
 
   const projectOptions = useProjectStore((state) => state.options);
   const loadOptions = useProjectStore((state) => state.loadOptions);
@@ -66,6 +74,7 @@ export function MeetingsPage() {
   const [ruleFormOpen, setRuleFormOpen] = useState(false);
   const [editingRule, setEditingRule] = useState<RecurrenceRule | null>(null);
   const [deletingRule, setDeletingRule] = useState<RecurrenceRule | null>(null);
+  const [createChoiceOpen, setCreateChoiceOpen] = useState(false);
 
   useEffect(() => {
     void loadMeetings();
@@ -139,24 +148,9 @@ export function MeetingsPage() {
             记录会议纪要与决议，并把行动项转成任务。
           </p>
         </div>
-        <Button
-          onClick={() => {
-            setEditing(null);
-            setFormOpen(true);
-          }}
-        >
+        <Button onClick={() => setCreateChoiceOpen(true)}>
           <Plus className="h-4 w-4" aria-hidden />
-          新建会议
-        </Button>
-        <Button
-          variant="outline"
-          onClick={() => {
-            setEditingRule(null);
-            setRuleFormOpen(true);
-          }}
-        >
-          <Repeat2 className="h-4 w-4" aria-hidden />
-          创建周期会议
+          创建会议
         </Button>
       </header>
 
@@ -166,23 +160,13 @@ export function MeetingsPage() {
       )}
 
       <section className="mb-6 rounded-lg border bg-card p-4" aria-label="周期会议规则">
-        <div className="mb-3 flex items-center justify-between gap-3">
+        <div className="mb-3">
           <div>
-            <h2 className="text-lg font-medium">周期会议规则</h2>
+            <h2 className="text-lg font-medium">周期会议</h2>
             <p className="text-sm text-muted-foreground">
-              预期项会显示在日历中，可按次物化为真实会议。
+              日历会根据重复设置直接显示各次会议。
             </p>
           </div>
-          <Button
-            size="sm"
-            variant="outline"
-            onClick={() => {
-              setEditingRule(null);
-              setRuleFormOpen(true);
-            }}
-          >
-            创建周期会议
-          </Button>
         </div>
         {rules.length === 0 ? (
           <p className="text-sm text-muted-foreground">暂无周期会议规则。</p>
@@ -190,20 +174,17 @@ export function MeetingsPage() {
           <ul className="divide-y">
             {rules
               .filter((rule) => rule.kind === 'meeting')
+              .sort((a, b) => a.title.localeCompare(b.title, 'zh-CN', { sensitivity: 'base' }))
               .map((rule) => (
                 <li
                   key={rule.id}
-                  className="flex flex-wrap items-center justify-between gap-3 py-3"
+                  className="flex flex-wrap items-center justify-between gap-3 rounded bg-sky-50 px-3 py-3"
                 >
                   <div>
-                    <p className="font-medium">{rule.title}</p>
+                    <p className="font-medium">{`${rule.title} [周期会议]`}</p>
                     <p className="text-sm text-muted-foreground">
                       {recurrenceSummary(rule)} · 下次 {nextOccurrence(rule)} ·{' '}
                       {rule.project_id === null ? '独立会议' : projectName(rule.project_id)}
-                      {' · '}
-                      {materializedCounts[rule.id] === 0
-                        ? '暂无已物化实例'
-                        : `已物化 ${String(materializedCounts[rule.id])} 次`}
                     </p>
                   </div>
                   <div className="flex gap-2">
@@ -250,7 +231,14 @@ export function MeetingsPage() {
         />
       ) : (
         <ul className="divide-y rounded-lg border bg-card">
-          {meetings.map((meeting) => (
+          {[...meetings]
+            .sort(
+              (a, b) =>
+                a.date.localeCompare(b.date) ||
+                (a.start_time === null ? 1 : b.start_time === null ? -1 : a.start_time.localeCompare(b.start_time)) ||
+                a.topic.localeCompare(b.topic, 'zh-CN', { sensitivity: 'base' }),
+            )
+            .map((meeting) => (
             <li key={meeting.id} className="flex flex-wrap items-center justify-between gap-3 p-4">
               <div className="min-w-0">
                 <div className="flex flex-wrap items-center gap-2">
@@ -304,7 +292,7 @@ export function MeetingsPage() {
                 </Button>
               </div>
             </li>
-          ))}
+            ))}
         </ul>
       )}
 
@@ -326,6 +314,41 @@ export function MeetingsPage() {
           setEditing(null);
         }}
       />
+
+      <Dialog
+        open={createChoiceOpen}
+        onOpenChange={(open) => {
+          if (!open) setCreateChoiceOpen(false);
+        }}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>创建会议</DialogTitle>
+            <DialogDescription>请选择普通会议或周期会议。周期会议会按重复设置直接显示在日历中。</DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => {
+                setCreateChoiceOpen(false);
+                setEditingRule(null);
+                setRuleFormOpen(true);
+              }}
+            >
+              周期会议
+            </Button>
+            <Button
+              onClick={() => {
+                setCreateChoiceOpen(false);
+                setEditing(null);
+                setFormOpen(true);
+              }}
+            >
+              普通会议
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <RecurrenceRuleForm
         open={ruleFormOpen}

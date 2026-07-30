@@ -5,7 +5,15 @@ import { Link } from 'react-router-dom';
 import { ErrorState } from '@/components/common/ErrorState';
 import { LoadingState } from '@/components/common/LoadingState';
 import { Button } from '@/components/ui/button';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
 import { cn } from '@/lib/cn';
+import { getCalendarService, type CalendarAttentionTask } from '@/services/calendar.service';
 import { useCalendarStore } from '@/stores/useCalendarStore';
 import {
   WEEKDAY_LABELS,
@@ -60,10 +68,23 @@ export function CalendarPage() {
   const goToToday = useCalendarStore((state) => state.goToToday);
 
   const [expandedDays, setExpandedDays] = useState<readonly string[]>([]);
+  const [attentionDate, setAttentionDate] = useState<string | null>(null);
+  const [attentionTasks, setAttentionTasks] = useState<readonly CalendarAttentionTask[]>([]);
+  const [attentionLoading, setAttentionLoading] = useState(false);
 
   useEffect(() => {
     void load();
   }, [load]);
+
+  const openAttention = (date: string): void => {
+    setAttentionDate(date);
+    setAttentionTasks([]);
+    setAttentionLoading(true);
+    void getCalendarService()
+      .then((service) => service.loadAttentionTasks(date))
+      .then(setAttentionTasks)
+      .finally(() => setAttentionLoading(false));
+  };
 
   if (loading && data === null) {
     return (
@@ -205,10 +226,46 @@ export function CalendarPage() {
                         收起
                       </button>
                     )}
+                    <button
+                      type="button"
+                      className="mt-1 w-full rounded px-1 text-left text-xs text-primary hover:bg-accent"
+                      onClick={() => openAttention(day.date)}
+                    >
+                      查看当日任务
+                    </button>
                   </div>
                 );
               })}
           </div>
+          <Dialog
+            open={attentionDate !== null}
+            onOpenChange={(open) => {
+              if (!open) setAttentionDate(null);
+            }}
+          >
+            <DialogContent className="max-h-[80vh] overflow-y-auto">
+              <DialogHeader>
+                <DialogTitle>当日任务</DialogTitle>
+                <DialogDescription>{attentionDate ?? ''}</DialogDescription>
+              </DialogHeader>
+              {attentionLoading ? (
+                <p className="text-sm text-muted-foreground">正在加载任务…</p>
+              ) : attentionTasks.length === 0 ? (
+                <p className="text-sm text-muted-foreground">当天没有需要关注的任务。</p>
+              ) : (
+                <ul className="space-y-2">
+                  {attentionTasks.map(({ task, labels }) => (
+                    <li key={task.id} className="rounded border p-3">
+                      <Link to={`/tasks?taskId=${encodeURIComponent(task.id)}`} className="font-medium hover:underline">
+                        {task.title}
+                      </Link>
+                      <p className="mt-1 text-xs text-muted-foreground">{labels.join(' · ')}</p>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </DialogContent>
+          </Dialog>
         ))}
       </div>
     </div>

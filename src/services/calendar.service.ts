@@ -13,6 +13,7 @@ import {
   monthGridRange,
   type CalendarMonth,
 } from '@/features/calendar/calendarModel';
+import type { TaskPriority, TaskWithProject } from '@/types';
 
 export interface CalendarServiceDeps {
   tasks: TaskRepository;
@@ -20,6 +21,43 @@ export interface CalendarServiceDeps {
   milestones: MilestoneRepository;
   projects: ProjectRepository;
   recurrence?: RecurrenceRepository;
+}
+
+export interface CalendarAttentionTask {
+  readonly task: TaskWithProject;
+  readonly labels: readonly string[];
+}
+
+const PRIORITY_ORDER: Record<TaskPriority, number> = {
+  urgent: 0,
+  high: 1,
+  medium: 2,
+  low: 3,
+};
+
+function taskAttention(task: TaskWithProject, date: string): CalendarAttentionTask | null {
+  if (task.status === 'done' || task.status === 'cancelled' || task.archived_at !== null) return null;
+  const labels = [
+    ...(task.status === 'blocked' && ((task.start_date ?? '') <= date || (task.due_date ?? '') < date)
+      ? ['受阻任务']
+      : []),
+    ...(task.due_date !== null && task.due_date < date ? ['已逾期'] : []),
+    ...(task.due_date === date ? ['今日截止'] : []),
+    ...(task.start_date === date ? ['今日开始'] : []),
+    ...(task.start_date !== null && task.due_date !== null && task.start_date <= date && date <= task.due_date
+      ? ['今日进行中']
+      : []),
+  ];
+  return labels.length === 0 ? null : { task, labels };
+}
+
+function attentionOrder(item: CalendarAttentionTask): readonly number[] {
+  return [
+    item.labels.includes('受阻任务') ? 0 : 1,
+    item.labels.includes('已逾期') ? 0 : 1,
+    item.labels.includes('今日截止') ? 0 : 1,
+    item.labels.includes('今日开始') ? 0 : 1,
+  ];
 }
 
 /**
@@ -120,6 +158,24 @@ export function createCalendarService(deps: CalendarServiceDeps) {
         },
         today,
       );
+    },
+    async loadAttentionTasks(date: string): Promise<readonly CalendarAttentionTask[]> {
+      return (await deps.tasks.findByQuery())
+        .map((task) => taskAttention(task, date))
+        .filter((item): item is CalendarAttentionTask => item !== null)
+        .sort((a, b) => {
+          const orderA = attentionOrder(a);
+          const orderB = attentionOrder(b);
+          for (let index = 0; index < orderA.length; index += 1) {
+            const difference = (orderA[index] ?? 0) - (orderB[index] ?? 0);
+            if (difference !== 0) return difference;
+          }
+          return (
+            (a.task.due_date ?? '9999-12-31').localeCompare(b.task.due_date ?? '9999-12-31') ||
+            PRIORITY_ORDER[a.task.priority] - PRIORITY_ORDER[b.task.priority] ||
+            a.task.title.localeCompare(b.task.title, 'zh-CN')
+          );
+        });
     },
   };
 }

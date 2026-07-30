@@ -91,7 +91,7 @@ export function RecurrenceRuleForm({ open, rule, projects, onSubmit, onClose }: 
         <DialogHeader>
           <DialogTitle>{rule === null ? '创建周期会议' : '编辑周期会议'}</DialogTitle>
           <DialogDescription>
-            规则会保存主题、议程和时间，物化后生成独立的真实会议。
+            重复设置会保存会议主题、议程和时间，并直接显示在日历中。
           </DialogDescription>
         </DialogHeader>
         <form className="grid gap-4" noValidate onSubmit={(event) => void submit(event)}>
