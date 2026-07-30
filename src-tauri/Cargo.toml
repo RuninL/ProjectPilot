@@ -1,6 +1,6 @@
 [package]
 name = "projectpilot"
-version = "1.0.0"
+version = "1.1.0"
 description = "ProjectPilot — local-first desktop project management"
 authors = ["Racliu <rliubp@connect.ust.hk>"]
 edition = "2021"

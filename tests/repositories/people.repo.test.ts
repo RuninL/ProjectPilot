@@ -26,18 +26,46 @@ afterEach(() => {
 describe('people repository', () => {
   it('creates, reads, updates, lists, and deletes people', async () => {
     const people = createPeopleRepository(db.executor);
-    await people.insert(makePerson({ id: 'p-b', name: '李四' }));
+    await people.insert(
+      makePerson({ id: 'p-b', name: '李四', email: 'li@example.com', role: '开发', note: '备注' }),
+    );
     await people.insert(makePerson({ id: 'p-a', name: '阿明' }));
 
     expect((await people.findAll()).map((person) => person.name)).toEqual(['李四', '阿明']);
-    await people.update('p-b', { name: '王五' }, '2026-07-15T00:00:00Z');
+    await people.update(
+      'p-b',
+      { name: '王五', email: 'wang@example.com', role: '产品', note: null },
+      '2026-07-15T00:00:00Z',
+    );
     expect(await people.findById('p-b')).toMatchObject({
       name: '王五',
+      email: 'wang@example.com',
+      role: '产品',
+      note: null,
       updated_at: '2026-07-15T00:00:00Z',
     });
 
     await people.deleteById('p-a');
     expect(await people.findById('p-a')).toBeNull();
+  });
+
+  it('searches profile fields and returns both relationship counts in one query', async () => {
+    const projects = createProjectRepository(db.executor);
+    const tasks = createTaskRepository(db.executor);
+    const people = createPeopleRepository(db.executor);
+    await projects.insert(makeProject({ id: 'project-1' }));
+    await tasks.insert(makeTask({ id: 'task-1', project_id: 'project-1' }));
+    await people.insert(makePerson({ id: 'person-1', email: 'lin@example.com', role: '设计师' }));
+    await people.insertProjectParticipant(makeProjectParticipant({ project_id: 'project-1' }));
+    await people.insertTaskParticipant(makeTaskParticipant({ task_id: 'task-1' }));
+
+    expect(await people.findAllWithCounts('设计')).toEqual([
+      expect.objectContaining({ id: 'person-1', project_count: 1, task_count: 1 }),
+    ]);
+    expect(await people.countDeleteImpact('person-1')).toEqual({
+      projectCount: 1,
+      taskCount: 1,
+    });
   });
 
   it('round-trips independent project and task relationships with joined details', async () => {

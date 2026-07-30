@@ -1,5 +1,5 @@
 import { zodResolver } from '@hookform/resolvers/zod';
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { Button } from '@/components/ui/button';
 import {
@@ -15,8 +15,9 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { toAppError } from '@/lib/errors';
 import { PROJECT_STATUS_OPTIONS } from '@/lib/labels';
+import { ParticipantSelector } from '@/features/people/components/ParticipantSelector';
 import { projectInputSchema, type ProjectInput } from '@/services/schemas';
-import type { Project, ProjectStatus } from '@/types';
+import type { Person, Project, ProjectStatus } from '@/types';
 
 /** Raw form state: every control is a string, exactly as the DOM produces it. */
 interface ProjectFormValues {
@@ -29,6 +30,8 @@ interface ProjectFormValues {
 }
 
 const DEFAULT_COLOR = '#6366f1';
+const EMPTY_PEOPLE: readonly Person[] = [];
+const EMPTY_PARTICIPANT_IDS: readonly string[] = [];
 
 function toFormValues(project: Project | null): ProjectFormValues {
   return {
@@ -44,7 +47,9 @@ function toFormValues(project: Project | null): ProjectFormValues {
 interface ProjectFormProps {
   open: boolean;
   project: Project | null;
-  onSubmit: (input: ProjectInput) => Promise<void>;
+  people?: readonly Person[];
+  participantIds?: readonly string[];
+  onSubmit: (input: ProjectInput, participantIds: readonly string[]) => Promise<void>;
   onClose: () => void;
 }
 
@@ -52,7 +57,14 @@ interface ProjectFormProps {
  * Create/edit dialog. The same Zod schema validates here and again inside the
  * service, so the inline messages always match what the write layer accepts.
  */
-export function ProjectForm({ open, project, onSubmit, onClose }: ProjectFormProps) {
+export function ProjectForm({
+  open,
+  project,
+  people = EMPTY_PEOPLE,
+  participantIds = EMPTY_PARTICIPANT_IDS,
+  onSubmit,
+  onClose,
+}: ProjectFormProps) {
   const {
     register,
     handleSubmit,
@@ -65,17 +77,21 @@ export function ProjectForm({ open, project, onSubmit, onClose }: ProjectFormPro
     resolver: zodResolver(projectInputSchema, undefined, { raw: true }),
     defaultValues: toFormValues(project),
   });
+  const [selectedParticipantIds, setSelectedParticipantIds] = useState<string[]>([]);
+  const [availablePeople, setAvailablePeople] = useState<readonly Person[]>(people);
 
   // Reopening for a different project must not show the previous one's values.
   useEffect(() => {
     if (open) {
       reset(toFormValues(project));
+      setSelectedParticipantIds([...participantIds]);
+      setAvailablePeople(people);
     }
-  }, [open, project, reset]);
+  }, [open, participantIds, people, project, reset]);
 
   const submit = handleSubmit(async (values) => {
     try {
-      await onSubmit(projectInputSchema.parse(values));
+      await onSubmit(projectInputSchema.parse(values), selectedParticipantIds);
       onClose();
     } catch (caught) {
       setError('root', { message: toAppError(caught).message });
@@ -133,6 +149,17 @@ export function ProjectForm({ open, project, onSubmit, onClose }: ProjectFormPro
                 ))}
               </select>
             </div>
+
+            <ParticipantSelector
+              id="project-form-participants"
+              people={availablePeople}
+              selectedIds={selectedParticipantIds}
+              onChange={setSelectedParticipantIds}
+              allowCreate
+              onPersonCreated={(person) => {
+                setAvailablePeople((current) => [...current, person]);
+              }}
+            />
 
             <div className="grid gap-1.5">
               <Label htmlFor="project-color">颜色</Label>

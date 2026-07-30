@@ -45,14 +45,17 @@ describe('ProjectForm', () => {
     await user.click(screen.getByRole('button', { name: '保存' }));
 
     await waitFor(() => {
-      expect(onSubmit).toHaveBeenCalledWith({
-        name: '内网门户重构',
-        description: '',
-        status: 'active',
-        color: '#6366f1',
-        start_date: null,
-        target_end_date: null,
-      });
+      expect(onSubmit).toHaveBeenCalledWith(
+        {
+          name: '内网门户重构',
+          description: '',
+          status: 'active',
+          color: '#6366f1',
+          start_date: null,
+          target_end_date: null,
+        },
+        [],
+      );
     });
     expect(onClose).toHaveBeenCalledTimes(1);
   });

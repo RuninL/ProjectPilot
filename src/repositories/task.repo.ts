@@ -84,6 +84,7 @@ export interface TaskQuery {
   /** Archived tasks are hidden everywhere unless explicitly requested. */
   includeArchived?: boolean;
   sort?: TaskSort;
+  participantIds?: readonly string[];
 }
 
 // Fixed whitelist: callers choose a key, never the ORDER BY text.
@@ -117,6 +118,16 @@ function taskConditions(query: TaskQuery): SqlFragment[] {
       : {
           sql: "(t.title LIKE ? ESCAPE '\\' OR t.description LIKE ? ESCAPE '\\')",
           params: [likeParam(search), likeParam(search)],
+        },
+    query.participantIds === undefined || query.participantIds.length === 0
+      ? { sql: '', params: [] }
+      : {
+          sql: `EXISTS (
+            SELECT 1 FROM task_participants participant_filter
+             WHERE participant_filter.task_id = t.id
+               AND participant_filter.person_id IN (${query.participantIds.map(() => '?').join(', ')})
+          )`,
+          params: [...query.participantIds],
         },
   ];
 }
@@ -173,7 +184,7 @@ export function createTaskRepository(db: SqlExecutor) {
       const where = composeWhere(taskConditions(query));
       const orderBy = TASK_ORDER_BY[query.sort ?? 'due_date'];
       const rows = await db.select(
-        `SELECT t.*, p.name AS project_name, p.color AS project_color
+        `SELECT t.*, p.name AS project_name, p.color AS project_color, p.status AS project_status
            FROM tasks t
            JOIN projects p ON p.id = t.project_id${where.sql}
           ORDER BY ${orderBy}`,
@@ -189,7 +200,7 @@ export function createTaskRepository(db: SqlExecutor) {
      */
     async findInDateRange(from: string, to: string): Promise<TaskWithProject[]> {
       const rows = await db.select(
-        `SELECT t.*, p.name AS project_name, p.color AS project_color
+        `SELECT t.*, p.name AS project_name, p.color AS project_color, p.status AS project_status
            FROM tasks t
            JOIN projects p ON p.id = t.project_id
           WHERE t.archived_at IS NULL

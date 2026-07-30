@@ -11,8 +11,11 @@ import type {
   personProjectParticipationRowSchema,
   personRowSchema,
   personTaskParticipationRowSchema,
+  personWithCountsRowSchema,
   projectLinkRowSchema,
+  projectLinkWithProjectRowSchema,
   projectParticipantRowSchema,
+  projectParticipantPersonRowSchema,
   projectRowSchema,
   projectStatusEnum,
   riskCategoryEnum,
@@ -24,6 +27,7 @@ import type {
   riskWithProjectRowSchema,
   taskDependencyRowSchema,
   taskParticipantRowSchema,
+  taskParticipantPersonRowSchema,
   taskPriorityEnum,
   taskRowSchema,
   taskStatusEnum,
@@ -39,12 +43,16 @@ export type Milestone = z.infer<typeof milestoneRowSchema>;
 export type Meeting = z.infer<typeof meetingRowSchema>;
 export type ActionItem = z.infer<typeof actionItemRowSchema>;
 export type ProjectLink = z.infer<typeof projectLinkRowSchema>;
+export type ProjectLinkWithProject = z.infer<typeof projectLinkWithProjectRowSchema>;
 export type AppSetting = z.infer<typeof appSettingRowSchema>;
 export type Risk = z.infer<typeof riskRowSchema>;
 export type RiskWithProject = z.infer<typeof riskWithProjectRowSchema>;
 export type Person = z.infer<typeof personRowSchema>;
+export type PersonWithCounts = z.infer<typeof personWithCountsRowSchema>;
 export type ProjectParticipant = z.infer<typeof projectParticipantRowSchema>;
+export type ProjectParticipantPerson = z.infer<typeof projectParticipantPersonRowSchema>;
 export type TaskParticipant = z.infer<typeof taskParticipantRowSchema>;
+export type TaskParticipantPerson = z.infer<typeof taskParticipantPersonRowSchema>;
 export type PersonProjectParticipation = z.infer<typeof personProjectParticipationRowSchema>;
 export type PersonTaskParticipation = z.infer<typeof personTaskParticipationRowSchema>;
 

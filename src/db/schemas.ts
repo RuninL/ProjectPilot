@@ -24,8 +24,21 @@ const auditColumns = {
   updated_at: timestamp,
 };
 
-export const projectStatusEnum = z.enum(['active', 'on_hold', 'completed', 'archived']);
-export const taskStatusEnum = z.enum(['todo', 'in_progress', 'blocked', 'done', 'cancelled']);
+export const projectStatusEnum = z.enum([
+  'active',
+  'on_hold',
+  'postponed',
+  'completed',
+  'archived',
+]);
+export const taskStatusEnum = z.enum([
+  'todo',
+  'in_progress',
+  'blocked',
+  'postponed',
+  'done',
+  'cancelled',
+]);
 export const taskPriorityEnum = z.enum(['low', 'medium', 'high', 'urgent']);
 export const milestoneStatusEnum = z.enum(['upcoming', 'achieved', 'missed', 'cancelled']);
 export const actionItemStatusEnum = z.enum(['open', 'in_progress', 'done', 'cancelled']);
@@ -82,6 +95,7 @@ export const taskRowSchema = z.object({
 export const taskWithProjectRowSchema = taskRowSchema.extend({
   project_name: z.string(),
   project_color: z.string(),
+  project_status: projectStatusEnum,
 });
 
 export const taskDependencyRowSchema = z.object({
@@ -150,6 +164,11 @@ export const projectLinkRowSchema = z.object({
   ...auditColumns,
 });
 
+export const projectLinkWithProjectRowSchema = projectLinkRowSchema.extend({
+  project_name: z.string(),
+  project_color: z.string(),
+});
+
 export const appSettingRowSchema = z.object({
   key: z.string(),
   value: z.string(),
@@ -182,7 +201,15 @@ export const riskWithProjectRowSchema = riskRowSchema.extend({
 export const personRowSchema = z.object({
   id: z.string(),
   name: z.string(),
+  email: z.string().nullable(),
+  role: z.string().nullable(),
+  note: z.string().nullable(),
   ...auditColumns,
+});
+
+export const personWithCountsRowSchema = personRowSchema.extend({
+  project_count: z.number().int().nonnegative(),
+  task_count: z.number().int().nonnegative(),
 });
 
 export const projectParticipantRowSchema = z.object({
@@ -198,12 +225,25 @@ export const taskParticipantRowSchema = z.object({
   assigned_at: timestamp,
 });
 
+export const projectParticipantPersonRowSchema = projectParticipantRowSchema.extend({
+  person_name: z.string(),
+});
+
+export const taskParticipantPersonRowSchema = taskParticipantRowSchema.extend({
+  person_name: z.string(),
+});
+
 export const personProjectParticipationRowSchema = projectParticipantRowSchema.extend({
   project_name: z.string(),
+  project_status: projectStatusEnum,
 });
 
 export const personTaskParticipationRowSchema = taskParticipantRowSchema.extend({
   task_title: z.string(),
+  task_status: taskStatusEnum,
+  task_priority: taskPriorityEnum,
+  task_due_date: dateString.nullable(),
   project_id: z.string().nullable(),
   project_name: z.string().nullable(),
+  project_status: projectStatusEnum.nullable(),
 });

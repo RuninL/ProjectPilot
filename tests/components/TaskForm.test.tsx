@@ -4,7 +4,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { TaskForm } from '@/features/tasks/components/TaskForm';
 import type { TaskInput } from '@/services/schemas';
 import type { Project, Task } from '@/types';
-import { makeProject, makeTask } from '../helpers/fixtures';
+import { makePerson, makeProject, makeTask } from '../helpers/fixtures';
 
 const projects: Project[] = [
   makeProject({ id: 'p1', name: '内网门户重构' }),
@@ -85,20 +85,59 @@ describe('TaskForm', () => {
     await user.click(screen.getByRole('button', { name: '保存' }));
 
     await waitFor(() => {
-      expect(onSubmit).toHaveBeenCalledWith({
-        project_id: 'p1',
-        parent_task_id: null,
-        title: '梳理接口清单',
-        description: '',
-        status: 'todo',
-        priority: 'medium',
-        start_date: null,
-        due_date: null,
-        progress: 0,
-        estimated_hours: null,
-        actual_hours: null,
-      });
+      expect(onSubmit).toHaveBeenCalledWith(
+        {
+          project_id: 'p1',
+          parent_task_id: null,
+          title: '梳理接口清单',
+          description: '',
+          status: 'todo',
+          priority: 'medium',
+          start_date: null,
+          due_date: null,
+          progress: 0,
+          estimated_hours: null,
+          actual_hours: null,
+        },
+        [],
+      );
     });
+
     expect(onClose).toHaveBeenCalledTimes(1);
+  });
+
+  it('warns for non-project participants, saves anyway, and offers explicit project add', async () => {
+    const person = makePerson({ id: 'outside', name: '外部成员' });
+    const onSubmit = vi.fn(() => Promise.resolve());
+    const onAdd = vi.fn(() => Promise.resolve());
+    render(
+      <TaskForm
+        open
+        task={null}
+        projectId="p1"
+        projects={projects}
+        people={[person]}
+        participantIds={[person.id]}
+        loadProjectTasks={() => Promise.resolve([])}
+        loadProjectParticipantIds={() => Promise.resolve([])}
+        onAddProjectParticipant={onAdd}
+        onSubmit={onSubmit}
+        onClose={() => undefined}
+      />,
+    );
+    const user = userEvent.setup();
+
+    expect(await screen.findByText(/外部成员 不是本项目参与人，仍可保存任务/)).toBeInTheDocument();
+    await user.type(screen.getByLabelText('任务标题'), '独立分配');
+    await user.click(screen.getByRole('button', { name: '保存' }));
+    await waitFor(() => {
+      expect(onSubmit).toHaveBeenCalledWith(expect.objectContaining({ title: '独立分配' }), [
+        person.id,
+      ]);
+    });
+    expect(onAdd).not.toHaveBeenCalled();
+
+    await user.click(screen.getByRole('button', { name: '加入项目参与人' }));
+    expect(onAdd).toHaveBeenCalledWith('p1', person.id);
   });
 });

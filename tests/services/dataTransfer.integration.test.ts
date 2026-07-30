@@ -22,6 +22,9 @@ const ZERO_COUNTS: EntityCounts = {
   projectLinks: 0,
   risks: 0,
   appSettings: 0,
+  people: 0,
+  projectParticipants: 0,
+  taskParticipants: 0,
 };
 
 function countSnapshot(snapshot: DatabaseSnapshot): EntityCounts {
@@ -35,6 +38,9 @@ function countSnapshot(snapshot: DatabaseSnapshot): EntityCounts {
     projectLinks: snapshot.projectLinks.length,
     risks: snapshot.risks.length,
     appSettings: snapshot.appSettings.length,
+    people: snapshot.people.length,
+    projectParticipants: snapshot.projectParticipants.length,
+    taskParticipants: snapshot.taskParticipants.length,
   };
 }
 
@@ -51,6 +57,17 @@ function sortedSnapshot(snapshot: DatabaseSnapshot): DatabaseSnapshot {
     projectLinks: byId(snapshot.projectLinks),
     risks: byId(snapshot.risks),
     appSettings: [...snapshot.appSettings].sort((left, right) => left.key.localeCompare(right.key)),
+    people: byId(snapshot.people),
+    projectParticipants: [...snapshot.projectParticipants].sort((left, right) =>
+      `${left.project_id}\u0000${left.person_id}`.localeCompare(
+        `${right.project_id}\u0000${right.person_id}`,
+      ),
+    ),
+    taskParticipants: [...snapshot.taskParticipants].sort((left, right) =>
+      `${left.task_id}\u0000${left.person_id}`.localeCompare(
+        `${right.task_id}\u0000${right.person_id}`,
+      ),
+    ),
   };
 }
 
@@ -59,6 +76,7 @@ function prefixedSnapshot(prefix: string): DatabaseSnapshot {
   const projectId = (id: string) => `${prefix}-${id}`;
   const meetingId = (id: string) => `${prefix}-${id}`;
   const taskId = (id: string) => `${prefix}-${id}`;
+  const personId = (id: string) => `${prefix}-${id}`;
 
   return {
     projects: snapshot.projects.map((row) => ({ ...row, id: projectId(row.id) })),
@@ -103,6 +121,21 @@ function prefixedSnapshot(prefix: string): DatabaseSnapshot {
       project_id: projectId(row.project_id),
     })),
     appSettings: snapshot.appSettings.map((row) => ({ ...row, key: `${prefix}-${row.key}` })),
+    people: snapshot.people.map((row) => ({
+      ...row,
+      id: personId(row.id),
+      name: `${prefix}-${row.name}`,
+    })),
+    projectParticipants: snapshot.projectParticipants.map((row) => ({
+      ...row,
+      project_id: projectId(row.project_id),
+      person_id: personId(row.person_id),
+    })),
+    taskParticipants: snapshot.taskParticipants.map((row) => ({
+      ...row,
+      task_id: taskId(row.task_id),
+      person_id: personId(row.person_id),
+    })),
   };
 }
 
@@ -250,6 +283,9 @@ describe('数据交换真实 SQLite 集成', () => {
         projectLinks: [...existing.projectLinks, ...added.projectLinks],
         risks: [...existing.risks, ...added.risks],
         appSettings: [...existing.appSettings, ...added.appSettings],
+        people: [...existing.people, ...added.people],
+        projectParticipants: [...existing.projectParticipants, ...added.projectParticipants],
+        taskParticipants: [...existing.taskParticipants, ...added.taskParticipants],
       };
 
       const result = await harness.service.importData(fileFor(mixed), 'merge');
@@ -266,6 +302,8 @@ describe('数据交换真实 SQLite 集成', () => {
     try {
       const clearSql = harness.repository.buildClearStatements().map((statement) => statement.sql);
       expect(clearSql).toEqual([
+        'DELETE FROM task_participants',
+        'DELETE FROM project_participants',
         'DELETE FROM task_dependencies',
         'DELETE FROM action_items',
         'DELETE FROM milestones',
@@ -274,6 +312,7 @@ describe('数据交换真实 SQLite 集成', () => {
         'DELETE FROM tasks',
         'DELETE FROM meetings',
         'DELETE FROM projects',
+        'DELETE FROM people',
         'DELETE FROM app_settings',
       ]);
 
@@ -293,6 +332,14 @@ describe('数据交换真实 SQLite 集成', () => {
 
       expect(lastProject).toBeLessThan(firstMeeting);
       expect(Math.max(...taskIndexes)).toBeLessThan(firstDependency);
+      const firstProjectParticipant = sql.findIndex((statement) =>
+        statement.includes('INSERT INTO project_participants'),
+      );
+      const firstTaskParticipant = sql.findIndex((statement) =>
+        statement.includes('INSERT INTO task_participants'),
+      );
+      expect(Math.max(...taskIndexes)).toBeLessThan(firstTaskParticipant);
+      expect(lastProject).toBeLessThan(firstProjectParticipant);
       expect(inserts[firstMeeting]?.params?.[0]).toBe('meeting-project');
       expect(taskIndexes.map((index) => inserts[index]?.params?.[0])).toEqual([
         'task-root',

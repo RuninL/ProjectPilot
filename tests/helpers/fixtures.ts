@@ -148,6 +148,9 @@ export function makePerson(overrides: Partial<Person> = {}): Person {
   return {
     id: 'person-1',
     name: '张三',
+    email: null,
+    role: null,
+    note: null,
     created_at: NOW,
     updated_at: NOW,
     ...overrides,

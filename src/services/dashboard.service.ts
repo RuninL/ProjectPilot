@@ -21,6 +21,7 @@ import { buildDependencyGraph, deriveBlockedRisks, predecessorsOf } from './depe
 import { computeProjectProgress, type ProjectProgress } from './projectProgress';
 
 const CLOSED_TASK_STATUSES = new Set(['done', 'cancelled']);
+const REMINDER_EXCLUDED_TASK_STATUSES = new Set(['done', 'cancelled', 'postponed']);
 
 export interface DashboardServiceDeps {
   projects: ProjectRepository;
@@ -76,8 +77,12 @@ export interface DashboardData {
   readonly openRisks: readonly RiskWithProject[];
 }
 
-function isUnfinished(task: TaskWithProject): boolean {
-  return task.archived_at === null && !CLOSED_TASK_STATUSES.has(task.status);
+function isReminderEligible(task: TaskWithProject): boolean {
+  return (
+    task.archived_at === null &&
+    task.project_status !== 'postponed' &&
+    !REMINDER_EXCLUDED_TASK_STATUSES.has(task.status)
+  );
 }
 
 function unfinishedPredecessors(
@@ -134,7 +139,7 @@ export function createDashboardService(deps: DashboardServiceDeps) {
         }
       }
 
-      const openTasks = tasks.filter(isUnfinished);
+      const openTasks = tasks.filter(isReminderEligible);
       const graph = buildDependencyGraph(tasks, dependencies);
       const tasksById = new Map(tasks.map((task) => [task.id, task]));
       const overdueTasks = openTasks.filter(

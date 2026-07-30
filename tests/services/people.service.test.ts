@@ -39,14 +39,25 @@ describe('people service CRUD and validation', () => {
   it('trims valid names and rejects blank or overlong names', async () => {
     const person = await service.createPerson({ name: ' 张三 ' });
     expect(person.name).toBe('张三');
+    expect(person.email).toBeNull();
 
     await expect(service.createPerson({ name: '   ' })).rejects.toThrow('姓名不能为空');
     await expect(service.createPerson({ name: 'x'.repeat(121) })).rejects.toThrow(
       '姓名不能超过 120 个字符',
     );
 
-    const updated = await service.updatePerson(person.id, { name: ' 李四 ' });
-    expect(updated.name).toBe('李四');
+    const updated = await service.updatePerson(person.id, {
+      name: ' 李四 ',
+      email: 'li@example.com',
+      role: ' 开发 ',
+      note: ' 备注 ',
+    });
+    expect(updated).toMatchObject({
+      name: '李四',
+      email: 'li@example.com',
+      role: '开发',
+      note: '备注',
+    });
   });
 
   it('reports missing people, projects, and tasks with domain errors', async () => {
@@ -92,6 +103,7 @@ describe('people service CRUD and validation', () => {
       project_id: 'project-a',
       role: '开发',
     });
+
     await service.addTaskParticipant(person.id, { task_id: 'task-a' });
 
     await service.removeTaskParticipant(person.id, 'task-a');
@@ -102,6 +114,25 @@ describe('people service CRUD and validation', () => {
 
     expect(await createProjectRepository(db.executor).findById('project-a')).not.toBeNull();
     expect(await createTaskRepository(db.executor).findById('task-a')).not.toBeNull();
+  });
+
+  it('sets task participants without creating project participation and removes project links only', async () => {
+    const person = await service.createPerson({ name: '独立成员' });
+    await service.setTaskParticipants('task-a', [person.id]);
+
+    expect(await service.listTaskParticipants(['task-a'])).toEqual([
+      expect.objectContaining({ person_id: person.id }),
+    ]);
+    expect(await service.listProjectParticipants(['project-a'])).toEqual([]);
+
+    await service.addProjectParticipant(person.id, { project_id: 'project-a', role: '' });
+    expect(await service.countTaskAssignmentsInProject('project-a', person.id)).toBe(1);
+    await service.removeProjectParticipant(person.id, 'project-a');
+
+    expect(await service.listProjectParticipants(['project-a'])).toEqual([]);
+    expect(await service.listTaskParticipants(['task-a'])).toEqual([
+      expect.objectContaining({ person_id: person.id }),
+    ]);
   });
 });
 
@@ -114,6 +145,7 @@ describe('people participation grouping', () => {
         person_id: 'person-1',
         role: '产品',
         joined_at: NOW,
+        project_status: 'active',
       },
       {
         project_id: 'project-c',
@@ -121,6 +153,7 @@ describe('people participation grouping', () => {
         person_id: 'person-1',
         role: '顾问',
         joined_at: NOW,
+        project_status: 'active',
       },
     ];
     const tasks: PersonTaskParticipation[] = [
@@ -131,6 +164,10 @@ describe('people participation grouping', () => {
         assigned_at: NOW,
         project_id: 'project-a',
         project_name: '甲项目',
+        project_status: 'active',
+        task_status: 'todo',
+        task_priority: 'medium',
+        task_due_date: null,
       },
       {
         task_id: 'task-b',
@@ -139,6 +176,10 @@ describe('people participation grouping', () => {
         assigned_at: NOW,
         project_id: 'project-b',
         project_name: '乙项目',
+        project_status: 'active',
+        task_status: 'todo',
+        task_priority: 'medium',
+        task_due_date: null,
       },
     ];
 
@@ -161,16 +202,30 @@ describe('people participation grouping', () => {
       assigned_at: NOW,
       project_id: null,
       project_name: null,
+      project_status: null,
+      task_status: 'todo',
+      task_priority: 'medium',
+      task_due_date: null,
     };
 
     expect(groupPersonParticipation([], [task])).toEqual([
       {
         projectId: null,
         projectName: '未归属',
+        projectStatus: null,
         source: 'task_only',
         projectRole: null,
         joinedAt: null,
-        tasks: [{ taskId: 'orphan-task', taskTitle: '待归类', assignedAt: NOW }],
+        tasks: [
+          {
+            taskId: 'orphan-task',
+            taskTitle: '待归类',
+            status: 'todo',
+            priority: 'medium',
+            dueDate: null,
+            assignedAt: NOW,
+          },
+        ],
       },
     ]);
   });

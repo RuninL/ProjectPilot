@@ -43,6 +43,9 @@ const ENTITY_KEYS = [
   'projectLinks',
   'risks',
   'appSettings',
+  'people',
+  'projectParticipants',
+  'taskParticipants',
 ] as const;
 
 export function createDataTransferService(deps: DataTransferServiceDeps) {
@@ -91,8 +94,13 @@ export function createDataTransferService(deps: DataTransferServiceDeps) {
         });
       }
       assertStatistics(parsed.data);
-      validateSnapshot(parsed.data.data);
-      return parsed.data;
+      const normalized = normalizePeopleData(parsed.data.data);
+      validateSnapshot(normalized);
+      return {
+        ...parsed.data,
+        statistics: countSnapshot(normalized),
+        data: normalized,
+      };
     },
 
     async previewImport(file: ProjectPilotExport, mode: ImportMode): Promise<ImportPreview> {
@@ -141,7 +149,20 @@ function selectImportRows(
   current: DatabaseSnapshot,
   mode: ImportMode,
 ): DatabaseSnapshot {
-  return mode === 'replace' ? incoming : withoutConflicts(incoming, current);
+  if (mode === 'replace') return incoming;
+  const selected = withoutConflicts(incoming, current);
+  const people = new Set([...current.people, ...selected.people].map((row) => row.id));
+  const projects = new Set([...current.projects, ...selected.projects].map((row) => row.id));
+  const tasks = new Set([...current.tasks, ...selected.tasks].map((row) => row.id));
+  return {
+    ...selected,
+    projectParticipants: selected.projectParticipants.filter(
+      (row) => projects.has(row.project_id) && people.has(row.person_id),
+    ),
+    taskParticipants: selected.taskParticipants.filter(
+      (row) => tasks.has(row.task_id) && people.has(row.person_id),
+    ),
+  };
 }
 
 export async function getDataTransferService(): Promise<DataTransferService> {
@@ -163,6 +184,9 @@ function countSnapshot(snapshot: DatabaseSnapshot): EntityCounts {
     projectLinks: snapshot.projectLinks.length,
     risks: snapshot.risks.length,
     appSettings: snapshot.appSettings.length,
+    people: snapshot.people.length,
+    projectParticipants: snapshot.projectParticipants.length,
+    taskParticipants: snapshot.taskParticipants.length,
   };
 }
 
@@ -177,6 +201,9 @@ function emptyCounts(): EntityCounts {
     projectLinks: 0,
     risks: 0,
     appSettings: 0,
+    people: 0,
+    projectParticipants: 0,
+    taskParticipants: 0,
   };
 }
 
@@ -212,6 +239,24 @@ function withoutConflicts(incoming: ExportData, current: DatabaseSnapshot): Data
     projectLinks: excludeIds(incoming.projectLinks, current.projectLinks, (row) => row.id),
     risks: excludeIds(incoming.risks, current.risks, (row) => row.id),
     appSettings: excludeIds(incoming.appSettings, current.appSettings, (row) => row.key),
+    people: incoming.people.filter(
+      (row) =>
+        !current.people.some(
+          (existing) =>
+            existing.id === row.id ||
+            existing.name.trim().toLocaleLowerCase() === row.name.trim().toLocaleLowerCase(),
+        ),
+    ),
+    projectParticipants: excludeIds(
+      incoming.projectParticipants,
+      current.projectParticipants,
+      (row) => `${row.project_id}\u0000${row.person_id}`,
+    ),
+    taskParticipants: excludeIds(
+      incoming.taskParticipants,
+      current.taskParticipants,
+      (row) => `${row.task_id}\u0000${row.person_id}`,
+    ),
   };
 }
 
@@ -257,6 +302,11 @@ function withoutSampleData(snapshot: DatabaseSnapshot): DatabaseSnapshot {
     ),
     risks: snapshot.risks.filter((row) => row.is_sample === 0 && projectIds.has(row.project_id)),
     appSettings: snapshot.appSettings,
+    people: snapshot.people,
+    projectParticipants: snapshot.projectParticipants.filter((row) =>
+      projectIds.has(row.project_id),
+    ),
+    taskParticipants: snapshot.taskParticipants.filter((row) => taskIds.has(row.task_id)),
   };
 }
 
@@ -280,6 +330,9 @@ function mergeSnapshots(current: DatabaseSnapshot, incoming: DatabaseSnapshot): 
     projectLinks: [...current.projectLinks, ...incoming.projectLinks],
     risks: [...current.risks, ...incoming.risks],
     appSettings: [...current.appSettings, ...incoming.appSettings],
+    people: [...current.people, ...incoming.people],
+    projectParticipants: [...current.projectParticipants, ...incoming.projectParticipants],
+    taskParticipants: [...current.taskParticipants, ...incoming.taskParticipants],
   };
 }
 
@@ -289,6 +342,7 @@ function validateSnapshot(snapshot: DatabaseSnapshot): void {
   const meetingIds = new Set(snapshot.meetings.map((row) => row.id));
   const tasks = new Map(snapshot.tasks.map((row) => [row.id, row]));
   const taskIds = new Set(tasks.keys());
+  const personIds = new Set(snapshot.people.map((row) => row.id));
 
   for (const meeting of snapshot.meetings) {
     assertNullableReference(meeting.project_id, projectIds, `会议 ${meeting.id} 的项目`);
@@ -350,6 +404,19 @@ function validateSnapshot(snapshot: DatabaseSnapshot): void {
     if (risk.level !== calculateRiskLevel(risk.likelihood, risk.impact)) {
       throw validationError(`风险 ${risk.id} 的等级与可能性、影响不一致`);
     }
+    for (const person of snapshot.people) {
+      if (person.name.trim() === '') {
+        throw validationError(`人员 ${person.id} 的姓名不能为空`);
+      }
+    }
+    for (const participant of snapshot.projectParticipants) {
+      assertReference(participant.project_id, projectIds, '项目参与关系的项目');
+      assertReference(participant.person_id, personIds, '项目参与关系的人员');
+    }
+    for (const participant of snapshot.taskParticipants) {
+      assertReference(participant.task_id, taskIds, '任务参与关系的任务');
+      assertReference(participant.person_id, personIds, '任务参与关系的人员');
+    }
   }
   validateDependencyGraph(snapshot.tasks, snapshot.taskDependencies);
 }
@@ -392,9 +459,66 @@ function assertUniqueKeys(snapshot: DatabaseSnapshot): void {
     '设置键',
   );
   assertUnique(
+    snapshot.people.map((row) => row.id),
+    '人员 ID',
+  );
+  assertUnique(
+    snapshot.people.map((row) => row.name.trim().toLocaleLowerCase()),
+    '人员姓名',
+  );
+  assertUnique(
+    snapshot.projectParticipants.map((row) => `${row.project_id}\u0000${row.person_id}`),
+    '项目参与关系',
+  );
+  assertUnique(
+    snapshot.taskParticipants.map((row) => `${row.task_id}\u0000${row.person_id}`),
+    '任务参与关系',
+  );
+  assertUnique(
     snapshot.taskDependencies.map((row) => `${row.predecessor_id}\u0000${row.successor_id}`),
     '任务依赖关系',
   );
+}
+
+function normalizePeopleData(snapshot: DatabaseSnapshot): DatabaseSnapshot {
+  const people: DatabaseSnapshot['people'] = [];
+  const personIds = new Set<string>();
+  const personNames = new Set<string>();
+  for (const person of snapshot.people) {
+    const name = person.name.trim().toLocaleLowerCase();
+    if (personIds.has(person.id) || personNames.has(name)) continue;
+    personIds.add(person.id);
+    personNames.add(name);
+    people.push(person);
+  }
+  const projectIds = new Set(snapshot.projects.map((row) => row.id));
+  const taskIds = new Set(snapshot.tasks.map((row) => row.id));
+  return {
+    ...snapshot,
+    people,
+    projectParticipants: uniqueBy(
+      snapshot.projectParticipants.filter(
+        (row) => projectIds.has(row.project_id) && personIds.has(row.person_id),
+      ),
+      (row) => `${row.project_id}\u0000${row.person_id}`,
+    ),
+    taskParticipants: uniqueBy(
+      snapshot.taskParticipants.filter(
+        (row) => taskIds.has(row.task_id) && personIds.has(row.person_id),
+      ),
+      (row) => `${row.task_id}\u0000${row.person_id}`,
+    ),
+  };
+}
+
+function uniqueBy<T>(rows: readonly T[], keyOf: (row: T) => string): T[] {
+  const seen = new Set<string>();
+  return rows.filter((row) => {
+    const key = keyOf(row);
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
 }
 
 function assertUnique(values: readonly string[], label: string): void {

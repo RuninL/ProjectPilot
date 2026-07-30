@@ -7,6 +7,7 @@ interface TaskFilterState {
   statuses: TaskStatus[];
   priorities: TaskPriority[];
   projectIds: string[];
+  participantIds: string[];
   dueFrom: string | null;
   dueTo: string | null;
   sortBy: TaskSort;
@@ -15,6 +16,7 @@ interface TaskFilterState {
   setStatuses: (statuses: TaskStatus[]) => void;
   setPriorities: (priorities: TaskPriority[]) => void;
   setProjectIds: (ids: string[]) => void;
+  setParticipantIds: (ids: string[]) => void;
   setDueRange: (from: string | null, to: string | null) => void;
   setSortBy: (sortBy: TaskSort) => void;
   toggleSelected: (id: string) => void;
@@ -28,6 +30,7 @@ const initial = {
   statuses: [] as TaskStatus[],
   priorities: [] as TaskPriority[],
   projectIds: [] as string[],
+  participantIds: [] as string[],
   dueFrom: null as string | null,
   dueTo: null as string | null,
   sortBy: 'due_date' as TaskSort,
@@ -48,6 +51,9 @@ export const useTaskFilterStore = create<TaskFilterState>((set) => ({
   },
   setProjectIds: (projectIds) => {
     set({ projectIds });
+  },
+  setParticipantIds: (participantIds) => {
+    set({ participantIds });
   },
   setDueRange: (dueFrom, dueTo) => {
     set({ dueFrom, dueTo });
@@ -77,7 +83,14 @@ export const useTaskFilterStore = create<TaskFilterState>((set) => ({
 export function toTaskQuery(
   state: Pick<
     TaskFilterState,
-    'search' | 'statuses' | 'priorities' | 'projectIds' | 'dueFrom' | 'dueTo' | 'sortBy'
+    | 'search'
+    | 'statuses'
+    | 'priorities'
+    | 'projectIds'
+    | 'participantIds'
+    | 'dueFrom'
+    | 'dueTo'
+    | 'sortBy'
   >,
   projectId?: string,
 ): TaskQuery {
@@ -86,6 +99,7 @@ export function toTaskQuery(
     statuses: state.statuses,
     priorities: state.priorities,
     projectIds: projectId === undefined ? state.projectIds : [projectId],
+    participantIds: state.participantIds,
     sort: state.sortBy,
     ...(state.dueFrom === null ? {} : { dueFrom: state.dueFrom }),
     ...(state.dueTo === null ? {} : { dueTo: state.dueTo }),

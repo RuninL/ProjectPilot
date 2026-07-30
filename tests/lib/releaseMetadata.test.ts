@@ -6,7 +6,7 @@ import { describe, expect, it } from 'vitest';
 const root = join(dirname(fileURLToPath(import.meta.url)), '..', '..');
 
 describe('release metadata', () => {
-  it('keeps package, Cargo, and Tauri versions aligned for v1.0.0', () => {
+  it('keeps package, Cargo, and Tauri versions aligned for v1.1.0', () => {
     const packageJson = JSON.parse(readFileSync(join(root, 'package.json'), 'utf8')) as {
       version: string;
     };
@@ -17,8 +17,8 @@ describe('release metadata', () => {
       version: string;
     };
 
-    expect(packageJson.version).toBe('1.0.0');
-    expect(cargoToml).toMatch(/^version = "1\.0\.0"$/m);
+    expect(packageJson.version).toBe('1.1.0');
+    expect(cargoToml).toMatch(/^version = "1\.1\.0"$/m);
     expect(tauriConfig.version).toBe(packageJson.version);
   });
 });

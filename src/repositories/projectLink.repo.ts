@@ -1,9 +1,41 @@
-import { projectLinkRowSchema } from '@/db/schemas';
+import { projectLinkRowSchema, projectLinkWithProjectRowSchema } from '@/db/schemas';
 import type { SqlExecutor } from '@/lib/db';
-import type { ProjectLink } from '@/types';
-import { buildUpdate, parseOptional, parseRows, runUpdate } from './_shared';
+import type { LinkType, ProjectLink, ProjectLinkWithProject } from '@/types';
+import {
+  buildUpdate,
+  composeWhere,
+  likeParam,
+  parseOptional,
+  parseRows,
+  runUpdate,
+  type SqlFragment,
+} from './_shared';
 
 const UPDATABLE = ['label', 'link_type', 'target', 'description'] as const;
+
+export interface ProjectLinkQuery {
+  search?: string;
+  projectId?: string;
+  linkType?: LinkType;
+}
+
+function projectLinkConditions(query: ProjectLinkQuery): SqlFragment[] {
+  const search = query.search?.trim() ?? '';
+  return [
+    search === ''
+      ? { sql: '', params: [] }
+      : {
+          sql: "(pl.label LIKE ? ESCAPE '\\' OR pl.description LIKE ? ESCAPE '\\')",
+          params: [likeParam(search), likeParam(search)],
+        },
+    query.projectId === undefined || query.projectId === ''
+      ? { sql: '', params: [] }
+      : { sql: 'pl.project_id = ?', params: [query.projectId] },
+    query.linkType === undefined
+      ? { sql: '', params: [] }
+      : { sql: 'pl.link_type = ?', params: [query.linkType] },
+  ];
+}
 
 export function createProjectLinkRepository(db: SqlExecutor) {
   return {
@@ -13,6 +45,19 @@ export function createProjectLinkRepository(db: SqlExecutor) {
         [projectId],
       );
       return parseRows(projectLinkRowSchema, rows);
+    },
+
+    async findAllWithProject(query: ProjectLinkQuery = {}): Promise<ProjectLinkWithProject[]> {
+      const where = composeWhere(projectLinkConditions(query));
+      const rows = await db.select(
+        `SELECT pl.*, p.name AS project_name, p.color AS project_color
+           FROM project_links pl
+           JOIN projects p ON p.id = pl.project_id
+           ${where.sql}
+          ORDER BY pl.created_at DESC, pl.label ASC`,
+        where.params,
+      );
+      return parseRows(projectLinkWithProjectRowSchema, rows);
     },
 
     async findById(id: string): Promise<ProjectLink | null> {

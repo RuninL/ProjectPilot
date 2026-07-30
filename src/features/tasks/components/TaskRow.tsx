@@ -1,4 +1,5 @@
 import { MoreHorizontal, Pencil, Trash2 } from 'lucide-react';
+import { Link } from 'react-router-dom';
 import { SampleBadge } from '@/components/common/SampleBadge';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -28,6 +29,7 @@ interface TaskRowProps {
   onToggleSelect: (id: string) => void;
   onEdit: (task: TaskWithProject) => void;
   onDelete: (task: TaskWithProject) => void;
+  participantNames?: readonly string[];
 }
 
 /** One task row: selection, identity, status/priority, due date and actions. */
@@ -39,6 +41,7 @@ export function TaskRow({
   onToggleSelect,
   onEdit,
   onDelete,
+  participantNames = [],
 }: TaskRowProps) {
   const overdue = isOverdue(task.due_date, task.status);
 
@@ -59,9 +62,15 @@ export function TaskRow({
 
       <div className="min-w-0 flex-1">
         <div className="flex items-center gap-2">
-          <span className={cn('truncate font-medium', task.status === 'done' && 'line-through')}>
+          <Link
+            to={`/tasks/${task.id}`}
+            className={cn(
+              'truncate font-medium hover:underline',
+              task.status === 'done' && 'line-through',
+            )}
+          >
             {task.title}
-          </span>
+          </Link>
           <Badge variant={TASK_STATUS_VARIANTS[task.status]}>
             {TASK_STATUS_LABELS[task.status]}
           </Badge>
@@ -86,6 +95,9 @@ export function TaskRow({
             {overdue && '（已逾期）'}
           </span>
           <span>进度 {String(task.progress)}%</span>
+          <span>
+            参与人：{participantNames.length === 0 ? '未分配' : participantNames.join('、')}
+          </span>
         </p>
       </div>
 

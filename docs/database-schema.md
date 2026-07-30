@@ -22,7 +22,7 @@
 | id                      | TEXT    | PK (UUID)                                                                                                           |
 | name                    | TEXT    | NOT NULL, CHECK(length(trim(name)) BETWEEN 1 AND 120)                                                               |
 | description             | TEXT    | NOT NULL DEFAULT ''                                                                                                 |
-| status                  | TEXT    | NOT NULL DEFAULT 'active', CHECK(status IN ('active','on_hold','completed','archived'))                             |
+| status                  | TEXT    | NOT NULL DEFAULT 'active', CHECK(status IN ('active','on_hold','postponed','completed','archived'))                 |
 | color                   | TEXT    | NOT NULL DEFAULT '#2563EB', CHECK(color GLOB '#[0-9A-Fa-f][0-9A-Fa-f][0-9A-Fa-f][0-9A-Fa-f][0-9A-Fa-f][0-9A-Fa-f]') |
 | start_date              | TEXT    | NULL, CHECK(start_date IS NULL OR start_date GLOB '????-??-??')                                                     |
 | target_end_date         | TEXT    | NULL, 同上格式 CHECK；CHECK(start_date IS NULL OR target_end_date IS NULL OR start_date <= target_end_date)         |
@@ -34,28 +34,28 @@
 
 ### 2.2 tasks
 
-| 字段                    | 类型    | 约束                                                                                                 |
-| ----------------------- | ------- | ---------------------------------------------------------------------------------------------------- |
-| id                      | TEXT    | PK                                                                                                   |
-| project_id              | TEXT    | NOT NULL, FK→projects(id) **ON DELETE CASCADE**                                                      |
-| parent_task_id          | TEXT    | NULL, FK→tasks(id) **ON DELETE CASCADE**（删父删子，两层语义一致）                                   |
-| title                   | TEXT    | NOT NULL, CHECK(length(trim(title)) BETWEEN 1 AND 160)                                               |
-| description             | TEXT    | NOT NULL DEFAULT ''                                                                                  |
-| status                  | TEXT    | NOT NULL DEFAULT 'todo', CHECK(status IN ('todo','in_progress','blocked','done','cancelled'))        |
-| priority                | TEXT    | NOT NULL DEFAULT 'medium', CHECK(priority IN ('low','medium','high','urgent'))                       |
-| start_date              | TEXT    | NULL, 日期格式 CHECK                                                                                 |
-| due_date                | TEXT    | NULL, 日期格式 CHECK；CHECK(start_date IS NULL OR due_date IS NULL OR start_date <= due_date)        |
-| progress                | INTEGER | NOT NULL DEFAULT 0, CHECK(progress BETWEEN 0 AND 100)                                                |
-| estimated_hours         | REAL    | NULL, CHECK(estimated_hours IS NULL OR estimated_hours >= 0)                                         |
-| actual_hours            | REAL    | NULL, CHECK(actual_hours IS NULL OR actual_hours >= 0)                                               |
-| completed_at            | TEXT    | NULL（migration 0002；状态进入 done 的 UTC 时间戳，离开 done 时清空）                                |
-| archived_at             | TEXT    | NULL（migration 0002；任务归档时间。本阶段仅参与查询过滤与完成率，无归档 UI）                        |
-| source_meeting_id       | TEXT    | NULL, FK→meetings(id) **ON DELETE SET NULL**（migration 0002；会议行动项转任务时写入，后续阶段启用） |
-| is_sample               | INTEGER | NOT NULL DEFAULT 0                                                                                   |
-| created_at / updated_at | TEXT    | NOT NULL                                                                                             |
+| 字段                    | 类型    | 约束                                                                                                      |
+| ----------------------- | ------- | --------------------------------------------------------------------------------------------------------- |
+| id                      | TEXT    | PK                                                                                                        |
+| project_id              | TEXT    | NOT NULL, FK→projects(id) **ON DELETE CASCADE**                                                           |
+| parent_task_id          | TEXT    | NULL, FK→tasks(id) **ON DELETE CASCADE**（删父删子，两层语义一致）                                        |
+| title                   | TEXT    | NOT NULL, CHECK(length(trim(title)) BETWEEN 1 AND 160)                                                    |
+| description             | TEXT    | NOT NULL DEFAULT ''                                                                                       |
+| status                  | TEXT    | NOT NULL DEFAULT 'todo', CHECK(status IN ('todo','in_progress','blocked','postponed','done','cancelled')) |
+| priority                | TEXT    | NOT NULL DEFAULT 'medium', CHECK(priority IN ('low','medium','high','urgent'))                            |
+| start_date              | TEXT    | NULL, 日期格式 CHECK                                                                                      |
+| due_date                | TEXT    | NULL, 日期格式 CHECK；CHECK(start_date IS NULL OR due_date IS NULL OR start_date <= due_date)             |
+| progress                | INTEGER | NOT NULL DEFAULT 0, CHECK(progress BETWEEN 0 AND 100)                                                     |
+| estimated_hours         | REAL    | NULL, CHECK(estimated_hours IS NULL OR estimated_hours >= 0)                                              |
+| actual_hours            | REAL    | NULL, CHECK(actual_hours IS NULL OR actual_hours >= 0)                                                    |
+| completed_at            | TEXT    | NULL（migration 0002；状态进入 done 的 UTC 时间戳，离开 done 时清空）                                     |
+| archived_at             | TEXT    | NULL（migration 0002；任务归档时间。本阶段仅参与查询过滤与完成率，无归档 UI）                             |
+| source_meeting_id       | TEXT    | NULL, FK→meetings(id) **ON DELETE SET NULL**（migration 0002；会议行动项转任务时写入，后续阶段启用）      |
+| is_sample               | INTEGER | NOT NULL DEFAULT 0                                                                                        |
+| created_at / updated_at | TEXT    | NOT NULL                                                                                                  |
 
 索引：`idx_tasks_project_status(project_id, status)`、`idx_tasks_project_due(project_id, due_date)`、`idx_tasks_parent(parent_task_id)`、`idx_tasks_dashboard(status, due_date, progress)`（Dashboard 今日/未来 7 天/逾期/临期低进度均命中）
-migration 0002 追加：`idx_tasks_archived(archived_at)`（列表与完成率排除归档任务）、`idx_tasks_due_status(due_date, status)`（跨项目「我的任务」按截止日期排序 + 状态筛选）
+migration 0002 追加：`idx_tasks_archived(archived_at)`（列表与完成率排除归档任务）、`idx_tasks_due_status(due_date, status)`（跨项目「任务」按截止日期排序 + 状态筛选）
 
 **两层父子限制（0001，触发器兜底 + service 校验）**：
 
@@ -92,7 +92,9 @@ UPDATE 触发器不限定 `OF parent_task_id`：把子任务改到别的项目�
 触发器是兜底：`task.service.ts` 的 `validateParent` 先行校验同样的不变式并抛出中文提示，
 用户正常操作看不到 `SELF_PARENT` / `CROSS_PROJECT_PARENT` / `MAX_TWO_LEVELS` 这类原始 abort 文本。
 
-业务规则（service 层，不在 DB）：done→progress=100 且写 `completed_at`；离开 done 清空 `completed_at` 但保留 progress；cancelled 不计入完成率分母；归档任务不计入分子与分母。
+业务规则（service 层，不在 DB）：done→progress=100 且写 `completed_at`；离开 done 清空 `completed_at`
+但保留 progress；cancelled 不计入完成率分母；postponed 留在分母但不计完成，也不进入逾期或提醒；
+归档任务不计入分子与分母。项目/任务状态可自由切换，v1.1 未引入状态机。
 
 ### 2.3 task_dependencies（finish-to-start）
 
@@ -266,11 +268,11 @@ WHEN EXISTS (
 `people` 是独立人员主数据；项目参与和任务参与是两种互不推导的关系。把人员加入任务不会自动加入
 任务所属项目，反之亦然。
 
-| 表                   | 字段                                   | 约束 / 语义                                           |
-| -------------------- | -------------------------------------- | ----------------------------------------------------- |
-| people               | id, name, created_at, updated_at       | id PK；name trim 后 1–120 字符                        |
-| project_participants | project_id, person_id, role, joined_at | 复合 PK；项目和人员 FK 均 CASCADE；role 最多 120 字符 |
-| task_participants    | task_id, person_id, assigned_at        | 复合 PK；任务和人员 FK 均 CASCADE                     |
+| 表                   | 字段                                                | 约束 / 语义                                           |
+| -------------------- | --------------------------------------------------- | ----------------------------------------------------- |
+| people               | id, name, email, role, note, created_at, updated_at | id PK；name trim 后 1–120 字符；后三项可空            |
+| project_participants | project_id, person_id, role, joined_at              | 复合 PK；项目和人员 FK 均 CASCADE；role 最多 120 字符 |
+| task_participants    | task_id, person_id, assigned_at                     | 复合 PK；任务和人员 FK 均 CASCADE                     |
 
 两张关联表分别按外键两端建立索引。删除项目只级联其项目关系、所属任务及这些任务的关系；删除任务不影响
 项目关系；删除人员只删除该人员的两类关系，不删除项目或任务。
@@ -380,6 +382,9 @@ erDiagram
   people {
     TEXT id PK
     TEXT name
+    TEXT email
+    TEXT role
+    TEXT note
     TEXT created_at
     TEXT updated_at
   }
@@ -403,8 +408,8 @@ erDiagram
 - `schemaVersion: 1`
 - `exportedAt: UTC ISO-8601 string`
 - `appVersion: non-empty string`
-- `statistics`: 下列九个数组各自的非负整数记录数
-- `data`: 九个实体数组；未知顶层、data、统计或行字段均拒绝
+- `statistics`: 下列十二个数组各自的非负整数记录数
+- `data`: 十二个实体数组；未知顶层、data、统计或行字段均拒绝
 
 `data` 的完整字段如下（字段类型、枚举和可空性与 §2 表定义一致）：
 
@@ -417,12 +422,15 @@ erDiagram
 - `projectLinks[]`: `id,project_id,label,link_type,target,description,is_sample,created_at,updated_at`
 - `risks[]`: `id,project_id,title,description,category,likelihood,impact,level,status,owner,mitigation_plan,due_date,resolved_at,is_sample,created_at,updated_at`
 - `appSettings[]`: `key,value,created_at,updated_at`
+- `people[]`: `id,name,email,role,note,created_at,updated_at`
+- `projectParticipants[]`: `project_id,person_id,role,joined_at`
+- `taskParticipants[]`: `task_id,person_id,assigned_at`
 
-schemaVersion 1 暂不包含 `people`、`project_participants` 或 `task_participants`；导入导出该数据需要
-先升级交换格式版本，避免旧客户端静默丢弃人员数据。
+旧版 schemaVersion 1 文件缺少后三个数组及其统计字段时按空数组/0 读取。重复人员、重复关系和缺失引用
+会安全跳过；任务关系绝不推导项目关系。
 
-导入顺序为 projects → meetings → 根 tasks → 子 tasks →
-taskDependencies/milestones/actionItems/projectLinks/risks → appSettings。替换模式先按反向依赖顺序清空；
+导入顺序为 projects/people → meetings → 根 tasks → 子 tasks →
+taskDependencies/milestones/actionItems/projectLinks/risks → 两类参与关系 → appSettings。替换模式先按反向依赖顺序清空；
 合并模式对所有数组统一按主键（设置按 key）跳过。写入前校验统计、重复键、外键、同项目关系、
 两层任务、converted_task_id 唯一性和完整依赖图无环，之后一次调用 `execute_batch`。
 
@@ -465,6 +473,11 @@ taskDependencies/milestones/actionItems/projectLinks/risks → appSettings。替
   `status`/`resolved_at` 一致性由表级 CHECK 兜底；合法状态迁移由 service 层校验。
 - `src-tauri/migrations/0007_people.sql`：**纯增量**——新增 `people`、`project_participants`、
   `task_participants` 三张表及查询索引；不修改、复制或删除任何既有行。
+- `src-tauri/migrations/0008_postponed_people_fields.sql`：为 `people` 纯增量增加可空的
+  `email/role/note`；为扩展项目/任务 `status` CHECK，在关闭外键后以单一事务执行标准表重建：
+  创建新表 → 原列逐列复制 → 删除旧表 → 重命名 → 完整重建 8 个索引、7 个 tasks 触发器和
+  2 个引用 tasks 的依赖触发器 → 提交 → 恢复外键。升级测试以含完整业务数据的 0007 旧库验证
+  重建前后 projects/tasks 行数及关键字段一致，且索引、触发器无遗漏。
 - 每个 migration 幂等（CREATE TABLE IF NOT EXISTS 风格不用于变更，版本号单调递增，插件按 version 执行一次）
 - Down SQL 仅用于开发期回滚；发布后只前进不后退
 - schema 版本随 JSON 导出携带，导入时校验兼容性

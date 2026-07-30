@@ -38,6 +38,7 @@ const THEME_OPTIONS: { value: Theme; label: string }[] = [
 ];
 
 const CSV_OPTIONS: { value: CsvEntity; label: string }[] = [
+  { value: 'projects', label: '项目' },
   { value: 'tasks', label: '任务' },
   { value: 'milestones', label: '里程碑' },
   { value: 'risks', label: '风险' },
@@ -53,6 +54,9 @@ const COUNT_LABELS: Record<keyof EntityCounts, string> = {
   projectLinks: '项目链接',
   risks: '风险',
   appSettings: '设置',
+  people: '人员',
+  projectParticipants: '项目参与关系',
+  taskParticipants: '任务参与关系',
 };
 
 interface PendingImport {

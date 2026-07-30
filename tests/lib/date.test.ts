@@ -68,6 +68,10 @@ describe('isOverdue', () => {
     expect(isOverdue('2026-07-13', 'cancelled', today)).toBe(false);
   });
 
+  it('does not treat a postponed task as overdue', () => {
+    expect(isOverdue('2026-07-13', 'postponed', today)).toBe(false);
+  });
+
   it('is false today or with no due date', () => {
     expect(isOverdue(today, 'todo', today)).toBe(false);
     expect(isOverdue(null, 'todo', today)).toBe(false);

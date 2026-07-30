@@ -4,10 +4,11 @@ import { EmptyState } from '@/components/common/EmptyState';
 import { ErrorState } from '@/components/common/ErrorState';
 import { LoadingState } from '@/components/common/LoadingState';
 import { Button } from '@/components/ui/button';
+import { getPeopleService } from '@/services/people.service';
 import { useProjectStore } from '@/stores/useProjectStore';
 import { toTaskQuery, useTaskFilterStore } from '@/stores/useTaskFilterStore';
 import { useTaskStore } from '@/stores/useTaskStore';
-import type { TaskWithProject } from '@/types';
+import type { Person, TaskWithProject } from '@/types';
 import { BulkEditBar } from './BulkEditBar';
 import { BulkEditDialog } from './BulkEditDialog';
 import { DeleteTaskDialog } from './DeleteTaskDialog';
@@ -48,6 +49,7 @@ export function TaskWorkspace({ projectId, canCreate, createHint }: TaskWorkspac
   const statuses = useTaskFilterStore((state) => state.statuses);
   const priorities = useTaskFilterStore((state) => state.priorities);
   const projectIds = useTaskFilterStore((state) => state.projectIds);
+  const participantIds = useTaskFilterStore((state) => state.participantIds);
   const dueFrom = useTaskFilterStore((state) => state.dueFrom);
   const dueTo = useTaskFilterStore((state) => state.dueTo);
   const sortBy = useTaskFilterStore((state) => state.sortBy);
@@ -56,6 +58,7 @@ export function TaskWorkspace({ projectId, canCreate, createHint }: TaskWorkspac
   const setStatuses = useTaskFilterStore((state) => state.setStatuses);
   const setPriorities = useTaskFilterStore((state) => state.setPriorities);
   const setProjectIds = useTaskFilterStore((state) => state.setProjectIds);
+  const setParticipantIds = useTaskFilterStore((state) => state.setParticipantIds);
   const setDueRange = useTaskFilterStore((state) => state.setDueRange);
   const setSortBy = useTaskFilterStore((state) => state.setSortBy);
   const toggleSelected = useTaskFilterStore((state) => state.toggleSelected);
@@ -66,14 +69,19 @@ export function TaskWorkspace({ projectId, canCreate, createHint }: TaskWorkspac
   const [editing, setEditing] = useState<TaskWithProject | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<TaskWithProject | null>(null);
   const [bulkOpen, setBulkOpen] = useState(false);
+  const [people, setPeople] = useState<readonly Person[]>([]);
+  const [formParticipantIds, setFormParticipantIds] = useState<string[]>([]);
+  const [participantsByTask, setParticipantsByTask] = useState<
+    Readonly<Record<string, readonly string[]>>
+  >({});
 
   const query = useMemo(
     () =>
       toTaskQuery(
-        { search, statuses, priorities, projectIds, dueFrom, dueTo, sortBy },
+        { search, statuses, priorities, projectIds, participantIds, dueFrom, dueTo, sortBy },
         projectId ?? undefined,
       ),
-    [search, statuses, priorities, projectIds, dueFrom, dueTo, sortBy, projectId],
+    [search, statuses, priorities, projectIds, participantIds, dueFrom, dueTo, sortBy, projectId],
   );
 
   useEffect(() => {
@@ -88,6 +96,26 @@ export function TaskWorkspace({ projectId, canCreate, createHint }: TaskWorkspac
   useEffect(() => {
     void loadOptions();
   }, [loadOptions]);
+
+  useEffect(() => {
+    void getPeopleService()
+      .then((service) => service.listPeople())
+      .then(setPeople)
+      .catch(() => undefined);
+  }, []);
+
+  useEffect(() => {
+    void getPeopleService()
+      .then((service) => service.listTaskParticipants(tasks.map((task) => task.id)))
+      .then((participants) => {
+        const grouped: Record<string, string[]> = {};
+        for (const participant of participants) {
+          (grouped[participant.task_id] ??= []).push(participant.person_name);
+        }
+        setParticipantsByTask(grouped);
+      })
+      .catch(() => undefined);
+  }, [tasks]);
 
   const loadProjectTasks = useCallback(async (id: string) => listByProject(id), [listByProject]);
   const loadChildCount = useCallback(async (id: string) => countChildren(id), [countChildren]);
@@ -109,6 +137,7 @@ export function TaskWorkspace({ projectId, canCreate, createHint }: TaskWorkspac
             disabled={!canCreate}
             onClick={() => {
               setEditing(null);
+              setFormParticipantIds([]);
               setFormOpen(true);
             }}
           >
@@ -127,6 +156,8 @@ export function TaskWorkspace({ projectId, canCreate, createHint }: TaskWorkspac
           dueFrom={dueFrom}
           dueTo={dueTo}
           sortBy={sortBy}
+          people={people}
+          participantIds={participantIds}
           {...(projectId === null ? { projects: projectOptions } : {})}
           onSearchChange={setSearch}
           onStatusesChange={setStatuses}
@@ -134,6 +165,7 @@ export function TaskWorkspace({ projectId, canCreate, createHint }: TaskWorkspac
           onProjectIdsChange={setProjectIds}
           onDueRangeChange={setDueRange}
           onSortChange={setSortBy}
+          onParticipantIdsChange={setParticipantIds}
           onReset={resetFilters}
         />
       </div>
@@ -171,9 +203,15 @@ export function TaskWorkspace({ projectId, canCreate, createHint }: TaskWorkspac
           onToggleSelect={toggleSelected}
           onEdit={(task) => {
             setEditing(task);
+            void getPeopleService()
+              .then((service) => service.listTaskParticipants([task.id]))
+              .then((participants) => {
+                setFormParticipantIds(participants.map((participant) => participant.person_id));
+              });
             setFormOpen(true);
           }}
           onDelete={setDeleteTarget}
+          participantsByTask={participantsByTask}
         />
       )}
 
@@ -182,16 +220,32 @@ export function TaskWorkspace({ projectId, canCreate, createHint }: TaskWorkspac
         task={editing}
         projectId={projectId ?? ''}
         projects={projectOptions}
+        people={people}
+        participantIds={formParticipantIds}
         loadProjectTasks={loadProjectTasks}
-        onSubmit={async (input) => {
+        loadProjectParticipantIds={async (id) => {
+          const service = await getPeopleService();
+          const participants = await service.listProjectParticipants([id]);
+          return participants.map((participant) => participant.person_id);
+        }}
+        onAddProjectParticipant={async (id, personId) => {
+          const service = await getPeopleService();
+          await service.addProjectParticipant(personId, { project_id: id, role: '' });
+        }}
+        onSubmit={async (input, selectedParticipantIds) => {
+          const service = await getPeopleService();
           if (editing === null) {
-            await createTask(input, query);
+            const task = await createTask(input, query);
+            await service.setTaskParticipants(task.id, selectedParticipantIds);
           } else {
             await updateTask(editing.id, input, query);
+            await service.setTaskParticipants(editing.id, selectedParticipantIds);
           }
+          await loadTasks(query);
         }}
         onClose={() => {
           setFormOpen(false);
+          setFormParticipantIds([]);
         }}
       />
 

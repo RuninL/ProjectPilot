@@ -17,8 +17,8 @@ import {
 
 export const HK_TIME_ZONE = 'Asia/Hong_Kong';
 
-/** Terminal statuses excluded from overdue checks. */
-const CLOSED_TASK_STATUSES = new Set(['done', 'cancelled']);
+/** Statuses excluded from overdue checks; postponed remains open but intentionally does not alert. */
+const NON_OVERDUE_TASK_STATUSES = new Set(['done', 'cancelled', 'postponed']);
 
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 
@@ -68,7 +68,7 @@ export function isOverdue(
   if (dueDate === null) {
     return false;
   }
-  return dueDate < today && !CLOSED_TASK_STATUSES.has(status);
+  return dueDate < today && !NON_OVERDUE_TASK_STATUSES.has(status);
 }
 
 /** True when `date` equals today (HK). */

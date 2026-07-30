@@ -5,10 +5,11 @@ import { AppError, toAppError } from '@/lib/errors';
 import { newId } from '@/lib/uuid';
 import {
   getRepositories,
+  type ProjectLinkQuery,
   type ProjectLinkRepository,
   type ProjectRepository,
 } from '@/repositories';
-import type { ProjectLink } from '@/types';
+import type { ProjectLink, ProjectLinkWithProject } from '@/types';
 import { isAbsoluteWindowsPath, projectLinkInputSchema, type ProjectLinkInput } from './schemas';
 
 export interface ProjectLinkOpenDeps {
@@ -50,6 +51,10 @@ export function createProjectLinkService(deps: ProjectLinkServiceDeps) {
     async listProjectLinks(projectId: string): Promise<ProjectLink[]> {
       await requireProject(projectId);
       return deps.projectLinks.findByProject(projectId);
+    },
+
+    async listAllProjectLinks(query: ProjectLinkQuery = {}): Promise<ProjectLinkWithProject[]> {
+      return deps.projectLinks.findAllWithProject(query);
     },
 
     async createProjectLink(projectId: string, input: ProjectLinkInput): Promise<ProjectLink> {

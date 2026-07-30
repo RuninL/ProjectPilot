@@ -59,6 +59,7 @@ export interface ProjectQuery {
   status?: ProjectStatus;
   scope?: ProjectScope;
   sort?: ProjectSort;
+  participantIds?: readonly string[];
 }
 
 // Fixed whitelist: the caller picks a key, never the ORDER BY text itself.
@@ -88,6 +89,16 @@ function projectConditions(query: ProjectQuery): SqlFragment[] {
           sql: "(name LIKE ? ESCAPE '\\' OR description LIKE ? ESCAPE '\\')",
           params: [likeParam(search), likeParam(search)],
         },
+    query.participantIds === undefined || query.participantIds.length === 0
+      ? { sql: '', params: [] }
+      : {
+          sql: `EXISTS (
+            SELECT 1 FROM project_participants participant_filter
+             WHERE participant_filter.project_id = projects.id
+               AND participant_filter.person_id IN (${query.participantIds.map(() => '?').join(', ')})
+          )`,
+          params: [...query.participantIds],
+        },
   ];
 }
 
@@ -114,7 +125,7 @@ export function createProjectRepository(db: SqlExecutor) {
       const where = composeWhere(projectConditions(query));
       const orderBy = PROJECT_ORDER_BY[query.sort ?? 'updated_at'];
       const rows = await db.select(
-        `SELECT * FROM projects${where.sql} ORDER BY ${orderBy}`,
+        `SELECT projects.* FROM projects${where.sql} ORDER BY ${orderBy}`,
         where.params,
       );
       return parseRows(projectRowSchema, rows);

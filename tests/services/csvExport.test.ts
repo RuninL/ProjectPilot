@@ -12,6 +12,9 @@ function emptySnapshot(): DatabaseSnapshot {
     projectLinks: [],
     risks: [],
     appSettings: [],
+    people: [],
+    projectParticipants: [],
+    taskParticipants: [],
   };
 }
 
@@ -29,6 +32,7 @@ describe('CSV 导出', () => {
   });
 
   it.each([
+    ['projects', '项目 ID'],
     ['tasks', '任务 ID'],
     ['milestones', '里程碑 ID'],
     ['risks', '风险 ID'],
@@ -102,5 +106,79 @@ describe('CSV 导出', () => {
     };
     expect(createCsv('tasks', snapshot, null)).toContain('进行中,紧急');
     expect(createCsv('risks', snapshot, null)).toContain('技术,高,高,严重,监控中');
+  });
+
+  it('为项目和任务导出各自独立的参与人列并保留公式防护', () => {
+    const base = emptySnapshot();
+    const project = {
+      id: 'p1',
+      name: '项目',
+      description: '',
+      status: 'active' as const,
+      color: '#2563EB',
+      start_date: null,
+      target_end_date: null,
+      archived_at: null,
+      is_sample: 0 as const,
+      created_at: '2026-07-14T00:00:00Z',
+      updated_at: '2026-07-14T00:00:00Z',
+    };
+    const task = {
+      id: 't1',
+      project_id: 'p1',
+      parent_task_id: null,
+      title: '任务',
+      description: '',
+      status: 'todo' as const,
+      priority: 'medium' as const,
+      start_date: null,
+      due_date: null,
+      progress: 0,
+      estimated_hours: null,
+      actual_hours: null,
+      completed_at: null,
+      archived_at: null,
+      source_meeting_id: null,
+      is_sample: 0 as const,
+      created_at: '2026-07-14T00:00:00Z',
+      updated_at: '2026-07-14T00:00:00Z',
+    };
+    const snapshot: DatabaseSnapshot = {
+      ...base,
+      projects: [project],
+      tasks: [task],
+      people: [
+        {
+          id: 'project-person',
+          name: '=项目成员',
+          email: null,
+          role: null,
+          note: null,
+          created_at: project.created_at,
+          updated_at: project.updated_at,
+        },
+        {
+          id: 'task-person',
+          name: '任务成员',
+          email: null,
+          role: null,
+          note: null,
+          created_at: project.created_at,
+          updated_at: project.updated_at,
+        },
+      ],
+      projectParticipants: [
+        { project_id: 'p1', person_id: 'project-person', role: '', joined_at: project.created_at },
+      ],
+      taskParticipants: [
+        { task_id: 't1', person_id: 'task-person', assigned_at: project.created_at },
+      ],
+    };
+
+    expect(createCsv('projects', snapshot, null)).toContain('参与人');
+    expect(createCsv('projects', snapshot, null)).toContain("'=项目成员");
+    expect(createCsv('projects', snapshot, null)).not.toContain('任务成员');
+    expect(createCsv('tasks', snapshot, null)).toContain('任务成员');
+    expect(createCsv('tasks', snapshot, null)).not.toContain('=项目成员');
   });
 });

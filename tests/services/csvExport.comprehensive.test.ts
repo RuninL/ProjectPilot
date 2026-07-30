@@ -74,7 +74,14 @@ describe('CSV 导出完整覆盖', () => {
     try {
       const snapshot = cloneSnapshot();
       const taskTemplate = row(snapshot, 'tasks', 0);
-      const taskStatuses = ['todo', 'in_progress', 'blocked', 'done', 'cancelled'] as const;
+      const taskStatuses = [
+        'todo',
+        'in_progress',
+        'blocked',
+        'postponed',
+        'done',
+        'cancelled',
+      ] as const;
       const priorities = ['low', 'medium', 'high', 'urgent'] as const;
       snapshot.tasks = taskStatuses.map((status, index) => ({
         ...taskTemplate,
@@ -86,6 +93,7 @@ describe('CSV 导出完整覆盖', () => {
         completed_at: status === 'done' ? '2026-07-18T08:00:00Z' : null,
       }));
       snapshot.taskDependencies = [];
+      snapshot.taskParticipants = [];
       snapshot.actionItems = snapshot.actionItems.map((item) => ({
         ...item,
         converted_task_id: null,
@@ -126,7 +134,7 @@ describe('CSV 导出完整覆盖', () => {
       const persisted = await harness.repository.readSnapshot();
 
       const taskCsv = createCsv('tasks', persisted, null);
-      for (const label of ['待办', '进行中', '受阻', '已完成', '已取消']) {
+      for (const label of ['待办', '进行中', '受阻', '已推迟', '已完成', '已取消']) {
         expect(taskCsv).toContain(label);
       }
       for (const label of ['低', '中', '高', '紧急']) {

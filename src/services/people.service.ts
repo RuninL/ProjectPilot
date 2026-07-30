@@ -12,7 +12,13 @@ import type {
   PersonProjectParticipation,
   PersonTaskParticipation,
   ProjectParticipant,
+  ProjectStatus,
   TaskParticipant,
+  TaskParticipantPerson,
+  TaskPriority,
+  TaskStatus,
+  PersonWithCounts,
+  ProjectParticipantPerson,
 } from '@/types';
 import {
   personInputSchema,
@@ -34,12 +40,16 @@ export type ParticipationSource = 'project_only' | 'task_only' | 'both';
 export interface ParticipationTask {
   taskId: string;
   taskTitle: string;
+  status: TaskStatus;
+  priority: TaskPriority;
+  dueDate: string | null;
   assignedAt: string;
 }
 
 export interface PersonProjectGroup {
   projectId: string | null;
   projectName: string;
+  projectStatus: ProjectStatus | null;
   source: ParticipationSource;
   projectRole: string | null;
   joinedAt: string | null;
@@ -67,6 +77,7 @@ export function groupPersonParticipation(
     groups.set(participation.project_id, {
       projectId: participation.project_id,
       projectName: participation.project_name,
+      projectStatus: participation.project_status,
       source: 'project_only',
       projectRole: participation.role,
       joinedAt: participation.joined_at,
@@ -81,6 +92,7 @@ export function groupPersonParticipation(
     const current = groups.get(key) ?? {
       projectId: participation.project_id,
       projectName: participation.project_name ?? '未归属',
+      projectStatus: participation.project_status,
       source: 'task_only' as const,
       projectRole: null,
       joinedAt: null,
@@ -91,6 +103,9 @@ export function groupPersonParticipation(
     current.tasks.push({
       taskId: participation.task_id,
       taskTitle: participation.task_title,
+      status: participation.task_status,
+      priority: participation.task_priority,
+      dueDate: participation.task_due_date,
       assignedAt: participation.assigned_at,
     });
     current.hasTaskParticipation = true;
@@ -128,6 +143,10 @@ export function createPeopleService(deps: PeopleServiceDeps) {
       return deps.people.findAll();
     },
 
+    async listPeopleWithCounts(search = ''): Promise<PersonWithCounts[]> {
+      return deps.people.findAllWithCounts(search);
+    },
+
     async getPerson(id: string): Promise<Person> {
       return requirePerson(id);
     },
@@ -138,6 +157,9 @@ export function createPeopleService(deps: PeopleServiceDeps) {
       const person: Person = {
         id: newId(),
         name: parsed.name,
+        email: parsed.email,
+        role: parsed.role,
+        note: parsed.note,
         created_at: now,
         updated_at: now,
       };
@@ -148,13 +170,74 @@ export function createPeopleService(deps: PeopleServiceDeps) {
     async updatePerson(id: string, input: PersonInput): Promise<Person> {
       await requirePerson(id);
       const parsed = personInputSchema.parse(input);
-      await deps.people.update(id, { name: parsed.name }, nowIso());
+      await deps.people.update(
+        id,
+        { name: parsed.name, email: parsed.email, role: parsed.role, note: parsed.note },
+        nowIso(),
+      );
       return requirePerson(id);
     },
 
     async deletePerson(id: string): Promise<void> {
       await requirePerson(id);
       await deps.people.deleteById(id);
+    },
+
+    async countDeleteImpact(id: string): Promise<{ projectCount: number; taskCount: number }> {
+      await requirePerson(id);
+      return deps.people.countDeleteImpact(id);
+    },
+
+    async listProjectParticipants(
+      projectIds: readonly string[],
+    ): Promise<ProjectParticipantPerson[]> {
+      return deps.people.findProjectParticipantsByProjectIds(projectIds);
+    },
+
+    async listTaskParticipants(taskIds: readonly string[]): Promise<TaskParticipantPerson[]> {
+      return deps.people.findTaskParticipantsByTaskIds(taskIds);
+    },
+
+    async countTaskAssignmentsInProject(projectId: string, personId: string): Promise<number> {
+      return deps.people.countTaskAssignmentsInProject(projectId, personId);
+    },
+
+    async setProjectParticipants(projectId: string, personIds: readonly string[]): Promise<void> {
+      if ((await deps.projects.findById(projectId)) === null) {
+        throw new AppError('not_found', '项目不存在或已被删除');
+      }
+      const wanted = new Set(personIds);
+      const current = await deps.people.findProjectParticipantsByProjectIds([projectId]);
+      for (const participant of current) {
+        if (!wanted.has(participant.person_id)) {
+          await deps.people.deleteProjectParticipant(projectId, participant.person_id);
+        }
+      }
+      const currentIds = new Set(current.map((participant) => participant.person_id));
+      for (const personId of wanted) {
+        if (!currentIds.has(personId)) {
+          await this.addProjectParticipant(personId, { project_id: projectId, role: '' });
+        }
+      }
+    },
+
+    async setTaskParticipants(taskId: string, personIds: readonly string[]): Promise<void> {
+      if ((await deps.tasks.findById(taskId)) === null) {
+        throw new AppError('not_found', '任务不存在或已被删除');
+      }
+      const wanted = new Set(personIds);
+      const current = await deps.people.findTaskParticipantsByTaskIds([taskId]);
+      for (const participant of current) {
+        if (!wanted.has(participant.person_id)) {
+          await deps.people.deleteTaskParticipant(taskId, participant.person_id);
+        }
+      }
+      const currentIds = new Set(current.map((participant) => participant.person_id));
+      for (const personId of wanted) {
+        if (!currentIds.has(personId)) {
+          await this.addTaskParticipant(personId, { task_id: taskId });
+        }
+      }
     },
 
     async addProjectParticipant(

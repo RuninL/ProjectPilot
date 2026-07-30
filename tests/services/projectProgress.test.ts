@@ -68,6 +68,14 @@ describe('computeProjectProgress', () => {
     );
     expect(progress).toEqual({ total: 2, done: 0, percent: 0 });
   });
+
+  it('keeps postponed tasks in the denominator without counting them as done', () => {
+    expect(computeProjectProgress(tasks({ status: 'done' }, { status: 'postponed' }))).toEqual({
+      total: 2,
+      done: 1,
+      percent: 50,
+    });
+  });
 });
 
 describe('formatProgress', () => {

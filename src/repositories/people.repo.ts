@@ -2,26 +2,53 @@ import {
   personProjectParticipationRowSchema,
   personRowSchema,
   personTaskParticipationRowSchema,
+  personWithCountsRowSchema,
   projectParticipantRowSchema,
+  projectParticipantPersonRowSchema,
   taskParticipantRowSchema,
+  taskParticipantPersonRowSchema,
 } from '@/db/schemas';
 import type { SqlExecutor } from '@/lib/db';
 import type {
   Person,
   PersonProjectParticipation,
   PersonTaskParticipation,
+  PersonWithCounts,
   ProjectParticipant,
+  ProjectParticipantPerson,
   TaskParticipant,
+  TaskParticipantPerson,
 } from '@/types';
 import { buildUpdate, parseOptional, parseRows, runUpdate } from './_shared';
+import { inClause } from './_shared';
 
-const PERSON_UPDATABLE = ['name'] as const;
+const PERSON_UPDATABLE = ['name', 'email', 'role', 'note'] as const;
 
 export function createPeopleRepository(db: SqlExecutor) {
   return {
     async findAll(): Promise<Person[]> {
       const rows = await db.select('SELECT * FROM people ORDER BY name ASC, created_at ASC');
       return parseRows(personRowSchema, rows);
+    },
+
+    async findAllWithCounts(search = ''): Promise<PersonWithCounts[]> {
+      const term = search.trim();
+      const pattern = `%${term.replaceAll('\\', '\\\\').replaceAll('%', '\\%').replaceAll('_', '\\_')}%`;
+      const rows = await db.select(
+        `SELECT p.*,
+                COUNT(DISTINCT pp.project_id) AS project_count,
+                COUNT(DISTINCT tp.task_id) AS task_count
+           FROM people p
+           LEFT JOIN project_participants pp ON pp.person_id = p.id
+           LEFT JOIN task_participants tp ON tp.person_id = p.id
+          WHERE ? = '' OR p.name LIKE ? ESCAPE '\\'
+             OR COALESCE(p.email, '') LIKE ? ESCAPE '\\'
+             OR COALESCE(p.role, '') LIKE ? ESCAPE '\\'
+          GROUP BY p.id
+          ORDER BY p.name ASC, p.created_at ASC`,
+        [term, pattern, pattern, pattern],
+      );
+      return parseRows(personWithCountsRowSchema, rows);
     },
 
     async findById(id: string): Promise<Person | null> {
@@ -31,9 +58,17 @@ export function createPeopleRepository(db: SqlExecutor) {
 
     async insert(person: Person): Promise<void> {
       await db.execute(
-        `INSERT INTO people (id, name, created_at, updated_at)
-         VALUES (?, ?, ?, ?)`,
-        [person.id, person.name, person.created_at, person.updated_at],
+        `INSERT INTO people (id, name, email, role, note, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?)`,
+        [
+          person.id,
+          person.name,
+          person.email,
+          person.role,
+          person.note,
+          person.created_at,
+          person.updated_at,
+        ],
       );
     },
 
@@ -44,6 +79,19 @@ export function createPeopleRepository(db: SqlExecutor) {
     async deleteById(id: string): Promise<number> {
       const result = await db.execute('DELETE FROM people WHERE id = ?', [id]);
       return result.rowsAffected;
+    },
+
+    async countDeleteImpact(id: string): Promise<{ projectCount: number; taskCount: number }> {
+      const rows = await db.select<{ project_count: number; task_count: number }[]>(
+        `SELECT
+           (SELECT COUNT(*) FROM project_participants WHERE person_id = ?) AS project_count,
+           (SELECT COUNT(*) FROM task_participants WHERE person_id = ?) AS task_count`,
+        [id, id],
+      );
+      return {
+        projectCount: rows[0]?.project_count ?? 0,
+        taskCount: rows[0]?.task_count ?? 0,
+      };
     },
 
     async findProjectParticipant(
@@ -57,9 +105,25 @@ export function createPeopleRepository(db: SqlExecutor) {
       return parseOptional(projectParticipantRowSchema, rows);
     },
 
+    async findProjectParticipantsByProjectIds(
+      projectIds: readonly string[],
+    ): Promise<ProjectParticipantPerson[]> {
+      const condition = inClause('pp.project_id', projectIds);
+      if (condition.sql === '') return [];
+      const rows = await db.select(
+        `SELECT pp.*, p.name AS person_name
+           FROM project_participants pp
+           JOIN people p ON p.id = pp.person_id
+          WHERE ${condition.sql}
+          ORDER BY p.name ASC`,
+        condition.params,
+      );
+      return parseRows(projectParticipantPersonRowSchema, rows);
+    },
+
     async findProjectParticipantsByPerson(personId: string): Promise<PersonProjectParticipation[]> {
       const rows = await db.select(
-        `SELECT pp.*, p.name AS project_name
+        `SELECT pp.*, p.name AS project_name, p.status AS project_status
            FROM project_participants pp
            JOIN projects p ON p.id = pp.project_id
           WHERE pp.person_id = ?
@@ -93,10 +157,38 @@ export function createPeopleRepository(db: SqlExecutor) {
       return parseOptional(taskParticipantRowSchema, rows);
     },
 
+    async findTaskParticipantsByTaskIds(
+      taskIds: readonly string[],
+    ): Promise<TaskParticipantPerson[]> {
+      const condition = inClause('tp.task_id', taskIds);
+      if (condition.sql === '') return [];
+      const rows = await db.select(
+        `SELECT tp.*, p.name AS person_name
+           FROM task_participants tp
+           JOIN people p ON p.id = tp.person_id
+          WHERE ${condition.sql}
+          ORDER BY p.name ASC`,
+        condition.params,
+      );
+      return parseRows(taskParticipantPersonRowSchema, rows);
+    },
+
+    async countTaskAssignmentsInProject(projectId: string, personId: string): Promise<number> {
+      const rows = await db.select<{ count: number }[]>(
+        `SELECT COUNT(*) AS count
+           FROM task_participants tp
+           JOIN tasks t ON t.id = tp.task_id
+          WHERE t.project_id = ? AND tp.person_id = ?`,
+        [projectId, personId],
+      );
+      return rows[0]?.count ?? 0;
+    },
+
     async findTaskParticipantsByPerson(personId: string): Promise<PersonTaskParticipation[]> {
       const rows = await db.select(
-        `SELECT tp.*, t.title AS task_title,
-                p.id AS project_id, p.name AS project_name
+        `SELECT tp.*, t.title AS task_title, t.status AS task_status,
+                t.priority AS task_priority, t.due_date AS task_due_date,
+                p.id AS project_id, p.name AS project_name, p.status AS project_status
            FROM task_participants tp
            JOIN tasks t ON t.id = tp.task_id
            LEFT JOIN projects p ON p.id = t.project_id

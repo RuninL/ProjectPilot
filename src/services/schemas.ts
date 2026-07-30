@@ -263,8 +263,24 @@ export const projectLinkInputSchema = z
     }
   });
 
+const optionalProfileText = (max: number, message: string) =>
+  z
+    .string()
+    .trim()
+    .max(max, message)
+    .transform((value) => (value === '' ? null : value))
+    .nullable()
+    .default(null)
+    .transform((value) => value ?? null);
+
 export const personInputSchema = z.object({
   name: z.string().trim().min(1, '姓名不能为空').max(120, '姓名不能超过 120 个字符'),
+  email: optionalProfileText(254, '邮箱不能超过 254 个字符').refine(
+    (value) => value === null || z.string().email().safeParse(value).success,
+    '邮箱格式不正确',
+  ),
+  role: optionalProfileText(120, '角色不能超过 120 个字符'),
+  note: optionalProfileText(2000, '备注不能超过 2000 个字符'),
 });
 
 export const projectParticipantInputSchema = z.object({
@@ -286,6 +302,6 @@ export type ConvertActionItemInput = z.infer<typeof convertActionItemSchema>;
 export type MilestoneInput = z.infer<typeof milestoneInputSchema>;
 export type RiskInput = z.infer<typeof riskInputSchema>;
 export type ProjectLinkInput = z.infer<typeof projectLinkInputSchema>;
-export type PersonInput = z.infer<typeof personInputSchema>;
+export type PersonInput = z.input<typeof personInputSchema>;
 export type ProjectParticipantInput = z.infer<typeof projectParticipantInputSchema>;
 export type TaskParticipantInput = z.infer<typeof taskParticipantInputSchema>;

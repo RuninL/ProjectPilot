@@ -3,7 +3,7 @@ import { toAppError } from '@/lib/errors';
 import type { TaskQuery } from '@/repositories';
 import type { BulkTaskUpdate, TaskInput } from '@/services/schemas';
 import { getTaskService, type TaskService } from '@/services/task.service';
-import type { TaskWithProject } from '@/types';
+import type { Task, TaskWithProject } from '@/types';
 
 interface TaskState {
   tasks: TaskWithProject[];
@@ -14,8 +14,8 @@ interface TaskState {
   listByProject: (projectId: string) => Promise<TaskWithProject[]>;
   /** Read-only child count, shown before a delete is attempted. */
   countChildren: (id: string) => Promise<number>;
-  createTask: (input: TaskInput, query: TaskQuery) => Promise<void>;
-  updateTask: (id: string, input: TaskInput, query: TaskQuery) => Promise<void>;
+  createTask: (input: TaskInput, query: TaskQuery) => Promise<Task>;
+  updateTask: (id: string, input: TaskInput, query: TaskQuery) => Promise<Task>;
   deleteTask: (id: string, query: TaskQuery) => Promise<void>;
   bulkUpdateTasks: (
     ids: readonly string[],
@@ -65,11 +65,17 @@ export const useTaskStore = create<TaskState>((set, get) => {
     },
 
     createTask: async (input, query) => {
-      await mutate(query, (service) => service.createTask(input));
+      const service = await getTaskService();
+      const task = await service.createTask(input);
+      await get().loadTasks(query);
+      return task;
     },
 
     updateTask: async (id, input, query) => {
-      await mutate(query, (service) => service.updateTask(id, input));
+      const service = await getTaskService();
+      const task = await service.updateTask(id, input);
+      await get().loadTasks(query);
+      return task;
     },
 
     deleteTask: async (id, query) => {

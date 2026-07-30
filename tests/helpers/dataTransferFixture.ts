@@ -315,6 +315,44 @@ export function createCompleteSnapshot(): DatabaseSnapshot {
       { key: 'sample_seeded', value: '1', created_at: NOW, updated_at: NOW },
       { key: 'calendar_week_start', value: 'monday', created_at: NOW, updated_at: NOW },
     ],
+    people: [
+      {
+        id: 'person-owner',
+        name: '项目负责人',
+        email: 'owner@example.com',
+        role: '负责人',
+        note: '核心成员',
+        created_at: NOW,
+        updated_at: NOW,
+      },
+      {
+        id: 'person-member',
+        name: '项目成员',
+        email: null,
+        role: null,
+        note: null,
+        created_at: NOW,
+        updated_at: NOW,
+      },
+    ],
+    projectParticipants: [
+      {
+        project_id: 'project-real',
+        person_id: 'person-owner',
+        role: '负责人',
+        joined_at: NOW,
+      },
+      {
+        project_id: 'project-sample',
+        person_id: 'person-member',
+        role: '',
+        joined_at: NOW,
+      },
+    ],
+    taskParticipants: [
+      { task_id: 'task-root', person_id: 'person-member', assigned_at: NOW },
+      { task_id: 'task-sample', person_id: 'person-owner', assigned_at: NOW },
+    ],
   };
 }
 
