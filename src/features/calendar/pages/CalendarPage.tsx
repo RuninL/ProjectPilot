@@ -125,6 +125,11 @@ export function CalendarPage() {
       </header>
 
       {error !== null && <p className="mb-3 text-sm text-destructive">{error}</p>}
+      {data?.recurrenceTruncated === true && (
+        <p role="alert" className="mb-3 rounded-lg border border-amber-500 p-3 text-sm">
+          周期规则展开已达到 500 项上限，当前日历仅显示部分预期项。
+        </p>
+      )}
 
       {data !== null && data.entryCount === 0 && (
         <p className="mb-3 rounded-lg border border-dashed bg-muted/30 p-4 text-center text-sm text-muted-foreground">

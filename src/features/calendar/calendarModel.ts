@@ -53,6 +53,7 @@ export interface CalendarMonth {
   readonly weeks: readonly (readonly CalendarDay[])[];
   /** Entries inside the month proper, for the empty state. */
   readonly entryCount: number;
+  readonly recurrenceTruncated: boolean;
 }
 
 export interface CalendarData {
@@ -61,6 +62,7 @@ export interface CalendarData {
   readonly milestones: readonly Milestone[];
   /** Used to name and colour milestones, which are stored without a join. */
   readonly projects: readonly Project[];
+  readonly recurrenceTruncated?: boolean;
 }
 
 const MONTH_RE = /^\d{4}-\d{2}$/;
@@ -114,8 +116,11 @@ function taskEntries(tasks: readonly TaskWithProject[]): CalendarEntry[] {
         sourceId: task.id,
         date: task.due_date,
         title: task.title,
-        kindLabel: '任务截止',
-        detail: task.project_name,
+        kindLabel: task.source_rule_id === null ? '任务截止' : '周期任务',
+        detail:
+          task.source_rule_id === null
+            ? task.project_name
+            : `来源周期规则 · ${task.project_name} · ${task.id.startsWith('expected:') ? '预期项' : '已物化'}`,
         href,
         color: task.project_color,
       });
@@ -153,8 +158,11 @@ function meetingEntries(
       sourceId: meeting.id,
       date: meeting.date,
       title: meeting.topic,
-      kindLabel: KIND_LABELS.meeting,
-      detail: parts.join(' · '),
+      kindLabel: meeting.source_rule_id === null ? KIND_LABELS.meeting : '周期会议',
+      detail:
+        meeting.source_rule_id === null
+          ? parts.join(' · ')
+          : `${parts.join(' · ')} · 来源周期规则 · ${meeting.id.startsWith('expected:') ? '预期项' : '已物化'}`,
       href: `/meetings/${encodeURIComponent(meeting.id)}`,
       color: project?.color ?? null,
     };
@@ -243,6 +251,7 @@ export function buildCalendarMonth(
     rangeEnd: to,
     weeks,
     entryCount,
+    recurrenceTruncated: data.recurrenceTruncated ?? false,
   };
 }
 

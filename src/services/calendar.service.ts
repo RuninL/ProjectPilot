@@ -3,8 +3,10 @@ import type {
   MeetingRepository,
   MilestoneRepository,
   ProjectRepository,
+  RecurrenceRepository,
   TaskRepository,
 } from '@/repositories';
+import { expandRule } from './recurrence.service';
 import { getRepositories } from '@/repositories';
 import {
   buildCalendarMonth,
@@ -17,6 +19,7 @@ export interface CalendarServiceDeps {
   meetings: MeetingRepository;
   milestones: MilestoneRepository;
   projects: ProjectRepository;
+  recurrence?: RecurrenceRepository;
 }
 
 /**
@@ -34,7 +37,90 @@ export function createCalendarService(deps: CalendarServiceDeps) {
         deps.milestones.findByDateRange(from, to),
         deps.projects.findAll(),
       ]);
-      return buildCalendarMonth(month, { tasks, meetings, milestones, projects }, today);
+      const rules =
+        deps.recurrence === undefined
+          ? []
+          : await deps.recurrence.findActiveByProjectIds(projects.map((project) => project.id));
+      const expansions = await Promise.all(
+        rules.map(async (rule) => ({
+          rule,
+          result: expandRule(
+            rule,
+            from,
+            to,
+            null,
+            deps.recurrence === undefined ? [] : await deps.recurrence.findExceptions(rule.id),
+          ),
+        })),
+      );
+      const recurringTasks = expansions.flatMap(({ rule, result }) =>
+        rule.kind === 'task'
+          ? result.occurrences
+              .filter((occurrence) => occurrence.materialized_id === null)
+              .map((occurrence) => ({
+                id: `expected:${rule.id}:${occurrence.date}`,
+                project_id: rule.project_id,
+                parent_task_id: null,
+                title: rule.title,
+                description: rule.note,
+                status: 'todo' as const,
+                priority: rule.default_priority ?? 'medium',
+                start_date: occurrence.date,
+                due_date: occurrence.date,
+                progress: 0,
+                estimated_hours: null,
+                actual_hours: null,
+                completed_at: null,
+                archived_at: null,
+                source_meeting_id: null,
+                source_rule_id: rule.id,
+                source_occurrence_date: occurrence.date,
+                is_sample: 0 as const,
+                created_at: rule.created_at,
+                updated_at: rule.updated_at,
+                project_name:
+                  projects.find((project) => project.id === rule.project_id)?.name ?? '',
+                project_color:
+                  projects.find((project) => project.id === rule.project_id)?.color ?? '#64748b',
+                project_status:
+                  projects.find((project) => project.id === rule.project_id)?.status ?? 'active',
+              }))
+          : [],
+      );
+      const recurringMeetings = expansions.flatMap(({ rule, result }) =>
+        rule.kind === 'meeting'
+          ? result.occurrences
+              .filter((occurrence) => occurrence.materialized_id === null)
+              .map((occurrence) => ({
+                id: `expected:${rule.id}:${occurrence.date}`,
+                project_id: rule.project_id,
+                topic: rule.title,
+                date: occurrence.date,
+                start_time: rule.time_of_day,
+                attendees: '[]',
+                agenda: rule.note,
+                notes: '',
+                decisions: '',
+                risks: '',
+                source_rule_id: rule.id,
+                source_occurrence_date: occurrence.date,
+                is_sample: 0 as const,
+                created_at: rule.created_at,
+                updated_at: rule.updated_at,
+              }))
+          : [],
+      );
+      return buildCalendarMonth(
+        month,
+        {
+          tasks: [...tasks, ...recurringTasks],
+          meetings: [...meetings, ...recurringMeetings],
+          milestones,
+          projects,
+          recurrenceTruncated: expansions.some(({ result }) => result.truncated),
+        },
+        today,
+      );
     },
   };
 }
@@ -48,5 +134,6 @@ export async function getCalendarService(): Promise<CalendarService> {
     meetings: repos.meetings,
     milestones: repos.milestones,
     projects: repos.projects,
+    recurrence: repos.recurrence,
   });
 }
