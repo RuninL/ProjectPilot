@@ -33,7 +33,7 @@ function resetStore() {
     loading: false,
     error: null,
     options: [],
-    filters: { search: '', status: null, scope: 'active', sort: 'updated_at' },
+    filters: { search: '', status: null, scope: 'active', sort: 'updated_at', participantIds: [] },
   });
 }
 
@@ -176,7 +176,13 @@ describe('ProjectListPage', () => {
     await repos.tasks.insert(makeTask({ id: 't1', project_id: 'p1' }));
     await repos.tasks.insert(makeTask({ id: 't2', project_id: 'p1' }));
     useProjectStore.setState({
-      filters: { search: '', status: null, scope: 'archived', sort: 'updated_at' },
+      filters: {
+        search: '',
+        status: null,
+        scope: 'archived',
+        sort: 'updated_at',
+        participantIds: [],
+      },
     });
 
     renderPage();

@@ -4,7 +4,9 @@ import {
   personTaskParticipationRowSchema,
   personWithCountsRowSchema,
   projectParticipantRowSchema,
+  projectParticipantPersonRowSchema,
   taskParticipantRowSchema,
+  taskParticipantPersonRowSchema,
 } from '@/db/schemas';
 import type { SqlExecutor } from '@/lib/db';
 import type {
@@ -13,9 +15,12 @@ import type {
   PersonTaskParticipation,
   PersonWithCounts,
   ProjectParticipant,
+  ProjectParticipantPerson,
   TaskParticipant,
+  TaskParticipantPerson,
 } from '@/types';
 import { buildUpdate, parseOptional, parseRows, runUpdate } from './_shared';
+import { inClause } from './_shared';
 
 const PERSON_UPDATABLE = ['name', 'email', 'role', 'note'] as const;
 
@@ -100,6 +105,22 @@ export function createPeopleRepository(db: SqlExecutor) {
       return parseOptional(projectParticipantRowSchema, rows);
     },
 
+    async findProjectParticipantsByProjectIds(
+      projectIds: readonly string[],
+    ): Promise<ProjectParticipantPerson[]> {
+      const condition = inClause('pp.project_id', projectIds);
+      if (condition.sql === '') return [];
+      const rows = await db.select(
+        `SELECT pp.*, p.name AS person_name
+           FROM project_participants pp
+           JOIN people p ON p.id = pp.person_id
+          WHERE ${condition.sql}
+          ORDER BY p.name ASC`,
+        condition.params,
+      );
+      return parseRows(projectParticipantPersonRowSchema, rows);
+    },
+
     async findProjectParticipantsByPerson(personId: string): Promise<PersonProjectParticipation[]> {
       const rows = await db.select(
         `SELECT pp.*, p.name AS project_name, p.status AS project_status
@@ -134,6 +155,33 @@ export function createPeopleRepository(db: SqlExecutor) {
         [taskId, personId],
       );
       return parseOptional(taskParticipantRowSchema, rows);
+    },
+
+    async findTaskParticipantsByTaskIds(
+      taskIds: readonly string[],
+    ): Promise<TaskParticipantPerson[]> {
+      const condition = inClause('tp.task_id', taskIds);
+      if (condition.sql === '') return [];
+      const rows = await db.select(
+        `SELECT tp.*, p.name AS person_name
+           FROM task_participants tp
+           JOIN people p ON p.id = tp.person_id
+          WHERE ${condition.sql}
+          ORDER BY p.name ASC`,
+        condition.params,
+      );
+      return parseRows(taskParticipantPersonRowSchema, rows);
+    },
+
+    async countTaskAssignmentsInProject(projectId: string, personId: string): Promise<number> {
+      const rows = await db.select<{ count: number }[]>(
+        `SELECT COUNT(*) AS count
+           FROM task_participants tp
+           JOIN tasks t ON t.id = tp.task_id
+          WHERE t.project_id = ? AND tp.person_id = ?`,
+        [projectId, personId],
+      );
+      return rows[0]?.count ?? 0;
     },
 
     async findTaskParticipantsByPerson(personId: string): Promise<PersonTaskParticipation[]> {

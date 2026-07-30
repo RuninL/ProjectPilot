@@ -22,6 +22,7 @@ interface ProjectListItemProps {
   onArchive: (project: Project) => void;
   onRestore: (project: Project) => void;
   onDelete: (project: Project) => void;
+  participantNames?: readonly string[];
 }
 
 /** One row of the project list: identity, dates, completion rate and actions. */
@@ -32,6 +33,7 @@ export function ProjectListItem({
   onArchive,
   onRestore,
   onDelete,
+  participantNames = [],
 }: ProjectListItemProps) {
   const archived = project.archived_at !== null;
   const rate = progress ?? { total: 0, done: 0, percent: 0 };
@@ -63,6 +65,9 @@ export function ProjectListItem({
         <p className="mt-1 text-xs text-muted-foreground">
           开始 {formatDisplay(project.start_date)} · 目标结束{' '}
           {formatDisplay(project.target_end_date)}
+        </p>
+        <p className="mt-1 text-xs text-muted-foreground">
+          参与人：{participantNames.length === 0 ? '未分配' : participantNames.join('、')}
         </p>
       </div>
 

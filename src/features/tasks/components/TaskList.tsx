@@ -9,6 +9,7 @@ interface TaskListProps {
   onToggleSelect: (id: string) => void;
   onEdit: (task: TaskWithProject) => void;
   onDelete: (task: TaskWithProject) => void;
+  participantsByTask?: Readonly<Record<string, readonly string[]>>;
 }
 
 /**
@@ -23,6 +24,7 @@ export function TaskList({
   onToggleSelect,
   onEdit,
   onDelete,
+  participantsByTask = {},
 }: TaskListProps) {
   const present = new Set(tasks.map((task) => task.id));
   const childrenByParent = new Map<string, TaskWithProject[]>();
@@ -50,6 +52,7 @@ export function TaskList({
             onToggleSelect={onToggleSelect}
             onEdit={onEdit}
             onDelete={onDelete}
+            participantNames={participantsByTask[task.id] ?? []}
           />
           {(childrenByParent.get(task.id) ?? []).map((child) => (
             <TaskRow
@@ -61,6 +64,7 @@ export function TaskList({
               onToggleSelect={onToggleSelect}
               onEdit={onEdit}
               onDelete={onDelete}
+              participantNames={participantsByTask[child.id] ?? []}
             />
           ))}
         </Fragment>

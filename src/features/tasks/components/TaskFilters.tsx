@@ -3,8 +3,9 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { TASK_PRIORITY_OPTIONS, TASK_STATUS_OPTIONS } from '@/lib/labels';
+import { ParticipantSelector } from '@/features/people/components/ParticipantSelector';
 import type { TaskSort } from '@/repositories';
-import type { Project, TaskPriority, TaskStatus } from '@/types';
+import type { Person, Project, TaskPriority, TaskStatus } from '@/types';
 
 const SORT_OPTIONS: { value: TaskSort; label: string }[] = [
   { value: 'due_date', label: '截止日期' },
@@ -21,6 +22,8 @@ interface TaskFiltersProps {
   dueFrom: string | null;
   dueTo: string | null;
   sortBy: TaskSort;
+  people?: readonly Person[];
+  participantIds?: readonly string[];
   /** Omitted on a project's own task list, where the project is already fixed. */
   projects?: readonly Project[];
   onSearchChange: (search: string) => void;
@@ -29,6 +32,7 @@ interface TaskFiltersProps {
   onProjectIdsChange: (ids: string[]) => void;
   onDueRangeChange: (from: string | null, to: string | null) => void;
   onSortChange: (sort: TaskSort) => void;
+  onParticipantIdsChange?: (ids: string[]) => void;
   onReset: () => void;
 }
 
@@ -45,6 +49,8 @@ export function TaskFilters({
   dueFrom,
   dueTo,
   sortBy,
+  people = [],
+  participantIds = [],
   projects,
   onSearchChange,
   onStatusesChange,
@@ -52,6 +58,7 @@ export function TaskFilters({
   onProjectIdsChange,
   onDueRangeChange,
   onSortChange,
+  onParticipantIdsChange = () => undefined,
   onReset,
 }: TaskFiltersProps) {
   return (
@@ -184,6 +191,13 @@ export function TaskFilters({
           ))}
         </fieldset>
       </div>
+      <ParticipantSelector
+        id="task-participant-filter"
+        people={people}
+        selectedIds={participantIds}
+        onChange={onParticipantIdsChange}
+        label="参与人筛选（任意匹配）"
+      />
     </div>
   );
 }

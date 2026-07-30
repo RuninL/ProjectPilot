@@ -111,9 +111,7 @@ describe('migration 0008 upgrade', () => {
       projects: raw.prepare('SELECT COUNT(*) AS count FROM projects').get(),
       tasks: raw.prepare('SELECT COUNT(*) AS count FROM tasks').get(),
       people: raw.prepare('SELECT COUNT(*) AS count FROM people').get(),
-      projectParticipants: raw
-        .prepare('SELECT COUNT(*) AS count FROM project_participants')
-        .get(),
+      projectParticipants: raw.prepare('SELECT COUNT(*) AS count FROM project_participants').get(),
       taskParticipants: raw.prepare('SELECT COUNT(*) AS count FROM task_participants').get(),
     };
 
@@ -123,9 +121,7 @@ describe('migration 0008 upgrade', () => {
       projects: raw.prepare('SELECT COUNT(*) AS count FROM projects').get(),
       tasks: raw.prepare('SELECT COUNT(*) AS count FROM tasks').get(),
       people: raw.prepare('SELECT COUNT(*) AS count FROM people').get(),
-      projectParticipants: raw
-        .prepare('SELECT COUNT(*) AS count FROM project_participants')
-        .get(),
+      projectParticipants: raw.prepare('SELECT COUNT(*) AS count FROM project_participants').get(),
       taskParticipants: raw.prepare('SELECT COUNT(*) AS count FROM task_participants').get(),
     };
     expect(after).toStrictEqual(before);

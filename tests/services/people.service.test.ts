@@ -103,6 +103,7 @@ describe('people service CRUD and validation', () => {
       project_id: 'project-a',
       role: '开发',
     });
+
     await service.addTaskParticipant(person.id, { task_id: 'task-a' });
 
     await service.removeTaskParticipant(person.id, 'task-a');
@@ -113,6 +114,25 @@ describe('people service CRUD and validation', () => {
 
     expect(await createProjectRepository(db.executor).findById('project-a')).not.toBeNull();
     expect(await createTaskRepository(db.executor).findById('task-a')).not.toBeNull();
+  });
+
+  it('sets task participants without creating project participation and removes project links only', async () => {
+    const person = await service.createPerson({ name: '独立成员' });
+    await service.setTaskParticipants('task-a', [person.id]);
+
+    expect(await service.listTaskParticipants(['task-a'])).toEqual([
+      expect.objectContaining({ person_id: person.id }),
+    ]);
+    expect(await service.listProjectParticipants(['project-a'])).toEqual([]);
+
+    await service.addProjectParticipant(person.id, { project_id: 'project-a', role: '' });
+    expect(await service.countTaskAssignmentsInProject('project-a', person.id)).toBe(1);
+    await service.removeProjectParticipant(person.id, 'project-a');
+
+    expect(await service.listProjectParticipants(['project-a'])).toEqual([]);
+    expect(await service.listTaskParticipants(['task-a'])).toEqual([
+      expect.objectContaining({ person_id: person.id }),
+    ]);
   });
 });
 

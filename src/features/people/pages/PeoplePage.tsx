@@ -114,7 +114,10 @@ export function PeoplePage() {
               {people.map((person) => (
                 <tr key={person.id} className="border-t">
                   <td className="px-4 py-3">
-                    <Link className="font-medium text-primary hover:underline" to={`/people/${person.id}`}>
+                    <Link
+                      className="font-medium text-primary hover:underline"
+                      to={`/people/${person.id}`}
+                    >
                       {person.name}
                     </Link>
                   </td>

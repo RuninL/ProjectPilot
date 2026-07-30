@@ -15,6 +15,7 @@ interface ProjectFilters {
   status: ProjectStatus | null;
   scope: ProjectScope;
   sort: ProjectSort;
+  participantIds: string[];
 }
 
 interface ProjectState {
@@ -31,8 +32,8 @@ interface ProjectState {
   loadOptions: () => Promise<void>;
   /** Read-only single-project fetch for the detail page. */
   getProject: (id: string) => Promise<Project>;
-  createProject: (input: ProjectInput) => Promise<void>;
-  updateProject: (id: string, input: ProjectInput) => Promise<void>;
+  createProject: (input: ProjectInput) => Promise<Project>;
+  updateProject: (id: string, input: ProjectInput) => Promise<Project>;
   archiveProject: (id: string) => Promise<void>;
   restoreProject: (id: string) => Promise<void>;
   countDeleteImpact: (id: string) => Promise<DeleteImpact>;
@@ -44,6 +45,7 @@ const INITIAL_FILTERS: ProjectFilters = {
   status: null,
   scope: 'active',
   sort: 'updated_at',
+  participantIds: [],
 };
 
 function toQuery(filters: ProjectFilters): ProjectQuery {
@@ -52,6 +54,7 @@ function toQuery(filters: ProjectFilters): ProjectQuery {
     scope: filters.scope,
     sort: filters.sort,
     ...(filters.status === null ? {} : { status: filters.status }),
+    participantIds: filters.participantIds,
   };
 }
 
@@ -107,11 +110,17 @@ export const useProjectStore = create<ProjectState>((set, get) => {
     },
 
     createProject: async (input) => {
-      await mutate((service) => service.createProject(input));
+      const service = await getProjectService();
+      const project = await service.createProject(input);
+      await get().loadProjects();
+      return project;
     },
 
     updateProject: async (id, input) => {
-      await mutate((service) => service.updateProject(id, input));
+      const service = await getProjectService();
+      const project = await service.updateProject(id, input);
+      await get().loadProjects();
+      return project;
     },
 
     archiveProject: async (id) => {

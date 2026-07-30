@@ -219,6 +219,14 @@ export const taskParticipantRowSchema = z.object({
   assigned_at: timestamp,
 });
 
+export const projectParticipantPersonRowSchema = projectParticipantRowSchema.extend({
+  person_name: z.string(),
+});
+
+export const taskParticipantPersonRowSchema = taskParticipantRowSchema.extend({
+  person_name: z.string(),
+});
+
 export const personProjectParticipationRowSchema = projectParticipantRowSchema.extend({
   project_name: z.string(),
   project_status: projectStatusEnum,

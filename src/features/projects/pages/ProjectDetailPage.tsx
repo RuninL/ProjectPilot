@@ -13,6 +13,7 @@ import { ProjectLinkSection } from '@/features/links/components/ProjectLinkSecti
 import { MeetingSection } from '@/features/meetings/components/MeetingSection';
 import { MilestoneSection } from '@/features/milestones/components/MilestoneSection';
 import { RiskSection } from '@/features/risks/components/RiskSection';
+import { ProjectParticipantsSection } from '@/features/people/components/ProjectParticipantsSection';
 import { TaskWorkspace } from '@/features/tasks/components/TaskWorkspace';
 import { formatDisplay, isOverdue } from '@/lib/date';
 import { toAppError } from '@/lib/errors';
@@ -235,6 +236,11 @@ export function ProjectDetailPage() {
             </div>
           ))}
         </dl>
+      </section>
+
+      <section className="mb-6">
+        <h2 className="mb-3 text-lg font-medium">项目参与人</h2>
+        <ProjectParticipantsSection projectId={project.id} />
       </section>
 
       <section className="mb-6">

@@ -14,9 +14,11 @@ import type {
   ProjectParticipant,
   ProjectStatus,
   TaskParticipant,
+  TaskParticipantPerson,
   TaskPriority,
   TaskStatus,
   PersonWithCounts,
+  ProjectParticipantPerson,
 } from '@/types';
 import {
   personInputSchema,
@@ -184,6 +186,58 @@ export function createPeopleService(deps: PeopleServiceDeps) {
     async countDeleteImpact(id: string): Promise<{ projectCount: number; taskCount: number }> {
       await requirePerson(id);
       return deps.people.countDeleteImpact(id);
+    },
+
+    async listProjectParticipants(
+      projectIds: readonly string[],
+    ): Promise<ProjectParticipantPerson[]> {
+      return deps.people.findProjectParticipantsByProjectIds(projectIds);
+    },
+
+    async listTaskParticipants(taskIds: readonly string[]): Promise<TaskParticipantPerson[]> {
+      return deps.people.findTaskParticipantsByTaskIds(taskIds);
+    },
+
+    async countTaskAssignmentsInProject(projectId: string, personId: string): Promise<number> {
+      return deps.people.countTaskAssignmentsInProject(projectId, personId);
+    },
+
+    async setProjectParticipants(projectId: string, personIds: readonly string[]): Promise<void> {
+      if ((await deps.projects.findById(projectId)) === null) {
+        throw new AppError('not_found', '项目不存在或已被删除');
+      }
+      const wanted = new Set(personIds);
+      const current = await deps.people.findProjectParticipantsByProjectIds([projectId]);
+      for (const participant of current) {
+        if (!wanted.has(participant.person_id)) {
+          await deps.people.deleteProjectParticipant(projectId, participant.person_id);
+        }
+      }
+      const currentIds = new Set(current.map((participant) => participant.person_id));
+      for (const personId of wanted) {
+        if (!currentIds.has(personId)) {
+          await this.addProjectParticipant(personId, { project_id: projectId, role: '' });
+        }
+      }
+    },
+
+    async setTaskParticipants(taskId: string, personIds: readonly string[]): Promise<void> {
+      if ((await deps.tasks.findById(taskId)) === null) {
+        throw new AppError('not_found', '任务不存在或已被删除');
+      }
+      const wanted = new Set(personIds);
+      const current = await deps.people.findTaskParticipantsByTaskIds([taskId]);
+      for (const participant of current) {
+        if (!wanted.has(participant.person_id)) {
+          await deps.people.deleteTaskParticipant(taskId, participant.person_id);
+        }
+      }
+      const currentIds = new Set(current.map((participant) => participant.person_id));
+      for (const personId of wanted) {
+        if (!currentIds.has(personId)) {
+          await this.addTaskParticipant(personId, { task_id: taskId });
+        }
+      }
     },
 
     async addProjectParticipant(

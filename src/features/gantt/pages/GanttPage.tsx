@@ -45,16 +45,13 @@ export function GanttPage() {
     try {
       await loadOptions();
       const active = useProjectStore.getState().options;
-      const [service, taskService] = await Promise.all([
-        getDependencyService(),
-        getTaskService(),
-      ]);
+      const [service, taskService] = await Promise.all([getDependencyService(), getTaskService()]);
       const [analyses, allTasks] = await Promise.all([
         Promise.all(
-        active.map(async (project) => ({
-          project,
-          analysis: await service.analyzeProject(project.id),
-        })),
+          active.map(async (project) => ({
+            project,
+            analysis: await service.analyzeProject(project.id),
+          })),
         ),
         taskService.listTasks(),
       ]);

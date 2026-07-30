@@ -5,7 +5,13 @@ import { afterEach, describe, expect, it } from 'vitest';
 import { PeoplePage } from '@/features/people/pages/PeoplePage';
 import { setDbForTesting } from '@/lib/db';
 import { getRepositories } from '@/repositories';
-import { makePerson, makeProject, makeProjectParticipant, makeTask, makeTaskParticipant } from '../helpers/fixtures';
+import {
+  makePerson,
+  makeProject,
+  makeProjectParticipant,
+  makeTask,
+  makeTaskParticipant,
+} from '../helpers/fixtures';
 import { createTestDb, type TestDb } from '../helpers/testDb';
 
 let db: TestDb | null = null;
@@ -36,7 +42,9 @@ describe('PeoplePage', () => {
     await repos.people.insert(
       makePerson({ id: 'person-1', name: '林然', email: 'lin@example.com', role: '设计师' }),
     );
-    await repos.people.insertProjectParticipant(makeProjectParticipant({ project_id: 'project-1' }));
+    await repos.people.insertProjectParticipant(
+      makeProjectParticipant({ project_id: 'project-1' }),
+    );
     await repos.people.insertTaskParticipant(makeTaskParticipant({ task_id: 'task-1' }));
 
     await user.type(screen.getByLabelText('搜索人物'), '设计');

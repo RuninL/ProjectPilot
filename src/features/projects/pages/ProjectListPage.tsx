@@ -6,8 +6,9 @@ import { ErrorState } from '@/components/common/ErrorState';
 import { LoadingState } from '@/components/common/LoadingState';
 import { Button } from '@/components/ui/button';
 import { toAppError } from '@/lib/errors';
+import { getPeopleService } from '@/services/people.service';
 import { useProjectStore } from '@/stores/useProjectStore';
-import type { Project } from '@/types';
+import type { Person, Project } from '@/types';
 import { DeleteProjectDialog } from '../components/DeleteProjectDialog';
 import { ProjectFilters } from '../components/ProjectFilters';
 import { ProjectForm } from '../components/ProjectForm';
@@ -34,18 +35,49 @@ export function ProjectListPage() {
   const [archiveTarget, setArchiveTarget] = useState<Project | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<Project | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
+  const [people, setPeople] = useState<readonly Person[]>([]);
+  const [formParticipantIds, setFormParticipantIds] = useState<string[]>([]);
+  const [participantsByProject, setParticipantsByProject] = useState<
+    Readonly<Record<string, readonly string[]>>
+  >({});
 
   useEffect(() => {
     void loadProjects();
   }, [loadProjects, filters]);
 
+  useEffect(() => {
+    void getPeopleService()
+      .then((service) => service.listPeople())
+      .then(setPeople)
+      .catch(() => undefined);
+  }, []);
+
+  useEffect(() => {
+    void getPeopleService()
+      .then((service) => service.listProjectParticipants(projects.map((project) => project.id)))
+      .then((participants) => {
+        const grouped: Record<string, string[]> = {};
+        for (const participant of participants) {
+          (grouped[participant.project_id] ??= []).push(participant.person_name);
+        }
+        setParticipantsByProject(grouped);
+      })
+      .catch(() => undefined);
+  }, [projects]);
+
   const openCreate = () => {
     setEditing(null);
+    setFormParticipantIds([]);
     setFormOpen(true);
   };
 
   const openEdit = (project: Project) => {
     setEditing(project);
+    void getPeopleService()
+      .then((service) => service.listProjectParticipants([project.id]))
+      .then((participants) => {
+        setFormParticipantIds(participants.map((participant) => participant.person_id));
+      });
     setFormOpen(true);
   };
 
@@ -81,6 +113,8 @@ export function ProjectListPage() {
           status={filters.status}
           scope={filters.scope}
           sort={filters.sort}
+          people={people}
+          participantIds={filters.participantIds}
           onSearchChange={(search) => {
             setFilters({ search });
           }}
@@ -92,6 +126,9 @@ export function ProjectListPage() {
           }}
           onSortChange={(sort) => {
             setFilters({ sort });
+          }}
+          onParticipantIdsChange={(participantIds) => {
+            setFilters({ participantIds });
           }}
         />
       </div>
@@ -131,6 +168,7 @@ export function ProjectListPage() {
                 void runAction(async () => restoreProject(target.id));
               }}
               onDelete={setDeleteTarget}
+              participantNames={participantsByProject[project.id] ?? []}
             />
           ))}
         </ul>
@@ -139,12 +177,19 @@ export function ProjectListPage() {
       <ProjectForm
         open={formOpen}
         project={editing}
-        onSubmit={async (input) => {
+        people={people}
+        participantIds={formParticipantIds}
+        onSubmit={async (input, participantIds) => {
+          const service = await getPeopleService();
           if (editing === null) {
-            await createProject(input);
+            const project = await createProject(input);
+            await service.setProjectParticipants(project.id, participantIds);
           } else {
             await updateProject(editing.id, input);
+            await service.setProjectParticipants(editing.id, participantIds);
           }
+          setPeople(await service.listPeople());
+          await loadProjects();
         }}
         onClose={() => {
           setFormOpen(false);

@@ -15,8 +15,9 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { toAppError } from '@/lib/errors';
 import { TASK_PRIORITY_OPTIONS, TASK_STATUS_OPTIONS } from '@/lib/labels';
+import { ParticipantSelector } from '@/features/people/components/ParticipantSelector';
 import { taskInputSchema, type TaskInput } from '@/services/schemas';
-import type { Project, Task, TaskPriority, TaskStatus } from '@/types';
+import type { Person, Project, Task, TaskPriority, TaskStatus } from '@/types';
 
 /** Raw form state: every control is a string, exactly as the DOM produces it. */
 interface TaskFormValues {
@@ -32,6 +33,11 @@ interface TaskFormValues {
   estimated_hours: string;
   actual_hours: string;
 }
+
+const EMPTY_PEOPLE: readonly Person[] = [];
+const EMPTY_PARTICIPANT_IDS: readonly string[] = [];
+const loadNoProjectParticipants = (): Promise<string[]> => Promise.resolve([]);
+const addNoProjectParticipant = (): Promise<void> => Promise.resolve();
 
 function numberToField(value: number | null): string {
   return value === null ? '' : String(value);
@@ -62,7 +68,11 @@ interface TaskFormProps {
   projects: readonly Project[];
   /** All tasks of a project, used to derive the legal parent candidates. */
   loadProjectTasks: (projectId: string) => Promise<Task[]>;
-  onSubmit: (input: TaskInput) => Promise<void>;
+  people?: readonly Person[];
+  participantIds?: readonly string[];
+  loadProjectParticipantIds?: (projectId: string) => Promise<string[]>;
+  onAddProjectParticipant?: (projectId: string, personId: string) => Promise<void>;
+  onSubmit: (input: TaskInput, participantIds: readonly string[]) => Promise<void>;
   onClose: () => void;
 }
 
@@ -78,6 +88,10 @@ export function TaskForm({
   projectId,
   projects,
   loadProjectTasks,
+  people = EMPTY_PEOPLE,
+  participantIds = EMPTY_PARTICIPANT_IDS,
+  loadProjectParticipantIds = loadNoProjectParticipants,
+  onAddProjectParticipant = addNoProjectParticipant,
   onSubmit,
   onClose,
 }: TaskFormProps) {
@@ -96,13 +110,16 @@ export function TaskForm({
   });
 
   const [projectTasks, setProjectTasks] = useState<Task[]>([]);
+  const [selectedParticipantIds, setSelectedParticipantIds] = useState<string[]>([]);
+  const [projectParticipantIds, setProjectParticipantIds] = useState<string[]>([]);
   const selectedProjectId = watch('project_id');
 
   useEffect(() => {
     if (open) {
       reset(toFormValues(task, projectId));
+      setSelectedParticipantIds([...participantIds]);
     }
-  }, [open, task, projectId, reset]);
+  }, [open, participantIds, task, projectId, reset]);
 
   useEffect(() => {
     if (!open || selectedProjectId === '') {
@@ -115,10 +132,15 @@ export function TaskForm({
         setProjectTasks(loaded);
       }
     });
+    void loadProjectParticipantIds(selectedProjectId).then((ids) => {
+      if (active) {
+        setProjectParticipantIds(ids);
+      }
+    });
     return () => {
       active = false;
     };
-  }, [open, selectedProjectId, loadProjectTasks]);
+  }, [open, selectedProjectId, loadProjectParticipantIds, loadProjectTasks]);
 
   const hasChildren = task !== null && projectTasks.some((row) => row.parent_task_id === task.id);
   const parentCandidates = projectTasks.filter(
@@ -127,7 +149,7 @@ export function TaskForm({
 
   const submit = handleSubmit(async (values) => {
     try {
-      await onSubmit(taskInputSchema.parse(values));
+      await onSubmit(taskInputSchema.parse(values), selectedParticipantIds);
       onClose();
     } catch (caught) {
       setError('root', { message: toAppError(caught).message });
@@ -203,6 +225,39 @@ export function TaskForm({
               <p className="text-sm text-destructive">{errors.parent_task_id.message}</p>
             )}
           </div>
+
+          <ParticipantSelector
+            id="task-form-participants"
+            people={people}
+            selectedIds={selectedParticipantIds}
+            onChange={setSelectedParticipantIds}
+            label="任务参与人"
+          />
+          {selectedParticipantIds
+            .filter((personId) => !projectParticipantIds.includes(personId))
+            .map((personId) => {
+              const person = people.find((candidate) => candidate.id === personId);
+              return (
+                <div
+                  key={personId}
+                  className="flex items-center justify-between gap-2 rounded-md border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-sm"
+                >
+                  <span>{person?.name ?? personId} 不是本项目参与人，仍可保存任务。</span>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    onClick={() => {
+                      void onAddProjectParticipant(selectedProjectId, personId).then(() => {
+                        setProjectParticipantIds((current) => [...current, personId]);
+                      });
+                    }}
+                  >
+                    加入项目参与人
+                  </Button>
+                </div>
+              );
+            })}
 
           <div className="grid gap-1.5">
             <Label htmlFor="task-title">任务标题</Label>

@@ -19,11 +19,7 @@ describe('buildParallelGanttViewModel', () => {
     expect(model.rows).toHaveLength(2);
     expect(model.rangeStart).toBe('2026-12-01');
     expect(model.rangeEnd).toBe('2027-02-28');
-    expect(model.ticks.map((tick) => tick.key)).toEqual([
-      '2026-12-01',
-      '2027-01-01',
-      '2027-02-01',
-    ]);
+    expect(model.ticks.map((tick) => tick.key)).toEqual(['2026-12-01', '2027-01-01', '2027-02-01']);
     expect(model.todayX).toBeGreaterThan(0);
   });
 

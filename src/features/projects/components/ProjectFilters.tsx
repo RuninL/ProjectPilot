@@ -3,8 +3,9 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { PROJECT_STATUS_OPTIONS } from '@/lib/labels';
+import { ParticipantSelector } from '@/features/people/components/ParticipantSelector';
 import type { ProjectScope, ProjectSort } from '@/repositories';
-import type { ProjectStatus } from '@/types';
+import type { Person, ProjectStatus } from '@/types';
 
 const SCOPE_OPTIONS: { value: ProjectScope; label: string }[] = [
   { value: 'active', label: '活动' },
@@ -27,10 +28,13 @@ interface ProjectFiltersProps {
   status: ProjectStatus | null;
   scope: ProjectScope;
   sort: ProjectSort;
+  people?: readonly Person[];
+  participantIds?: readonly string[];
   onSearchChange: (search: string) => void;
   onStatusChange: (status: ProjectStatus | null) => void;
   onScopeChange: (scope: ProjectScope) => void;
   onSortChange: (sort: ProjectSort) => void;
+  onParticipantIdsChange?: (ids: string[]) => void;
 }
 
 /** Search / status / archive-scope / sort controls for the project list. */
@@ -39,10 +43,13 @@ export function ProjectFilters({
   status,
   scope,
   sort,
+  people = [],
+  participantIds = [],
   onSearchChange,
   onStatusChange,
   onScopeChange,
   onSortChange,
+  onParticipantIdsChange = () => undefined,
 }: ProjectFiltersProps) {
   return (
     <div className="flex flex-wrap items-end gap-4">
@@ -119,6 +126,13 @@ export function ProjectFilters({
           ))}
         </TabsList>
       </Tabs>
+      <ParticipantSelector
+        id="project-participant-filter"
+        people={people}
+        selectedIds={participantIds}
+        onChange={onParticipantIdsChange}
+        label="参与人筛选（任意匹配）"
+      />
     </div>
   );
 }

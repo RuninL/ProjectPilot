@@ -84,6 +84,7 @@ export interface TaskQuery {
   /** Archived tasks are hidden everywhere unless explicitly requested. */
   includeArchived?: boolean;
   sort?: TaskSort;
+  participantIds?: readonly string[];
 }
 
 // Fixed whitelist: callers choose a key, never the ORDER BY text.
@@ -117,6 +118,16 @@ function taskConditions(query: TaskQuery): SqlFragment[] {
       : {
           sql: "(t.title LIKE ? ESCAPE '\\' OR t.description LIKE ? ESCAPE '\\')",
           params: [likeParam(search), likeParam(search)],
+        },
+    query.participantIds === undefined || query.participantIds.length === 0
+      ? { sql: '', params: [] }
+      : {
+          sql: `EXISTS (
+            SELECT 1 FROM task_participants participant_filter
+             WHERE participant_filter.task_id = t.id
+               AND participant_filter.person_id IN (${query.participantIds.map(() => '?').join(', ')})
+          )`,
+          params: [...query.participantIds],
         },
   ];
 }

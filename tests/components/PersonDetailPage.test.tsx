@@ -58,10 +58,7 @@ describe('PersonDetailPage', () => {
     await user.click(screen.getByRole('button', { name: '展开 乙项目' }));
 
     expect(screen.getByText('已参与项目，但尚未分配该项目下的任务。')).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: '原型设计' })).toHaveAttribute(
-      'href',
-      '/tasks/task-2',
-    );
+    expect(screen.getByRole('link', { name: '原型设计' })).toHaveAttribute('href', '/tasks/task-2');
     expect(screen.getByText('高')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: '收起 甲项目' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: '收起 乙项目' })).toBeInTheDocument();

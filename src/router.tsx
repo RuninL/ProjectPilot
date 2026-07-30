@@ -12,6 +12,7 @@ import { ProjectListPage } from '@/features/projects/pages/ProjectListPage';
 import { RisksPage } from '@/features/risks/pages/RisksPage';
 import { SettingsPage } from '@/features/settings/pages/SettingsPage';
 import { MyTasksPage } from '@/features/tasks/pages/MyTasksPage';
+import { TaskDetailPage } from '@/features/tasks/pages/TaskDetailPage';
 
 /** Fixed route stack. Hash routing avoids custom-protocol deep-link issues in Tauri. */
 export const router = createHashRouter([
@@ -26,6 +27,7 @@ export const router = createHashRouter([
       { path: 'projects/:projectId', element: <ProjectDetailPage /> },
       { path: 'risks', element: <RisksPage /> },
       { path: 'tasks', element: <MyTasksPage /> },
+      { path: 'tasks/:taskId', element: <TaskDetailPage /> },
       { path: 'gantt', element: <GanttPage /> },
       { path: 'calendar', element: <CalendarPage /> },
       { path: 'meetings', element: <MeetingsPage /> },

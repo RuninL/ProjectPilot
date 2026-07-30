@@ -72,10 +72,14 @@ function projectRange(
   const messages: string[] = [];
 
   if (project.start_date === null) {
-    messages.push(dates.length > 0 ? '开始日期按任务日期推算' : '缺少开始日期，按可用日期或今天显示');
+    messages.push(
+      dates.length > 0 ? '开始日期按任务日期推算' : '缺少开始日期，按可用日期或今天显示',
+    );
   }
   if (project.target_end_date === null) {
-    messages.push(dates.length > 0 ? '结束日期按任务日期推算' : '缺少结束日期，按可用日期或今天显示');
+    messages.push(
+      dates.length > 0 ? '结束日期按任务日期推算' : '缺少结束日期，按可用日期或今天显示',
+    );
   }
   if (end < start) {
     end = start;
@@ -98,9 +102,7 @@ function includeProject(project: Project, filters: ParallelGanttFilters): boolea
 }
 
 function projectProgress(tasks: readonly ParallelGanttTask[]): number {
-  const counted = tasks.filter(
-    (task) => task.archived_at === null && task.status !== 'cancelled',
-  );
+  const counted = tasks.filter((task) => task.archived_at === null && task.status !== 'cancelled');
   if (counted.length === 0) {
     return 0;
   }
