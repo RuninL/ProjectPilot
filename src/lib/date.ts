@@ -113,6 +113,21 @@ export function startOfWeekStr(date: string): string {
   return format(startOfWeek(toDate(date), { weekStartsOn: 1 }), 'yyyy-MM-dd');
 }
 
+/** Convert JavaScript's Sunday-first weekday index to the app's Monday-first index. */
+export function mondayWeekdayFromJsDay(jsDay: number): number {
+  return (jsDay + 6) % 7;
+}
+
+/** Convert the app's Monday-first weekday index to JavaScript's Sunday-first index. */
+export function jsDayFromMondayWeekday(mondayWeekday: number): number {
+  return (mondayWeekday + 1) % 7;
+}
+
+/** Weekday of a stored date using the recurrence rule convention: Monday = 0 through Sunday = 6. */
+export function mondayWeekdayOf(date: string): number {
+  return mondayWeekdayFromJsDay(toDate(date).getDay());
+}
+
 /** First day of the month containing `date`. */
 export function startOfMonthStr(date: string): string {
   return `${date.slice(0, 7)}-01`;

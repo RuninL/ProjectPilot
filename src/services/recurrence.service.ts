@@ -1,4 +1,4 @@
-import { addDays, inclusiveDays, startOfWeekStr } from '@/lib/date';
+import { addDays, inclusiveDays, mondayWeekdayOf, startOfWeekStr } from '@/lib/date';
 import type { RecurrenceException, RecurrenceRule } from '@/types';
 
 export const MAX_RECURRENCE_OCCURRENCES = 500;
@@ -35,12 +35,12 @@ export function expandRule(
     exceptions.map((exception) => [exception.occurrence_date, exception]),
   );
   const anchorWeek = startOfWeekStr(rule.start_date);
-  const offset = (rule.byweekday - weekday(rule.start_date) + 7) % 7;
+  const offset = (rule.byweekday - mondayWeekdayOf(rule.start_date) + 7) % 7;
   let candidate = addDays(rule.start_date, offset);
   const occurrences: Occurrence[] = [];
 
   while (candidate <= to) {
-    const weeksFromAnchor = inclusiveDays(anchorWeek, startOfWeekStr(candidate)) / 7;
+    const weeksFromAnchor = (inclusiveDays(anchorWeek, startOfWeekStr(candidate)) - 1) / 7;
     if (candidate >= from && weeksFromAnchor % rule.interval === 0) {
       const exception = exceptionsByDate.get(candidate);
       if (exception?.action !== 'skip') {
@@ -56,9 +56,4 @@ export function expandRule(
     candidate = addDays(candidate, 7);
   }
   return { occurrences, truncated: false };
-}
-
-function weekday(date: string): number {
-  const monday = startOfWeekStr(date);
-  return inclusiveDays(monday, date) - 1;
 }

@@ -63,6 +63,26 @@ describe('expandRule', () => {
       { date: '2026-02-02', materialized_id: 't' },
     ]);
   });
+  it('expands Wednesday and Sunday rules using the Monday-first weekday convention', () => {
+    expect(
+      expandRule(
+        rule({ byweekday: 2, start_date: '2026-01-05' }),
+        '2026-01-01',
+        '2026-01-18',
+        '2026-01-18',
+        [],
+      ).occurrences.map((item) => item.date),
+    ).toEqual(['2026-01-07', '2026-01-14']);
+    expect(
+      expandRule(
+        rule({ byweekday: 6, start_date: '2026-01-05' }),
+        '2026-01-01',
+        '2026-01-18',
+        '2026-01-18',
+        [],
+      ).occurrences.map((item) => item.date),
+    ).toEqual(['2026-01-11', '2026-01-18']);
+  });
   it('rejects unbounded rules and caps expansion', () => {
     expect(() => expandRule(rule(), '2026-01-01', '2026-02-01', null, [])).toThrow(
       '周期规则必须设置结束日期',
