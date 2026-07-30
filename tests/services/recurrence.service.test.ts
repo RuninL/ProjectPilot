@@ -5,10 +5,8 @@ import {
   MAX_RECURRENCE_OCCURRENCES,
 } from '@/services/recurrence.service';
 import type { RecurrenceRuleInput } from '@/services/schemas';
-import { createMeetingRepository } from '@/repositories/meeting.repo';
 import { createProjectRepository } from '@/repositories/project.repo';
 import { createRecurrenceRepository } from '@/repositories/recurrence.repo';
-import { createTaskRepository } from '@/repositories/task.repo';
 import type { RecurrenceRule } from '@/types';
 import { makeProject } from '../helpers/fixtures';
 import { createTestDb, type TestDb } from '../helpers/testDb';
@@ -54,9 +52,6 @@ describe('expandRule', () => {
     return createRecurrenceService({
       recurrence: createRecurrenceRepository(db.executor),
       projects: createProjectRepository(db.executor),
-      tasks: createTaskRepository(db.executor),
-      meetings: createMeetingRepository(db.executor),
-      runBatch: (statements) => Promise.resolve(requireDb().runBatch(statements)),
     });
   }
 

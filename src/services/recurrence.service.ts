@@ -5,10 +5,7 @@ import { newId } from '@/lib/uuid';
 import type { ProjectRepository, RecurrenceRepository } from '@/repositories';
 import { getRepositories } from '@/repositories';
 import type { RecurrenceException, RecurrenceRule } from '@/types';
-import {
-  recurrenceRuleInputSchema,
-  type RecurrenceRuleInput,
-} from './schemas';
+import { recurrenceRuleInputSchema, type RecurrenceRuleInput } from './schemas';
 
 export const MAX_RECURRENCE_OCCURRENCES = 500;
 
@@ -41,7 +38,9 @@ export function expandRule(
   const to = effectiveEnd < windowEnd ? effectiveEnd : windowEnd;
   if (from > to) return { occurrences: [], truncated: false };
 
-  const exceptionsByDate = new Map(exceptions.map((exception) => [exception.occurrence_date, exception]));
+  const exceptionsByDate = new Map(
+    exceptions.map((exception) => [exception.occurrence_date, exception]),
+  );
   const anchorWeek = startOfWeekStr(rule.start_date);
   const offset = (rule.byweekday - mondayWeekdayOf(rule.start_date) + 7) % 7;
   let candidate = addDays(rule.start_date, offset);
@@ -54,7 +53,12 @@ export function expandRule(
       const exception = exceptionsByDate.get(candidate);
       if (exception?.action !== 'skip' && exception?.action !== 'materialized') {
         const date = exception?.action === 'rescheduled' ? exception.replacement_date : candidate;
-        if (date !== null && date !== undefined && date >= windowStart && date <= windowEnd && !displayedDates.has(date)) {
+        if (
+          date !== null &&
+          date >= windowStart &&
+          date <= windowEnd &&
+          !displayedDates.has(date)
+        ) {
           displayedDates.add(date);
           occurrences.push({ date, occurrenceDate: candidate });
         }

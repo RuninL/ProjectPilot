@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
@@ -7,6 +7,7 @@ import { monthOf } from '@/features/calendar/calendarModel';
 import { todayHK } from '@/lib/date';
 import { setDbForTesting, type SqlExecutor } from '@/lib/db';
 import { getRepositories } from '@/repositories';
+import { getRecurrenceService } from '@/services/recurrence.service';
 import { useCalendarStore } from '@/stores/useCalendarStore';
 import { makeMeeting, makeMilestone, makeProject, makeTask } from '../helpers/fixtures';
 import { createTestDb, type TestDb } from '../helpers/testDb';
@@ -204,13 +205,48 @@ describe('CalendarPage', () => {
     });
   });
 
-  it('is read-only: the month view offers no way to reschedule', async () => {
+  it('does not offer drag-and-drop scheduling in the month view', async () => {
     useRealDb();
 
     renderPage('2026-07');
 
     expect(
-      await screen.findByText('只读视图：显示任务、会议与里程碑，不能在此拖动或改期。'),
+      await screen.findByText('显示任务、会议与里程碑，不能拖动排期；周期会议可按次调整。'),
     ).toBeInTheDocument();
+  });
+
+  it('changes or removes only the selected recurring meeting occurrence', async () => {
+    const user = userEvent.setup();
+    useRealDb();
+    const service = await getRecurrenceService();
+    const rule = await service.createRule({
+      project_id: null,
+      kind: 'meeting',
+      title: '周会',
+      byweekday: 2,
+      interval: 1,
+      start_date: '2026-07-01',
+      end_date: '2026-07-31',
+      time_of_day: null,
+      duration_minutes: null,
+      default_priority: null,
+      note: '',
+      is_active: 1,
+    });
+
+    renderPage('2026-07');
+    await user.click((await screen.findAllByRole('button', { name: /周会/ }))[0] as HTMLElement);
+    expect(await screen.findByText('周期会议操作')).toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText('仅修改本次的新日期'), {
+      target: { value: '2026-07-02' },
+    });
+    await user.click(screen.getByRole('button', { name: '仅修改本次' }));
+
+    await waitFor(async () => {
+      expect(await service.listExceptions(rule.id)).toMatchObject([
+        { occurrence_date: '2026-07-01', action: 'rescheduled', replacement_date: '2026-07-02' },
+      ]);
+    });
+    expect(await getRepositories().then((repos) => repos.meetings.findAll())).toHaveLength(0);
   });
 });

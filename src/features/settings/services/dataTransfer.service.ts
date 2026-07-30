@@ -414,7 +414,11 @@ function validateSnapshot(snapshot: DatabaseSnapshot): void {
         throw validationError(`周期例外 ${exception.id} 缺少旧版关联记录 ID`);
       }
       if (rule.kind === 'task') {
-        assertReference(exception.materialized_id, taskIds, `周期例外 ${exception.id} 的旧版关联任务`);
+        assertReference(
+          exception.materialized_id,
+          taskIds,
+          `周期例外 ${exception.id} 的旧版关联任务`,
+        );
       } else {
         assertReference(
           exception.materialized_id,

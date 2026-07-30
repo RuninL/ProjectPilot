@@ -206,14 +206,20 @@ describe('MeetingsPage', () => {
     expect(first).toMatchObject({ kind: 'meeting', project_id: 'p1', title: '项目周会' });
     if (first === undefined) throw new Error('周期规则应已创建');
 
-    await user.click(screen.getByRole('button', { name: '编辑规则' }));
+    await user.click(screen.getByRole('button', { name: '修改整个系列' }));
     expect(screen.getByLabelText('会议主题')).toHaveValue('项目周会');
     await user.clear(screen.getByLabelText('会议主题'));
     await user.type(screen.getByLabelText('会议主题'), '项目例会');
     await user.click(screen.getByRole('button', { name: '保存规则' }));
+    expect(
+      await screen.findByText(
+        '确定修改整个周期会议「项目周会」吗？新规则会立即重新展开；为避免旧日期被错误套用，历史单次调整将被清除。',
+      ),
+    ).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: '修改整个系列' }));
     expect(await screen.findByText(/项目例会 \[周期会议\]/)).toBeInTheDocument();
 
-    await user.click(screen.getByRole('button', { name: '删除规则' }));
+    await user.click(screen.getByRole('button', { name: '删除整个系列' }));
     expect(await screen.findByText(/删除整个周期会议/)).toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: '删除整个系列' }));
     await waitFor(async () => {

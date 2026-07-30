@@ -9,6 +9,7 @@ import {
   Dialog,
   DialogContent,
   DialogDescription,
+  DialogFooter,
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
@@ -145,7 +146,7 @@ export function CalendarPage() {
         <div>
           <h1 className="text-2xl font-semibold">日历</h1>
           <p className="mt-1 text-sm text-muted-foreground">
-            只读视图：显示任务、会议与里程碑，不能在此拖动或改期。
+            显示任务、会议与里程碑，不能拖动排期；周期会议可按次调整。
           </p>
         </div>
         <div className="flex items-center gap-2">
@@ -340,7 +341,9 @@ export function CalendarPage() {
                 }}
               />
             </label>
-            {occurrenceError !== null && <p className="text-sm text-destructive">{occurrenceError}</p>}
+            {occurrenceError !== null && (
+              <p className="text-sm text-destructive">{occurrenceError}</p>
+            )}
           </div>
           <DialogFooter>
             <Button
@@ -351,10 +354,18 @@ export function CalendarPage() {
                 if (target === null || target === undefined) return;
                 setOccurrenceBusy(true);
                 void rescheduleOccurrence(target.ruleId, target.occurrenceDate, replacementDate)
-                  .then(() => load(month))
-                  .then(() => setOccurrence(null))
-                  .catch((caught: unknown) => setOccurrenceError(toAppError(caught).message))
-                  .finally(() => setOccurrenceBusy(false));
+                  .then(() => {
+                    return load(month);
+                  })
+                  .then(() => {
+                    setOccurrence(null);
+                  })
+                  .catch((caught: unknown) => {
+                    setOccurrenceError(toAppError(caught).message);
+                  })
+                  .finally(() => {
+                    setOccurrenceBusy(false);
+                  });
               }}
             >
               仅修改本次
@@ -367,10 +378,18 @@ export function CalendarPage() {
                 if (target === null || target === undefined) return;
                 setOccurrenceBusy(true);
                 void skipOccurrence(target.ruleId, target.occurrenceDate)
-                  .then(() => load(month))
-                  .then(() => setOccurrence(null))
-                  .catch((caught: unknown) => setOccurrenceError(toAppError(caught).message))
-                  .finally(() => setOccurrenceBusy(false));
+                  .then(() => {
+                    return load(month);
+                  })
+                  .then(() => {
+                    setOccurrence(null);
+                  })
+                  .catch((caught: unknown) => {
+                    setOccurrenceError(toAppError(caught).message);
+                  })
+                  .finally(() => {
+                    setOccurrenceBusy(false);
+                  });
               }}
             >
               仅删除本次
