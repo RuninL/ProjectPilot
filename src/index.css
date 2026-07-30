@@ -24,6 +24,8 @@
     --radius: 0.5rem;
     /* Uniform accent for section headings (e.g. 项目健康度), distinct from body text. */
     --heading: 262 83% 58%;
+    --recurrence: 217 91% 45%;
+    --recurrence-background: 210 100% 97%;
   }
 
   .dark {
@@ -45,6 +47,8 @@
     --input: 217.2 32.6% 17.5%;
     --ring: 224.3 76.3% 48%;
     --heading: 263 90% 76%;
+    --recurrence: 213 94% 74%;
+    --recurrence-background: 217 33% 18%;
   }
 
   /* 暖橙主题：淡橙色与白色，浅色基底。 */
@@ -67,6 +71,8 @@
     --input: 30 60% 88%;
     --ring: 24 94% 50%;
     --heading: 18 85% 42%;
+    --recurrence: 217 91% 45%;
+    --recurrence-background: 210 100% 97%;
   }
 
   /* 彩色主题：深底高饱和多彩配色（类似 VS Code 的彩色主题）。 */
@@ -89,6 +95,8 @@
     --input: 249 26% 26%;
     --ring: 288 88% 66%;
     --heading: 172 85% 55%;
+    --recurrence: 190 95% 68%;
+    --recurrence-background: 200 85% 18%;
   }
 }
 

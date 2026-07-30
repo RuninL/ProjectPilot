@@ -8,6 +8,7 @@ import { LoadingState } from '@/components/common/LoadingState';
 import { SampleBadge } from '@/components/common/SampleBadge';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { PageHeader } from '@/components/common/PageHeader';
 import {
   Dialog,
   DialogContent,
@@ -155,22 +156,20 @@ export function MeetingsPage() {
 
   return (
     <div className="p-6">
-      <header className="mb-6 flex items-start justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-semibold">会议</h1>
-          <p className="mt-1 text-sm text-muted-foreground">
-            记录会议纪要与决议，并把行动项转成任务。
-          </p>
-        </div>
-        <Button
-          onClick={() => {
-            setCreateChoiceOpen(true);
-          }}
-        >
-          <Plus className="h-4 w-4" aria-hidden />
-          创建会议
-        </Button>
-      </header>
+      <PageHeader
+        title="会议"
+        description="记录会议纪要与决议，并把行动项转成任务。"
+        action={
+          <Button
+            onClick={() => {
+              setCreateChoiceOpen(true);
+            }}
+          >
+            <Plus className="h-4 w-4" aria-hidden />
+            创建会议
+          </Button>
+        }
+      />
 
       {actionError !== null && <p className="mb-4 text-sm text-destructive">{actionError}</p>}
       {recurrenceError !== null && (
@@ -194,10 +193,10 @@ export function MeetingsPage() {
               .map((rule) => (
                 <li
                   key={rule.id}
-                  className="flex flex-wrap items-center justify-between gap-3 rounded bg-sky-50 px-3 py-3"
+                  className="flex flex-wrap items-center justify-between gap-3 rounded bg-recurrence-background px-3 py-3"
                 >
                   <div>
-                    <p className="font-medium">{`${rule.title} [周期会议]`}</p>
+                    <p className="font-medium text-recurrence">{`${rule.title} [周期会议]`}</p>
                     <p className="text-sm text-muted-foreground">
                       {recurrenceSummary(rule)} · 下次 {nextOccurrence(rule)} ·{' '}
                       {rule.project_id === null ? '独立会议' : projectName(rule.project_id)}

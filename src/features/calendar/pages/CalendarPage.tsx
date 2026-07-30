@@ -1,6 +1,6 @@
 import { CalendarDays, ChevronLeft, ChevronRight, CheckSquare, Flag, Users } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { ErrorState } from '@/components/common/ErrorState';
 import { LoadingState } from '@/components/common/LoadingState';
@@ -96,10 +96,16 @@ export function CalendarPage() {
   const [attentionDate, setAttentionDate] = useState<string | null>(null);
   const [attentionTasks, setAttentionTasks] = useState<readonly CalendarAttentionTask[]>([]);
   const [attentionLoading, setAttentionLoading] = useState(false);
+  const [contextMenu, setContextMenu] = useState<{
+    date: string;
+    left: number;
+    top: number;
+  } | null>(null);
   const [occurrence, setOccurrence] = useState<CalendarEntry | null>(null);
   const [replacementDate, setReplacementDate] = useState('');
   const [occurrenceBusy, setOccurrenceBusy] = useState(false);
   const [occurrenceError, setOccurrenceError] = useState<string | null>(null);
+  const contextMenuRef = useRef<HTMLDivElement>(null);
   const recurrenceRuleId = occurrence?.recurrence?.ruleId ?? null;
 
   useEffect(() => {
@@ -117,6 +123,32 @@ export function CalendarPage() {
         setAttentionLoading(false);
       });
   };
+
+  const openContextMenu = useCallback((date: string, clientX: number, clientY: number): void => {
+    const width = 168;
+    const height = 44;
+    setContextMenu({
+      date,
+      left: Math.max(8, Math.min(clientX, window.innerWidth - width - 8)),
+      top: Math.max(8, Math.min(clientY, window.innerHeight - height - 8)),
+    });
+  }, []);
+
+  useEffect(() => {
+    if (contextMenu === null) return;
+    const closeOnOutsidePointer = (event: PointerEvent): void => {
+      if (!contextMenuRef.current?.contains(event.target as Node)) setContextMenu(null);
+    };
+    const closeOnEscape = (event: KeyboardEvent): void => {
+      if (event.key === 'Escape') setContextMenu(null);
+    };
+    document.addEventListener('pointerdown', closeOnOutsidePointer);
+    document.addEventListener('keydown', closeOnEscape);
+    return () => {
+      document.removeEventListener('pointerdown', closeOnOutsidePointer);
+      document.removeEventListener('keydown', closeOnEscape);
+    };
+  }, [contextMenu]);
 
   if (loading && data === null) {
     return (
@@ -148,6 +180,7 @@ export function CalendarPage() {
           <p className="mt-1 text-sm text-muted-foreground">
             显示任务、会议与里程碑，不能拖动排期；周期会议可按次调整。
           </p>
+          <p className="mt-1 text-xs text-muted-foreground">右键日期查看当日任务</p>
         </div>
         <div className="flex items-center gap-2">
           <Button
@@ -216,10 +249,27 @@ export function CalendarPage() {
               return (
                 <div
                   key={day.date}
+                  role="gridcell"
+                  tabIndex={0}
+                  aria-label={`${day.date} 的日期菜单`}
                   className={cn(
-                    'min-h-24 border-r p-1 last:border-r-0',
+                    'min-h-24 border-r p-1 outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring last:border-r-0',
                     day.inMonth ? '' : 'bg-muted/30 text-muted-foreground',
                   )}
+                  onContextMenu={(event) => {
+                    if ((event.target as HTMLElement).closest('[data-calendar-entry]') !== null) {
+                      return;
+                    }
+                    event.preventDefault();
+                    openContextMenu(day.date, event.clientX, event.clientY);
+                  }}
+                  onKeyDown={(event) => {
+                    if (event.key === 'ContextMenu' || (event.key === 'F10' && event.shiftKey)) {
+                      event.preventDefault();
+                      const bounds = event.currentTarget.getBoundingClientRect();
+                      openContextMenu(day.date, bounds.left + 12, bounds.top + 24);
+                    }
+                  }}
                 >
                   <div className="flex items-center justify-between px-1">
                     <span className={cn('text-xs', day.isToday && 'font-semibold text-primary')}>
@@ -231,7 +281,7 @@ export function CalendarPage() {
                       </span>
                     )}
                   </div>
-                  <div className="mt-1 space-y-0.5">
+                  <div className="mt-1 space-y-0.5" data-calendar-entry>
                     {visible.map((entry) => (
                       <EntryLink
                         key={entry.key}
@@ -266,21 +316,33 @@ export function CalendarPage() {
                       收起
                     </button>
                   )}
-                  <button
-                    type="button"
-                    className="mt-1 w-full rounded px-1 text-left text-xs text-primary hover:bg-accent"
-                    onClick={() => {
-                      openAttention(day.date);
-                    }}
-                  >
-                    查看当日任务
-                  </button>
                 </div>
               );
             })}
           </div>
         ))}
       </div>
+      {contextMenu !== null && (
+        <div
+          ref={contextMenuRef}
+          role="menu"
+          aria-label={`${contextMenu.date} 的日期菜单`}
+          className="fixed z-50 min-w-40 rounded-md border bg-card p-1 text-card-foreground shadow-md"
+          style={{ left: contextMenu.left, top: contextMenu.top }}
+        >
+          <button
+            type="button"
+            role="menuitem"
+            className="flex w-full rounded-sm px-2 py-1.5 text-left text-sm outline-none hover:bg-accent focus:bg-accent"
+            onClick={() => {
+              openAttention(contextMenu.date);
+              setContextMenu(null);
+            }}
+          >
+            查看当日任务
+          </button>
+        </div>
+      )}
       <Dialog
         open={attentionDate !== null}
         onOpenChange={(open) => {

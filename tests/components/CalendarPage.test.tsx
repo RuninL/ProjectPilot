@@ -215,6 +215,50 @@ describe('CalendarPage', () => {
     ).toBeInTheDocument();
   });
 
+  it('opens the daily task dialog from a date-cell context menu and never renders daily task buttons', async () => {
+    const user = userEvent.setup();
+    useRealDb();
+    const repos = await getRepositories();
+    await repos.projects.insert(makeProject({ id: 'p1' }));
+    await repos.tasks.insert(
+      makeTask({ id: 'today-task', project_id: 'p1', title: '当日跟进', due_date: '2026-07-20' }),
+    );
+
+    renderPage('2026-07');
+    const day = await screen.findByRole('gridcell', { name: '2026-07-20 的日期菜单' });
+    expect(screen.queryByRole('button', { name: '查看当日任务' })).toBeNull();
+
+    fireEvent.contextMenu(day, { clientX: 30, clientY: 40 });
+    await user.click(await screen.findByRole('menuitem', { name: '查看当日任务' }));
+
+    expect(await screen.findByRole('dialog', { name: '当日任务' })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: '当日跟进' })).toBeInTheDocument();
+  });
+
+  it('opens and closes a date menu with keyboard and ignores event context clicks', async () => {
+    useRealDb();
+    const repos = await getRepositories();
+    await repos.projects.insert(makeProject({ id: 'p1' }));
+    await repos.meetings.insert(
+      makeMeeting({ id: 'm1', project_id: 'p1', topic: '日期会议', date: '2026-07-20' }),
+    );
+
+    renderPage('2026-07');
+    const day = await screen.findByRole('gridcell', { name: '2026-07-20 的日期菜单' });
+    fireEvent.keyDown(day, { key: 'F10', shiftKey: true });
+    expect(await screen.findByRole('menuitem', { name: '查看当日任务' })).toBeInTheDocument();
+    fireEvent.keyDown(document, { key: 'Escape' });
+    await waitFor(() => {
+      expect(screen.queryByRole('menuitem', { name: '查看当日任务' })).toBeNull();
+    });
+
+    fireEvent.contextMenu(screen.getByRole('link', { name: /日期会议/ }), {
+      clientX: 30,
+      clientY: 40,
+    });
+    expect(screen.queryByRole('menuitem', { name: '查看当日任务' })).toBeNull();
+  });
+
   it('changes or removes only the selected recurring meeting occurrence', async () => {
     const user = userEvent.setup();
     useRealDb();
