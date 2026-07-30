@@ -16,7 +16,7 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { toAppError } from '@/lib/errors';
 import { projectLinkInputSchema, type ProjectLinkInput } from '@/services/schemas';
-import type { LinkType, ProjectLink } from '@/types';
+import type { LinkType, Project, ProjectLink } from '@/types';
 
 interface ProjectLinkFormValues {
   label: string;
@@ -37,11 +37,22 @@ function toFormValues(link: ProjectLink | null): ProjectLinkFormValues {
 interface ProjectLinkFormProps {
   open: boolean;
   link: ProjectLink | null;
+  projects?: readonly Project[];
+  projectId?: string;
+  onProjectIdChange?: (projectId: string) => void;
   onSubmit: (input: ProjectLinkInput) => Promise<void>;
   onClose: () => void;
 }
 
-export function ProjectLinkForm({ open, link, onSubmit, onClose }: ProjectLinkFormProps) {
+export function ProjectLinkForm({
+  open,
+  link,
+  projects,
+  projectId,
+  onProjectIdChange,
+  onSubmit,
+  onClose,
+}: ProjectLinkFormProps) {
   const {
     register,
     handleSubmit,
@@ -110,6 +121,23 @@ export function ProjectLinkForm({ open, link, onSubmit, onClose }: ProjectLinkFo
           }}
           noValidate
         >
+          {projects !== undefined && link === null && (
+            <div className="grid gap-1.5">
+              <Label htmlFor="project-link-project">所属项目</Label>
+              <select
+                id="project-link-project"
+                className="h-10 rounded-md border border-input bg-background px-3 text-sm"
+                value={projectId}
+                onChange={(event) => onProjectIdChange?.(event.target.value)}
+              >
+                {projects.map((project) => (
+                  <option key={project.id} value={project.id}>
+                    {project.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
           <div className="grid gap-1.5">
             <Label htmlFor="project-link-label">资料名称</Label>
             <Input id="project-link-label" placeholder="例如：需求文档" {...register('label')} />

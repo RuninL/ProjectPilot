@@ -163,6 +163,11 @@ export const projectLinkRowSchema = z.object({
   ...auditColumns,
 });
 
+export const projectLinkWithProjectRowSchema = projectLinkRowSchema.extend({
+  project_name: z.string(),
+  project_color: z.string(),
+});
+
 export const appSettingRowSchema = z.object({
   key: z.string(),
   value: z.string(),

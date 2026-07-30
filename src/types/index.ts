@@ -13,6 +13,7 @@ import type {
   personTaskParticipationRowSchema,
   personWithCountsRowSchema,
   projectLinkRowSchema,
+  projectLinkWithProjectRowSchema,
   projectParticipantRowSchema,
   projectParticipantPersonRowSchema,
   projectRowSchema,
@@ -42,6 +43,7 @@ export type Milestone = z.infer<typeof milestoneRowSchema>;
 export type Meeting = z.infer<typeof meetingRowSchema>;
 export type ActionItem = z.infer<typeof actionItemRowSchema>;
 export type ProjectLink = z.infer<typeof projectLinkRowSchema>;
+export type ProjectLinkWithProject = z.infer<typeof projectLinkWithProjectRowSchema>;
 export type AppSetting = z.infer<typeof appSettingRowSchema>;
 export type Risk = z.infer<typeof riskRowSchema>;
 export type RiskWithProject = z.infer<typeof riskWithProjectRowSchema>;
