@@ -385,6 +385,22 @@ describe('deriveBlockedRisks', () => {
     expect(deriveBlockedRisks(graph).map((risk) => risk.taskId)).toEqual(['open']);
   });
 
+  it('treats postponed downstream tasks as unfinished without making them blocked sources', () => {
+    const downstream = buildDependencyGraph(
+      [task('blocked', { status: 'blocked' }), task('postponed', { status: 'postponed' })],
+      [edge('blocked', 'postponed')],
+    );
+    const source = buildDependencyGraph(
+      [task('postponed', { status: 'postponed' }), task('open')],
+      [edge('postponed', 'open')],
+    );
+
+    expect(deriveBlockedRisks(downstream)).toEqual([
+      { taskId: 'postponed', blockedBy: ['blocked'] },
+    ]);
+    expect(deriveBlockedRisks(source)).toEqual([]);
+  });
+
   it('still reaches past a done intermediate task', () => {
     const graph = buildDependencyGraph(
       [task('a', { status: 'blocked' }), task('mid', { status: 'done' }), task('tail')],

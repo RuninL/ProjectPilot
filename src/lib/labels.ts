@@ -17,6 +17,7 @@ type BadgeVariant = NonNullable<BadgeProps['variant']>;
 export const PROJECT_STATUS_LABELS: Record<ProjectStatus, string> = {
   active: '进行中',
   on_hold: '已暂停',
+  postponed: '已推迟',
   completed: '已完成',
   archived: '已归档',
 };
@@ -25,6 +26,7 @@ export const TASK_STATUS_LABELS: Record<TaskStatus, string> = {
   todo: '待办',
   in_progress: '进行中',
   blocked: '受阻',
+  postponed: '已推迟',
   done: '已完成',
   cancelled: '已取消',
 };
@@ -40,6 +42,7 @@ export const TASK_STATUS_VARIANTS: Record<TaskStatus, BadgeVariant> = {
   todo: 'secondary',
   in_progress: 'default',
   blocked: 'destructive',
+  postponed: 'secondary',
   done: 'outline',
   cancelled: 'outline',
 };

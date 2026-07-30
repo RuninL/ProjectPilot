@@ -141,6 +141,23 @@ describe('task hierarchy rules', () => {
 });
 
 describe('updateTask status transitions', () => {
+  it('allows postponed to and from every task status without transition validation', async () => {
+    const statuses = ['todo', 'in_progress', 'blocked', 'done', 'cancelled'] as const;
+    for (const status of statuses) {
+      const task = await service.createTask(input({ title: status, status }));
+      const postponed = await service.updateTask(
+        task.id,
+        input({ title: status, status: 'postponed', progress: task.progress }),
+      );
+      expect(postponed.status).toBe('postponed');
+      const restored = await service.updateTask(
+        task.id,
+        input({ title: status, status, progress: postponed.progress }),
+      );
+      expect(restored.status).toBe(status);
+    }
+  });
+
   it('forces progress to 100 and records completed_at on entering done', async () => {
     const task = await service.createTask(input({ progress: 30 }));
 
@@ -233,6 +250,17 @@ describe('deleteTask', () => {
 });
 
 describe('bulkUpdateTasks', () => {
+  it('allows bulk postponing without transition validation', async () => {
+    const todo = await service.createTask(input({ title: '待办' }));
+    const done = await service.createTask(input({ title: '完成', status: 'done' }));
+
+    await service.bulkUpdateTasks([todo.id, done.id], { status: 'postponed' });
+
+    const repo = createTaskRepository(db.executor);
+    expect((await repo.findById(todo.id))?.status).toBe('postponed');
+    expect((await repo.findById(done.id))?.status).toBe('postponed');
+  });
+
   it('applies one patch to every selected task', async () => {
     const a = await service.createTask(input({ title: 'A' }));
     const b = await service.createTask(input({ title: 'B' }));

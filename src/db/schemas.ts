@@ -24,8 +24,21 @@ const auditColumns = {
   updated_at: timestamp,
 };
 
-export const projectStatusEnum = z.enum(['active', 'on_hold', 'completed', 'archived']);
-export const taskStatusEnum = z.enum(['todo', 'in_progress', 'blocked', 'done', 'cancelled']);
+export const projectStatusEnum = z.enum([
+  'active',
+  'on_hold',
+  'postponed',
+  'completed',
+  'archived',
+]);
+export const taskStatusEnum = z.enum([
+  'todo',
+  'in_progress',
+  'blocked',
+  'postponed',
+  'done',
+  'cancelled',
+]);
 export const taskPriorityEnum = z.enum(['low', 'medium', 'high', 'urgent']);
 export const milestoneStatusEnum = z.enum(['upcoming', 'achieved', 'missed', 'cancelled']);
 export const actionItemStatusEnum = z.enum(['open', 'in_progress', 'done', 'cancelled']);

@@ -22,6 +22,7 @@ const STATUS_FILL: Record<TaskStatus, string> = {
   todo: '#94A3B8',
   in_progress: '#2563EB',
   blocked: '#DC2626',
+  postponed: '#D97706',
   done: '#16A34A',
   cancelled: '#CBD5E1',
 };

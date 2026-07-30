@@ -89,6 +89,22 @@ describe('archive and restore', () => {
     expect(archived.status).toBe('archived');
   });
 
+  describe('postponed status', () => {
+    it('allows postponed to and from every editable project status', async () => {
+      const statuses = ['active', 'on_hold', 'completed'] as const;
+      for (const status of statuses) {
+        const project = await service.createProject(input({ name: status, status }));
+        const postponed = await service.updateProject(
+          project.id,
+          input({ name: status, status: 'postponed' }),
+        );
+        expect(postponed.status).toBe('postponed');
+        const restored = await service.updateProject(project.id, input({ name: status, status }));
+        expect(restored.status).toBe(status);
+      }
+    });
+  });
+
   it('restores both fields together', async () => {
     const project = await service.createProject(input());
     await service.archiveProject(project.id);

@@ -81,6 +81,20 @@ describe('dashboard aggregation', () => {
     await repos.tasks.insert(
       makeTask({ id: 'cancelled', due_date: today, status: 'cancelled', progress: 0 }),
     );
+    await repos.tasks.insert(
+      makeTask({ id: 'postponed-overdue', due_date: '2028-02-27', status: 'postponed' }),
+    );
+    await repos.tasks.insert(
+      makeTask({ id: 'postponed-today', due_date: today, status: 'postponed', progress: 10 }),
+    );
+    await repos.tasks.insert(
+      makeTask({
+        id: 'postponed-upcoming',
+        due_date: addDays(today, 3),
+        status: 'postponed',
+        progress: 10,
+      }),
+    );
     await repos.tasks.insert(makeTask({ id: 'blocked', status: 'blocked' }));
     await repos.tasks.insert(makeTask({ id: 'downstream', title: '受阻后续任务' }));
     await repos.tasks.insert(makeTask({ id: 'done-downstream', status: 'done', progress: 100 }));
@@ -181,6 +195,15 @@ describe('dashboard aggregation', () => {
       'today-low',
       'boundary-low',
     ]);
+    const reminderIds = [
+      ...dashboard.todayTasks,
+      ...dashboard.upcomingTasks,
+      ...dashboard.overdueTasks,
+      ...dashboard.lowProgressRisks,
+    ].map((task) => task.id);
+    expect(reminderIds).not.toContain('postponed-overdue');
+    expect(reminderIds).not.toContain('postponed-today');
+    expect(reminderIds).not.toContain('postponed-upcoming');
     expect(dashboard.blockedPropagationRisks.map((risk) => risk.task.id)).toEqual(['downstream']);
     expect(dashboard.milestonePredecessorRisks).toHaveLength(1);
     expect(dashboard.milestonePredecessorRisks[0]).toMatchObject({
