@@ -121,7 +121,9 @@ export function FilesPage() {
           <Input
             id="files-search"
             value={search}
-            onChange={(event) => setSearch(event.target.value)}
+            onChange={(event) => {
+              setSearch(event.target.value);
+            }}
           />
         </div>
         <div className="grid gap-1">
@@ -130,7 +132,9 @@ export function FilesPage() {
             id="files-project"
             className="h-10 rounded-md border border-input bg-background px-3 text-sm"
             value={projectId}
-            onChange={(event) => setProjectId(event.target.value)}
+            onChange={(event) => {
+              setProjectId(event.target.value);
+            }}
           >
             <option value="">全部项目</option>
             {projects.map((project) => (
@@ -146,7 +150,9 @@ export function FilesPage() {
             id="files-type"
             className="h-10 rounded-md border border-input bg-background px-3 text-sm"
             value={linkType}
-            onChange={(event) => setLinkType(event.target.value as LinkType | '')}
+            onChange={(event) => {
+              setLinkType(event.target.value as LinkType | '');
+            }}
           >
             <option value="">全部类型</option>
             <option value="url">网页链接</option>
@@ -232,7 +238,9 @@ export function FilesPage() {
                     size="sm"
                     variant="ghost"
                     aria-label={`删除：${link.label}`}
-                    onClick={() => setPendingDelete(link)}
+                    onClick={() => {
+                      setPendingDelete(link);
+                    }}
                   >
                     <Trash2 className="h-4 w-4" aria-hidden />
                   </Button>
@@ -263,7 +271,9 @@ export function FilesPage() {
         }
         confirmLabel="删除"
         destructive
-        onCancel={() => setPendingDelete(null)}
+        onCancel={() => {
+          setPendingDelete(null);
+        }}
         onConfirm={() => {
           const target = pendingDelete;
           if (target === null) return;
@@ -273,7 +283,9 @@ export function FilesPage() {
               setPendingDelete(null);
               await load();
             })
-            .catch((caught: unknown) => setError(toAppError(caught).message));
+            .catch((caught: unknown) => {
+              setError(toAppError(caught).message);
+            });
         }}
       />
     </div>

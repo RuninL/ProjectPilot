@@ -15,7 +15,7 @@ describe('AppFooter', () => {
     render(<AppFooter />);
 
     expect(screen.getByText(/Made by Racliu/)).toBeInTheDocument();
-    expect(screen.getByText(/v1\.0\.0/)).toBeInTheDocument();
+    expect(screen.getByText(/v1\.1\.0/)).toBeInTheDocument();
   });
 
   it('点击邮箱后安全打开 mailto', async () => {

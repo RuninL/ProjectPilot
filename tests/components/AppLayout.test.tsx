@@ -1,7 +1,8 @@
 import { render, screen } from '@testing-library/react';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { describe, expect, it } from 'vitest';
-import { AppLayout, NAV_ITEMS } from '@/components/AppLayout';
+import { AppLayout } from '@/components/AppLayout';
+import { NAV_ITEMS } from '@/components/navigation';
 import { APP_ROUTES } from '@/router';
 
 const EXPECTED_NAVIGATION = [

@@ -90,7 +90,7 @@ describe('SettingsPage 数据管理', () => {
 
     expect(screen.getByRole('heading', { name: '关于' })).toBeInTheDocument();
     expect(screen.getByText('ProjectPilot')).toBeInTheDocument();
-    expect(screen.getByText('v1.0.0')).toBeInTheDocument();
+    expect(screen.getByText('v1.1.0')).toBeInTheDocument();
     expect(screen.getByText('Racliu')).toBeInTheDocument();
     expect(
       screen.getByText(/完全离线运行，所有数据仅存储在本机 SQLite 数据库/),

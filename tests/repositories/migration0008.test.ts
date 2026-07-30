@@ -22,7 +22,7 @@ beforeEach(() => {
 });
 
 afterEach(() => {
-  db?.close();
+  db.close();
 });
 
 describe('migration 0008 schema', () => {

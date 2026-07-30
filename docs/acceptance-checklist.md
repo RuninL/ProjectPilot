@@ -94,6 +94,8 @@
       project/task/dashboard/progress/date/dependency 测试覆盖；项目/任务 service 未新增状态迁移校验。
 - [x] 并行甘特的状态筛选、跨月跨年、缺日期兜底及项目跳转模型由
       `tests/features/parallelGanttViewModel.test.ts` 覆盖。
+- [x] 30 项目 / 1000 任务并行甘特基准只运行一次并通过 <100ms 阈值；Vitest 记录该基准文件耗时 5ms
+      （`tests/performance/parallelGanttBenchmark.test.ts`）。
 - [x] 人物搜索/CRUD/删除影响确认与项目→任务二级详情、多展开、三种来源和未归属分组由
       `PeoplePage.test.tsx`、`PersonDetailPage.test.tsx` 覆盖。
 - [x] 任务参与不会写项目关系，项目移除不会删任务分配，非项目成员提示与显式加入由
@@ -116,7 +118,11 @@
 - [ ] 危险操作的代表性确认与取消无副作用已有 `ConfirmDialog.test.tsx`、`BulkEditDialog.test.tsx`、`SettingsPage.dataTransfer.test.tsx` 覆盖，但尚无穷尽审计；阻塞环境：补充矩阵测试；最小操作：逐项执行取消并回读数据库。
 - [ ] 生产 UI 无 mock 数据残留尚无专门静态审计；阻塞环境：补充审计；最小操作：对 `src/` grep mock/fixture/placeholder 并人工确认命中均非生产数据。
 - [ ] 各主要表单已有 Project/Task/Meeting/Risk 的 Zod 测试，但非全部表单的内联错误审计；阻塞环境：补充 RTL；最小操作：逐表单输入非法值并断言内联中文错误。
-- [x] `npm run typecheck`、`npm run lint` 与 `npm run test` 通过（57 files、616 tests）；版本一致性由 `tests/lib/releaseMetadata.test.ts` 覆盖。
+- [x] `npm ci`、format、lint、typecheck、build 与 `git diff --check` 通过；Vitest 共 70 files、670 tests
+      均通过（性能基准仅运行一次，修复后完整复跑其余 68 files、668 tests）；版本一致性由
+      `tests/lib/releaseMetadata.test.ts` 覆盖。
+- [ ] `npm audit --omit=dev` 报告 React Router 6 的 2 个 moderate 公告；自动修复要求强制升级
+      React Router 7，属于破坏性升级，留待独立兼容性工作处理。
 - [ ] 第二实例聚焦由 `src-tauri/src/lib.rs` 静态审计确认，但未在打包程序中运行；阻塞环境：Windows 真机；最小操作：双击启动两次并确认仅一实例且首窗口聚焦。
 - [ ] 1000 任务的纯模型 benchmark 已通过（阈值 <100ms），但 ≤3 秒 Windows 冷启动和真实交互未验；阻塞环境：Windows 真机；最小操作：冷启动计时并执行列表/Gantt/日历操作。
 - [ ] Windows 10/11（含无 WebView2）安装尚未真机验收；阻塞环境：两台目标机器；最小操作：安装、升级、卸载并核对离线 WebView2、SQLite 保留和启动。

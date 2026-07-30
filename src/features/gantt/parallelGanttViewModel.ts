@@ -67,7 +67,7 @@ function projectRange(
   today: string,
 ): { start: string; end: string; fallback: string | null } {
   const dates = tasks.flatMap(taskDates).sort();
-  let start = project.start_date ?? dates[0] ?? project.target_end_date ?? today;
+  const start = project.start_date ?? dates[0] ?? project.target_end_date ?? today;
   let end = project.target_end_date ?? dates.at(-1) ?? project.start_date ?? today;
   const messages: string[] = [];
 

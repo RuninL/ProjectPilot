@@ -78,7 +78,9 @@ describe('FilesPage', () => {
     expect(within(mailRow as HTMLElement).queryByRole('button', { name: '打开' })).toBeNull();
 
     await user.type(screen.getByLabelText('搜索名称或描述'), '产品需求');
-    await waitFor(() => expect(screen.queryByText('本地设计稿')).toBeNull());
+    await waitFor(() => {
+      expect(screen.queryByText('本地设计稿')).toBeNull();
+    });
     expect(screen.getByText('需求文档')).toBeInTheDocument();
 
     await user.clear(screen.getByLabelText('搜索名称或描述'));
@@ -119,6 +121,8 @@ describe('FilesPage', () => {
 
     await user.click(screen.getByRole('button', { name: '删除：会议纪要' }));
     await user.click(screen.getByRole('button', { name: '删除' }));
-    await waitFor(() => expect(screen.queryByText('会议纪要')).toBeNull());
+    await waitFor(() => {
+      expect(screen.queryByText('会议纪要')).toBeNull();
+    });
   });
 });
