@@ -227,6 +227,13 @@ describe('migration 0009', () => {
     expect(() =>
       db
         .prepare(
+          'INSERT INTO tasks (id, project_id, title, priority, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)',
+        )
+        .run('bad-priority', 'p', '坏优先级', 'unknown', NOW, NOW),
+    ).toThrow(/CHECK/);
+    expect(() =>
+      db
+        .prepare(
           'INSERT INTO tasks (id, project_id, title, progress, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)',
         )
         .run('bad-progress', 'p', '坏进度', 101, NOW, NOW),
@@ -241,9 +248,44 @@ describe('migration 0009', () => {
     expect(() =>
       db
         .prepare(
+          'INSERT INTO tasks (id, project_id, title, start_date, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)',
+        )
+        .run('bad-start-date', 'p', '坏开始日期', 'invalid', NOW, NOW),
+    ).toThrow(/CHECK/);
+    expect(() =>
+      db
+        .prepare(
+          'INSERT INTO tasks (id, project_id, title, estimated_hours, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)',
+        )
+        .run('bad-hours', 'p', '坏工时', -1, NOW, NOW),
+    ).toThrow(/CHECK/);
+    expect(() =>
+      db
+        .prepare(
+          'INSERT INTO tasks (id, project_id, title, is_sample, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)',
+        )
+        .run('bad-sample', 'p', '坏示例', 2, NOW, NOW),
+    ).toThrow(/CHECK/);
+    expect(() =>
+      db
+        .prepare(
           'INSERT INTO meetings (id, topic, date, created_at, updated_at) VALUES (?, ?, ?, ?, ?)',
         )
-        .run('bad-meeting', ' ', 'invalid', NOW, NOW),
+        .run('bad-meeting-topic', ' ', '2026-01-01', NOW, NOW),
+    ).toThrow(/CHECK/);
+    expect(() =>
+      db
+        .prepare(
+          'INSERT INTO meetings (id, topic, date, created_at, updated_at) VALUES (?, ?, ?, ?, ?)',
+        )
+        .run('bad-meeting-date', '会议', 'invalid', NOW, NOW),
+    ).toThrow(/CHECK/);
+    expect(() =>
+      db
+        .prepare(
+          'INSERT INTO meetings (id, topic, date, is_sample, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)',
+        )
+        .run('bad-meeting-sample', '会议', '2026-01-01', 2, NOW, NOW),
     ).toThrow(/CHECK/);
     expect(indexNames(db, 'tasks')).toEqual([
       'idx_tasks_archived',
