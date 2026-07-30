@@ -57,9 +57,7 @@ export function createPeopleRepository(db: SqlExecutor) {
       return parseOptional(projectParticipantRowSchema, rows);
     },
 
-    async findProjectParticipantsByPerson(
-      personId: string,
-    ): Promise<PersonProjectParticipation[]> {
+    async findProjectParticipantsByPerson(personId: string): Promise<PersonProjectParticipation[]> {
       const rows = await db.select(
         `SELECT pp.*, p.name AS project_name
            FROM project_participants pp
@@ -75,12 +73,7 @@ export function createPeopleRepository(db: SqlExecutor) {
       await db.execute(
         `INSERT INTO project_participants (project_id, person_id, role, joined_at)
          VALUES (?, ?, ?, ?)`,
-        [
-          participant.project_id,
-          participant.person_id,
-          participant.role,
-          participant.joined_at,
-        ],
+        [participant.project_id, participant.person_id, participant.role, participant.joined_at],
       );
     },
 
@@ -92,10 +85,7 @@ export function createPeopleRepository(db: SqlExecutor) {
       return result.rowsAffected;
     },
 
-    async findTaskParticipant(
-      taskId: string,
-      personId: string,
-    ): Promise<TaskParticipant | null> {
+    async findTaskParticipant(taskId: string, personId: string): Promise<TaskParticipant | null> {
       const rows = await db.select(
         'SELECT * FROM task_participants WHERE task_id = ? AND person_id = ?',
         [taskId, personId],

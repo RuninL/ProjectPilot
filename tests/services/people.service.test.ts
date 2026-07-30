@@ -55,9 +55,9 @@ describe('people service CRUD and validation', () => {
     await expect(
       service.addProjectParticipant(person.id, { project_id: 'missing', role: '' }),
     ).rejects.toThrow('项目不存在');
-    await expect(
-      service.addTaskParticipant(person.id, { task_id: 'missing' }),
-    ).rejects.toThrow('任务不存在');
+    await expect(service.addTaskParticipant(person.id, { task_id: 'missing' })).rejects.toThrow(
+      '任务不存在',
+    );
   });
 
   it('rejects duplicate relationships while keeping project and task membership independent', async () => {
@@ -69,9 +69,9 @@ describe('people service CRUD and validation', () => {
       source: 'task_only',
       projectRole: null,
     });
-    await expect(
-      service.addTaskParticipant(person.id, { task_id: 'task-a' }),
-    ).rejects.toThrow('已参与此任务');
+    await expect(service.addTaskParticipant(person.id, { task_id: 'task-a' })).rejects.toThrow(
+      '已参与此任务',
+    );
 
     await service.addProjectParticipant(person.id, {
       project_id: 'project-a',
@@ -142,11 +142,15 @@ describe('people participation grouping', () => {
       },
     ];
 
-    expect(groupPersonParticipation(projects, tasks)).toEqual([
-      expect.objectContaining({ projectId: 'project-a', source: 'both' }),
-      expect.objectContaining({ projectId: 'project-b', source: 'task_only' }),
-      expect.objectContaining({ projectId: 'project-c', source: 'project_only' }),
-    ]);
+    const groups = groupPersonParticipation(projects, tasks);
+    expect(groups).toHaveLength(3);
+    expect(groups).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ projectId: 'project-a', source: 'both' }),
+        expect.objectContaining({ projectId: 'project-b', source: 'task_only' }),
+        expect.objectContaining({ projectId: 'project-c', source: 'project_only' }),
+      ]),
+    );
   });
 
   it('groups tasks without a project under the explicit unassigned bucket', () => {

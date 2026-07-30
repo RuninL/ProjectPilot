@@ -253,19 +253,6 @@ export const projectLinkInputSchema = z
         path: ['target'],
         message: '请输入包含协议的合法绝对 URL',
       });
-
-export const personInputSchema = z.object({
-      name: z.string().trim().min(1, '姓名不能为空').max(120, '姓名不能超过 120 个字符'),
-});
-
-export const projectParticipantInputSchema = z.object({
-      project_id: z.string().trim().min(1, '必须选择项目'),
-      role: z.string().trim().max(120, '项目角色不能超过 120 个字符').default(''),
-});
-
-export const taskParticipantInputSchema = z.object({
-      task_id: z.string().trim().min(1, '必须选择任务'),
-});
     }
     if (value.link_type === 'file_path' && !isAbsoluteWindowsPath(value.target)) {
       context.addIssue({
@@ -275,6 +262,19 @@ export const taskParticipantInputSchema = z.object({
       });
     }
   });
+
+export const personInputSchema = z.object({
+  name: z.string().trim().min(1, '姓名不能为空').max(120, '姓名不能超过 120 个字符'),
+});
+
+export const projectParticipantInputSchema = z.object({
+  project_id: z.string().trim().min(1, '必须选择项目'),
+  role: z.string().trim().max(120, '项目角色不能超过 120 个字符').default(''),
+});
+
+export const taskParticipantInputSchema = z.object({
+  task_id: z.string().trim().min(1, '必须选择任务'),
+});
 
 export type ProjectInput = z.infer<typeof projectInputSchema>;
 export type TaskInput = z.infer<typeof taskInputSchema>;

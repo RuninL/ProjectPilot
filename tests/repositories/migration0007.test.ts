@@ -154,9 +154,9 @@ describe('migration 0007 independent relationships and cascades', () => {
     expect(count('people')).toBe(2);
     expect(count('project_participants')).toBe(1);
     expect(count('task_participants')).toBe(1);
-    expect(
-      db.raw.prepare('SELECT person_id FROM project_participants').get(),
-    ).toStrictEqual({ person_id: 'person-2' });
+    expect(db.raw.prepare('SELECT person_id FROM project_participants').get()).toStrictEqual({
+      person_id: 'person-2',
+    });
   });
 
   it('deleting a person removes both kinds of links without deleting core entities', () => {
@@ -204,9 +204,9 @@ describe('migration 0007 upgrade', () => {
 
     raw.exec(readFileSync(join(migrationDir, '0007_people.sql'), 'utf8'));
 
-    expect(raw.prepare('SELECT name FROM projects WHERE id = ?').get('legacy-project')).toStrictEqual(
-      { name: '旧项目' },
-    );
+    expect(
+      raw.prepare('SELECT name FROM projects WHERE id = ?').get('legacy-project'),
+    ).toStrictEqual({ name: '旧项目' });
     expect(raw.prepare('SELECT title FROM tasks WHERE id = ?').get('legacy-task')).toStrictEqual({
       title: '旧任务',
     });

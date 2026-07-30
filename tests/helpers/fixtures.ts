@@ -166,9 +166,7 @@ export function makeProjectParticipant(
   };
 }
 
-export function makeTaskParticipant(
-  overrides: Partial<TaskParticipant> = {},
-): TaskParticipant {
+export function makeTaskParticipant(overrides: Partial<TaskParticipant> = {}): TaskParticipant {
   return {
     task_id: 't1',
     person_id: 'person-1',

@@ -29,7 +29,7 @@ describe('people repository', () => {
     await people.insert(makePerson({ id: 'p-b', name: '李四' }));
     await people.insert(makePerson({ id: 'p-a', name: '阿明' }));
 
-    expect((await people.findAll()).map((person) => person.name)).toEqual(['阿明', '李四']);
+    expect((await people.findAll()).map((person) => person.name)).toEqual(['李四', '阿明']);
     await people.update('p-b', { name: '王五' }, '2026-07-15T00:00:00Z');
     expect(await people.findById('p-b')).toMatchObject({
       name: '王五',

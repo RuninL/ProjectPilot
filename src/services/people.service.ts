@@ -166,9 +166,7 @@ export function createPeopleService(deps: PeopleServiceDeps) {
       if ((await deps.projects.findById(parsed.project_id)) === null) {
         throw new AppError('not_found', '项目不存在或已被删除');
       }
-      if (
-        (await deps.people.findProjectParticipant(parsed.project_id, personId)) !== null
-      ) {
+      if ((await deps.people.findProjectParticipant(parsed.project_id, personId)) !== null) {
         throw new AppError('conflict', '该人员已加入此项目');
       }
       const participant: ProjectParticipant = {
