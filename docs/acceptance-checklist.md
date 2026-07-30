@@ -86,6 +86,30 @@
 - [ ] Files & Links 的真实默认浏览器和 Windows opener 行为无法由 mock/单测替代；阻塞环境：Windows 真机；最小操作：分别验证 https、javascript/file/data/mailto、存在与不存在路径及复制提示。
 - [ ] 设置页真实显示/打开 Windows 数据目录未验；阻塞环境：Windows 真机；最小操作：点击“打开数据目录”，核对路径和目录窗口。
 
+## v1.1：人物、参与人、已推迟、并行甘特与文件
+
+- [x] migration 0008 在含数据 0007 旧库上保持 projects/tasks 行数与关键字段，完整恢复索引和触发器；
+      `postponed` CHECK 接受合法值并拒绝非法值（`tests/repositories/migration0008.test.ts`）。
+- [x] `postponed` 自由切换、完成率分母、Dashboard 四类提醒排除、逾期排除和依赖传导语义由
+      project/task/dashboard/progress/date/dependency 测试覆盖；项目/任务 service 未新增状态迁移校验。
+- [x] 并行甘特的状态筛选、跨月跨年、缺日期兜底及项目跳转模型由
+      `tests/features/parallelGanttViewModel.test.ts` 覆盖。
+- [x] 人物搜索/CRUD/删除影响确认与项目→任务二级详情、多展开、三种来源和未归属分组由
+      `PeoplePage.test.tsx`、`PersonDetailPage.test.tsx` 覆盖。
+- [x] 任务参与不会写项目关系，项目移除不会删任务分配，非项目成员提示与显式加入由
+      `people.service.test.ts`、`TaskForm.test.tsx`、`ProjectParticipantsSection.test.tsx`、
+      `TaskDetailPage.test.tsx` 覆盖。
+- [x] 项目/任务参与人 OR 筛选各自只读取对应关联表，且批量读取每类只执行一次查询，由
+      `tests/repositories/participantFilters.test.ts` 覆盖。
+- [x] `/files` 的聚合筛选、CRUD、项目跳转及既有 http/https/本地路径安全规则由
+      `FilesPage.test.tsx`、`projectLink.service.test.ts` 覆盖；未修改 capability。
+- [x] 10 项导航顺序、路由映射、嵌套详情高亮和“任务”文案由 `AppLayout.test.tsx` 覆盖。
+- [x] JSON 旧文件兼容及人员三表往返、独立关系恢复、重复/缺失引用降级，以及项目/任务 CSV
+      独立参与人列由 dataTransfer/csvExport 测试覆盖。
+- [ ] Windows 默认程序打开、窄窗口视觉与备份恢复仍需真机确认。最小操作：在 Windows 10/11
+      依次打开 http/https、复制非白名单协议、打开存在/不存在的盘符与 UNC 路径；将窗口缩窄并遍历
+      10 项导航；备份后修改人员与两类参与关系，再恢复并重启核对。
+
 ## 全局质量（发布门槛）
 
 - [ ] 全界面简体中文及日期格式尚无全局审计；阻塞环境：补充静态/RTL 审计；最小操作：遍历路由与日期格式快照，人工抽查设置、项目、任务、会议、风险页。

@@ -12,6 +12,7 @@
 | **5**                 | Dashboard + 风险                                                       | 今日/本周/逾期、30 天 milestone、项目完成率、四类风险卡                                                                                                                                                                                                                                                                                                                   | 风险规则与 product-spec §5.2 完全一致                     |
 | **6（已完成）**       | 数据口 + 设置                                                          | JSON 全量导入导出（原子）；单项目 CSV（UTF-8 BOM）；SQLite 备份/恢复（自动预备份 + 二次确认）；主题三态；数据目录；关于页                                                                                                                                                                                                                                                 | 流程 D 自动化测试通过；JSON 往返无损                      |
 | **7（进行中）**       | 打磨与发布                                                             | 版本统一、发布文档、千级数据性能基准、GitHub Actions Windows NSIS 构建与 Release 资产；Windows 真机安装验收保留为发布后确认                                                                                                                                                                                                                                               | 自动质量门和 Windows 工作流通过；真机项有明确记录         |
+| **v1.1（验收中）**    | 人物、参与人、已推迟、并行甘特与全局文件                               | migration 0007/0008；人物列表与二级详情；项目/任务参与关系独立维护及 OR 筛选；自由切换的 postponed；跨项目并行甘特；`/files`；人员 JSON/CSV/备份兼容                                                                                                                                                                                                                      | v1.1 专项测试与质量门通过；Windows opener 保留真机确认    |
 | **8+（后续版本）**    | Gantt 拖拽（切 SVAR 适配器）、AI 建议层（见 architecture.md §10 边界） | —                                                                                                                                                                                                                                                                                                                                                                         | —                                                         |
 
 依赖关系：2 依赖 1；3 依赖 2；4/5 依赖 2（5 的 blocked 传导依赖 3）；6 依赖 1–5 数据全形态。
@@ -77,4 +78,4 @@
 - Linux 沙箱承担编码、Vitest/RTL 与 SQLite 集成测试；Windows 真机负责安装体验和系统集成验收。
 - 推送 `v*` tag 后，GitHub Actions 在 `windows-latest` 执行完整质量门、构建 NSIS，并创建带 SHA-256 文件的 GitHub Release。
 - NSIS 使用 Tauri WebView2 Offline Installer，保证未安装 WebView2 时无需网络即可安装，但安装包体积更大。
-- 版本号已统一为 1.0.0；正式支持平台为 Windows 10/11 x64。
+- 版本号已统一为 1.1.0；正式支持平台为 Windows 10/11 x64。

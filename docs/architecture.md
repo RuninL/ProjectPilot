@@ -50,7 +50,7 @@
 
 1. 行动项转任务（INSERT task + UPDATE action_item）
 2. 项目永久删除的级联清理
-3. 全量 JSON 导入（清空 + 重建当前 9 张应用表）
+3. 全量 JSON 导入（清空 + 重建当前 12 张应用表）
 4. 清除示例数据（跨表删除 is_sample=1）
 5. 批量修改任务（N 条 UPDATE）
 
@@ -67,7 +67,7 @@
 - 合并模式统一跳过同主键/设置键；替换模式反向清库。两种模式最终都只调用一次
   Rust `execute_batch`，任一语句失败由 SQLite 事务整体回滚。
 - 备份与还原使用 rusqlite online backup，而非直接复制主文件；还原源先执行
-  `PRAGMA quick_check` 并核对 9 张必要表，还原前生成时间戳安全副本。UI 要求完成后重启，
+  `PRAGMA quick_check` 并核对 12 张必要表，还原前生成时间戳安全副本。UI 要求完成后重启，
   避免 Zustand 轻缓存继续展示还原前数据。
 
 ### 2.5 Files & Links 安全边界
@@ -79,6 +79,14 @@
   再通过 `OpenerExt::open_path` 交给系统默认程序。
 - 两个自定义命令只执行元数据存在性判断和系统打开，不读取文件内容；未增加 shell、递归文件读取或全磁盘
   fs scope。现有 `opener:default` 已满足 URL 打开，capability 无需扩权。
+
+### 2.6 v1.1 人员与参与关系
+
+- `people` 是人员主数据；`project_participants` 与 `task_participants` 是完全独立的多对多关系。
+  service 不从任务关系推导或写入项目关系。
+- 列表通过一次 JOIN/IN 批量读取参与人；项目 OR 筛选只查项目关系，任务 OR 筛选只查任务关系，避免 N+1。
+- 页面、组件和 store 不含 SQL；表单选择与列表筛选使用不同状态变量。
+- JSON 导入按外键拓扑独立恢复三表；旧 schemaVersion 1 文件缺少数组时默认空数组。
 
 **降级预案**：若 execute_batch 仍不满足（如需要行级回读逻辑），按触发条件整体迁移到 Rust command + rusqlite（事务/savepoint 完备，drop 默认回滚）。触发条件：事务压测失败、备份恢复需更强文件锁、需要精确 SQLite 错误码映射。
 
@@ -95,7 +103,8 @@
   仅当该字段自己的 schema 接受候选值时才替换（数组/对象→`JSON.stringify`、数字/布尔→字符串或 0/1），
   所以数值列（`progress`、`estimated_hours`、`lag_days`、`is_sample`）保持数字、NULL 永远保持 NULL；
   已符合 schema 的行按原引用返回，better-sqlite3 路径行为完全不变
-- service 持有业务不变式：done→progress=100、cancelled 剔除完成率、两层父子校验、milestone 只提示不自动改、转任务防重复
+- service 持有业务不变式：done→progress=100、cancelled 剔除完成率、postponed 留在分母但排除逾期/提醒、
+  两层父子校验、milestone 只提示不自动改、转任务防重复。项目/任务状态不设状态机，可自由切换。
 - 所有写操作 service 先 Zod 校验再落库；错误统一映射为 `AppError`（用户可读文案 + 可重试标记）
 - **input schema 必须幂等**：表单先 `parse` 一次再交给 store，service 收到后还会再 `parse` 一次
   （防止绕过表单的调用者写入非法行），因此每个字段都必须接受自己的输出。
@@ -125,6 +134,9 @@ GanttData（纯领域数据: bars[], milestones[], links[], conflicts[]）
 执行清单内，仍推迟到后续阶段——阶段 4 的里程碑可视化落在项目详情的里程碑区与日历月视图，
 甘特图内不伪造图元。
 
+v1.1 在 `/gantt` 增加独立 `parallelGanttViewModel`：项目行与原项目依赖图完全分离，共享日期轴；
+缺日期的项目使用可解释兜底并保留在图中，下方原逐项目甘特行为不变。
+
 ### 3.2 升级与降级路径
 
 | 路径                        | 选择                                   | 条件与注意                                                                                                                                                  |
@@ -138,14 +150,14 @@ GanttData（纯领域数据: bars[], milestones[], links[], conflicts[]）
 
 **位置：前端 TypeScript 内存图**（三模型共识）。SQLite 只负责持久化边与外键；个人量级（千级任务）内存 O(V+E) 足够，纯函数便于 Vitest 覆盖。
 
-| 检测                 | 算法                                                                                                               | 时机                                                  |
-| -------------------- | ------------------------------------------------------------------------------------------------------------------ | ----------------------------------------------------- |
-| 循环依赖（全图）     | Kahn 拓扑排序（同时产出合法顺序，供未来自动排期）                                                                  | 载入 Gantt、导入数据时                                |
-| 加边即时防环         | 从 successor 出发 DFS/BFS 判断 predecessor 可达性，可达则拒绝                                                      | 创建/编辑依赖时（阻止保存）                           |
-| 排期冲突（FS 语义）  | 对每条边 A→B：两端日期齐全且 `A.due_date > B.start_date` 即冲突（缺日期不产生伪冲突）                              | Gantt 与依赖列表红色虚线 + 文字说明                   |
-| 跨项目依赖           | 遍历边比较两端 project_id；migration 0003 触发器在 DB 层兜底                                                       | UI 禁止创建；对导入产生的存量数据警示标记             |
-| blocked 传导         | 从 status=blocked 节点正向可达集合（跳过已归档前驱，忽略 done/cancelled/archived 后继）；纯派生，不写 tasks.status | 依赖列表与 Gantt 的「受阻风险」提示、Dashboard 风险区 |
-| Milestone 前置未完成 | milestone 关联任务的前驱链存在非 done 任务且 14 天内                                                               | Dashboard 风险区                                      |
+| 检测                 | 算法                                                                                                          | 时机                                                  |
+| -------------------- | ------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------- |
+| 循环依赖（全图）     | Kahn 拓扑排序（同时产出合法顺序，供未来自动排期）                                                             | 载入 Gantt、导入数据时                                |
+| 加边即时防环         | 从 successor 出发 DFS/BFS 判断 predecessor 可达性，可达则拒绝                                                 | 创建/编辑依赖时（阻止保存）                           |
+| 排期冲突（FS 语义）  | 对每条边 A→B：两端日期齐全且 `A.due_date > B.start_date` 即冲突（缺日期不产生伪冲突）                         | Gantt 与依赖列表红色虚线 + 文字说明                   |
+| 跨项目依赖           | 遍历边比较两端 project_id；migration 0003 触发器在 DB 层兜底                                                  | UI 禁止创建；对导入产生的存量数据警示标记             |
+| blocked 传导         | 仅从 status=blocked 节点正向传播；postponed 不作为来源，但作为下游仍未关闭；忽略 done/cancelled/archived 后继 | 依赖列表与 Gantt 的「受阻风险」提示、Dashboard 风险区 |
+| Milestone 前置未完成 | milestone 关联任务的前驱链存在非 done 任务且 14 天内                                                          | Dashboard 风险区                                      |
 
 ## 5. 日期与时区策略
 
@@ -154,7 +166,7 @@ GanttData（纯领域数据: bars[], milestones[], links[], conflicts[]）
 - 业务日期存 `TEXT 'YYYY-MM-DD'`；created_at/updated_at 存 UTC ISO-8601
 - "今天" = Asia/Hong_Kong 本地日历日。实现用 `Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Hong_Kong' })` 取日期字符串——**禁止** `new Date().toISOString().slice(0,10)`（那是 UTC 日，UTC+8 午夜后 8 小时内会差一天）
 - 所有判定用字符串比较（`YYYY-MM-DD` 字典序 = 日期序，SQLite 与 JS 均成立）：
-  - 逾期：`due_date < today` 且 status ∉ {done, cancelled}
+  - 逾期：`due_date < today` 且 status ∉ {done, cancelled, postponed}
   - 今日到期：`due_date === today`；本周：date-fns `startOfWeek/endOfWeek`（weekStartsOn: 1）
   - 倒计时：`differenceInCalendarDays`
 - 统一入口 `lib/date.ts`：`todayHK() / isOverdue() / isDueToday() / formatDisplay() / parseInput()`；**全应用禁止裸用 new Date() 做业务日期**（ESLint 约定强制）
