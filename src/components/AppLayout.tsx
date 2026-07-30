@@ -1,11 +1,13 @@
 import {
   CalendarDays,
   CheckSquare,
+  Files,
   FolderKanban,
   GanttChartSquare,
   LayoutDashboard,
   ShieldAlert,
   Settings,
+  UserRound,
   Users,
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
@@ -19,14 +21,16 @@ interface NavItem {
   icon: LucideIcon;
 }
 
-const NAV_ITEMS: NavItem[] = [
+export const NAV_ITEMS: readonly NavItem[] = [
   { to: '/', label: '仪表盘', icon: LayoutDashboard },
+  { to: '/people', label: '人物', icon: UserRound },
   { to: '/projects', label: '项目', icon: FolderKanban },
-  { to: '/tasks', label: '我的任务', icon: CheckSquare },
+  { to: '/tasks', label: '任务', icon: CheckSquare },
   { to: '/gantt', label: '甘特图', icon: GanttChartSquare },
   { to: '/calendar', label: '日历', icon: CalendarDays },
   { to: '/meetings', label: '会议', icon: Users },
   { to: '/risks', label: '风险', icon: ShieldAlert },
+  { to: '/files', label: '文件', icon: Files },
   { to: '/settings', label: '设置', icon: Settings },
 ];
 
@@ -34,12 +38,12 @@ const NAV_ITEMS: NavItem[] = [
 export function AppLayout() {
   return (
     <div className="flex h-screen w-screen overflow-hidden">
-      <aside className="flex w-56 flex-col border-r bg-card">
+      <aside className="flex w-56 shrink-0 flex-col border-r bg-card">
         <div className="flex items-center gap-2 px-4 py-4">
           <LayoutDashboard className="h-5 w-5 text-primary" aria-hidden />
           <span className="text-base font-semibold">ProjectPilot</span>
         </div>
-        <nav className="flex flex-col gap-1 px-2">
+        <nav className="flex flex-1 flex-col gap-1 overflow-y-auto px-2 pb-2">
           {NAV_ITEMS.map((item) => (
             <NavLink
               key={item.to}
