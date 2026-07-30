@@ -31,11 +31,10 @@ export interface CalendarEntry {
   readonly href: string;
   /** Project colour, decoration only — never the sole carrier of meaning. */
   readonly color: string | null;
-  /** Present for recurrence-derived entries so the calendar can expose occurrence actions. */
+  /** Present for recurrence-derived meetings so the calendar can expose series actions. */
   readonly recurrence: {
     readonly ruleId: string;
     readonly occurrenceDate: string;
-    readonly state: 'expected' | 'materialized';
   } | null;
 }
 
@@ -60,19 +59,6 @@ export interface CalendarMonth {
   /** Entries inside the month proper, for the empty state. */
   readonly entryCount: number;
   readonly recurrenceTruncated: boolean;
-  readonly bars: readonly CalendarBar[];
-}
-
-export interface CalendarBar {
-  readonly key: string;
-  readonly week: number;
-  readonly startColumn: number;
-  readonly span: number;
-  readonly title: string;
-  readonly href: string;
-  readonly color: string | null;
-  readonly label: string;
-  readonly state: 'normal' | 'expected' | 'materialized' | 'blocked';
 }
 
 export interface CalendarData {
@@ -124,46 +110,6 @@ const MILESTONE_STATUS_LABELS: Record<Milestone['status'], string> = {
 /** Meetings read first, then milestones, then tasks; ties broken by title. */
 const KIND_ORDER: Record<CalendarEntryKind, number> = { meeting: 0, milestone: 1, task: 2 };
 
-function barsForRange(
-  key: string,
-  title: string,
-  href: string,
-  color: string | null,
-  label: string,
-  state: CalendarBar['state'],
-  start: string,
-  end: string,
-  rangeStart: string,
-  rangeEnd: string,
-): CalendarBar[] {
-  const from = start < rangeStart ? rangeStart : start;
-  const to = end > rangeEnd ? rangeEnd : end;
-  if (from > to) return [];
-  const bars: CalendarBar[] = [];
-  let cursor = from;
-  while (cursor <= to) {
-    const offset = inclusiveDays(rangeStart, cursor) - 1;
-    const week = Math.floor(offset / DAYS_IN_WEEK);
-    const startColumn = (offset % DAYS_IN_WEEK) + 1;
-    const daysInWeek = DAYS_IN_WEEK - startColumn + 1;
-    const remaining = inclusiveDays(cursor, to);
-    const span = Math.min(daysInWeek, remaining);
-    bars.push({
-      key: `${key}:${String(week)}`,
-      week,
-      startColumn,
-      span,
-      title,
-      href,
-      color,
-      label,
-      state,
-    });
-    cursor = addDays(cursor, span);
-  }
-  return bars;
-}
-
 function taskEntries(tasks: readonly TaskWithProject[]): CalendarEntry[] {
   const entries: CalendarEntry[] = [];
   for (const task of tasks) {
@@ -175,11 +121,8 @@ function taskEntries(tasks: readonly TaskWithProject[]): CalendarEntry[] {
         sourceId: task.id,
         date: task.due_date,
         title: task.title,
-        kindLabel: task.source_rule_id === null ? '任务截止' : '周期任务',
-        detail:
-          task.source_rule_id === null
-            ? task.project_name
-            : `来源周期规则 · ${task.project_name} · ${task.id.startsWith('expected:') ? '预期项' : '已物化'}`,
+        kindLabel: '任务截止',
+        detail: task.project_name,
         href,
         color: task.project_color,
         recurrence:
@@ -188,7 +131,6 @@ function taskEntries(tasks: readonly TaskWithProject[]): CalendarEntry[] {
             : {
                 ruleId: task.source_rule_id,
                 occurrenceDate: task.source_occurrence_date,
-                state: task.id.startsWith('expected:') ? 'expected' : 'materialized',
               },
       });
     }
@@ -227,11 +169,11 @@ function meetingEntries(
       date: meeting.date,
       title: meeting.topic,
       kindLabel: meeting.source_rule_id === null ? KIND_LABELS.meeting : '周期会议',
-      detail:
-        meeting.source_rule_id === null
-          ? parts.join(' · ')
-          : `${parts.join(' · ')} · 来源周期规则 · ${meeting.id.startsWith('expected:') ? '预期项' : '已物化'}`,
-      href: `/meetings/${encodeURIComponent(meeting.id)}`,
+      detail: parts.join(' · '),
+      href:
+      meeting.source_rule_id === null
+        ? `/meetings/${encodeURIComponent(meeting.id)}`
+        : `/meetings?series=${encodeURIComponent(meeting.source_rule_id)}`,
       color: project?.color ?? null,
       recurrence:
         meeting.source_rule_id === null || meeting.source_occurrence_date === null
@@ -239,7 +181,6 @@ function meetingEntries(
           : {
               ruleId: meeting.source_rule_id,
               occurrenceDate: meeting.source_occurrence_date,
-              state: meeting.id.startsWith('expected:') ? 'expected' : 'materialized',
             },
     };
   });
@@ -321,57 +262,6 @@ export function buildCalendarMonth(
     weeks.push(days);
   }
 
-  const bars = [
-    ...data.tasks.flatMap((task) => {
-      const date = task.due_date ?? task.start_date;
-      if (date === null) return [];
-      const start = task.start_date ?? date;
-      const end = task.due_date ?? date;
-      const state: CalendarBar['state'] =
-        task.status === 'blocked'
-          ? 'blocked'
-          : task.source_rule_id === null
-            ? 'normal'
-            : task.id.startsWith('expected:')
-              ? 'expected'
-              : 'materialized';
-      return barsForRange(
-        `task:${task.id}`,
-        task.title,
-        `/tasks?taskId=${encodeURIComponent(task.id)}`,
-        task.project_color,
-        state === 'expected' ? '周期预期任务' : state === 'materialized' ? '已物化任务' : '任务',
-        state,
-        start,
-        end,
-        from,
-        to,
-      );
-    }),
-    ...data.meetings.map((meeting) =>
-      barsForRange(
-        `meeting:${meeting.id}`,
-        meeting.topic,
-        `/meetings/${encodeURIComponent(meeting.id)}`,
-        meeting.project_id === null ? null : (projectsById.get(meeting.project_id)?.color ?? null),
-        meeting.source_rule_id === null
-          ? '会议'
-          : meeting.id.startsWith('expected:')
-            ? '周期预期会议'
-            : '已物化会议',
-        meeting.source_rule_id === null
-          ? 'normal'
-          : meeting.id.startsWith('expected:')
-            ? 'expected'
-            : 'materialized',
-        meeting.date,
-        meeting.date,
-        from,
-        to,
-      ),
-    ),
-  ].flat();
-
   return {
     month,
     label: formatMonthLabel(`${month}-01`),
@@ -380,7 +270,6 @@ export function buildCalendarMonth(
     weeks,
     entryCount,
     recurrenceTruncated: data.recurrenceTruncated ?? false,
-    bars,
   };
 }
 
