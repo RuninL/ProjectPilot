@@ -11,6 +11,7 @@ import type {
   personProjectParticipationRowSchema,
   personRowSchema,
   personTaskParticipationRowSchema,
+  personWithCountsRowSchema,
   projectLinkRowSchema,
   projectParticipantRowSchema,
   projectRowSchema,
@@ -43,6 +44,7 @@ export type AppSetting = z.infer<typeof appSettingRowSchema>;
 export type Risk = z.infer<typeof riskRowSchema>;
 export type RiskWithProject = z.infer<typeof riskWithProjectRowSchema>;
 export type Person = z.infer<typeof personRowSchema>;
+export type PersonWithCounts = z.infer<typeof personWithCountsRowSchema>;
 export type ProjectParticipant = z.infer<typeof projectParticipantRowSchema>;
 export type TaskParticipant = z.infer<typeof taskParticipantRowSchema>;
 export type PersonProjectParticipation = z.infer<typeof personProjectParticipationRowSchema>;

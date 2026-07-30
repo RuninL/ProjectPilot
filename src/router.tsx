@@ -5,6 +5,8 @@ import { DashboardPage } from '@/features/dashboard/pages/DashboardPage';
 import { GanttPage } from '@/features/gantt/pages/GanttPage';
 import { MeetingDetailPage } from '@/features/meetings/pages/MeetingDetailPage';
 import { MeetingsPage } from '@/features/meetings/pages/MeetingsPage';
+import { PeoplePage } from '@/features/people/pages/PeoplePage';
+import { PersonDetailPage } from '@/features/people/pages/PersonDetailPage';
 import { ProjectDetailPage } from '@/features/projects/pages/ProjectDetailPage';
 import { ProjectListPage } from '@/features/projects/pages/ProjectListPage';
 import { RisksPage } from '@/features/risks/pages/RisksPage';
@@ -18,6 +20,8 @@ export const router = createHashRouter([
     element: <AppLayout />,
     children: [
       { index: true, element: <DashboardPage /> },
+      { path: 'people', element: <PeoplePage /> },
+      { path: 'people/:id', element: <PersonDetailPage /> },
       { path: 'projects', element: <ProjectListPage /> },
       { path: 'projects/:projectId', element: <ProjectDetailPage /> },
       { path: 'risks', element: <RisksPage /> },
