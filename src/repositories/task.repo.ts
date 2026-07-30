@@ -27,15 +27,17 @@ const UPDATABLE = [
   'completed_at',
   'archived_at',
   'source_meeting_id',
+  'source_rule_id',
+  'source_occurrence_date',
 ] as const;
 
 const INSERT_COLUMNS = `(id, project_id, parent_task_id, title, description, status, priority,
      start_date, due_date, progress, estimated_hours, actual_hours,
-     completed_at, archived_at, source_meeting_id,
+     completed_at, archived_at, source_meeting_id, source_rule_id, source_occurrence_date,
      is_sample, created_at, updated_at)`;
 
 const INSERT_SQL = `INSERT INTO tasks ${INSERT_COLUMNS}
-   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`;
+   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`;
 
 /**
  * Same insert, but it inserts nothing unless the source action item is still
@@ -46,7 +48,7 @@ const INSERT_SQL = `INSERT INTO tasks ${INSERT_COLUMNS}
  * after the fact could not achieve this — by then the batch has committed.
  */
 const CONVERSION_INSERT_SQL = `INSERT INTO tasks ${INSERT_COLUMNS}
-   SELECT ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
+   SELECT ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
     WHERE EXISTS (SELECT 1 FROM action_items WHERE id = ? AND converted_at IS NULL)`;
 
 function insertParams(task: Task): unknown[] {
@@ -66,6 +68,8 @@ function insertParams(task: Task): unknown[] {
     task.completed_at,
     task.archived_at,
     task.source_meeting_id,
+    task.source_rule_id,
+    task.source_occurrence_date,
     task.is_sample,
     task.created_at,
     task.updated_at,
@@ -238,6 +242,10 @@ export function createTaskRepository(db: SqlExecutor) {
     async deleteById(id: string): Promise<number> {
       const result = await db.execute('DELETE FROM tasks WHERE id = ?', [id]);
       return result.rowsAffected;
+    },
+
+    buildDelete(id: string): BatchStatement {
+      return { sql: 'DELETE FROM tasks WHERE id = ?', params: [id] };
     },
   };
 }

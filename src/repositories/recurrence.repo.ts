@@ -1,6 +1,7 @@
 import { recurrenceExceptionRowSchema, recurrenceRuleRowSchema } from '@/db/schemas';
 import type { RecurrenceException, RecurrenceRule } from '@/types';
 import type { SqlExecutor } from '@/lib/db';
+import type { BatchStatement } from '@/lib/commands';
 import { buildUpdate, parseOptional, parseRows, runUpdate } from './_shared';
 
 const RULE_UPDATABLE = [
@@ -83,9 +84,13 @@ export function createRecurrenceRepository(db: SqlExecutor) {
       );
     },
     async insertException(exception: RecurrenceException): Promise<void> {
-      await db.execute(
-        'INSERT INTO recurrence_exceptions (id, rule_id, occurrence_date, action, materialized_id, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)',
-        [
+      const statement = this.buildInsertException(exception);
+      await db.execute(statement.sql, statement.params);
+    },
+    buildInsertException(exception: RecurrenceException): BatchStatement {
+      return {
+        sql: 'INSERT INTO recurrence_exceptions (id, rule_id, occurrence_date, action, materialized_id, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)',
+        params: [
           exception.id,
           exception.rule_id,
           exception.occurrence_date,
@@ -94,7 +99,15 @@ export function createRecurrenceRepository(db: SqlExecutor) {
           exception.created_at,
           exception.updated_at,
         ],
-      );
+      };
+    },
+    async deleteException(ruleId: string, occurrenceDate: string): Promise<number> {
+      return (
+        await db.execute(
+          'DELETE FROM recurrence_exceptions WHERE rule_id = ? AND occurrence_date = ?',
+          [ruleId, occurrenceDate],
+        )
+      ).rowsAffected;
     },
   };
 }

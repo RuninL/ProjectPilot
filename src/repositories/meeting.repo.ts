@@ -1,4 +1,5 @@
 import { meetingRowSchema } from '@/db/schemas';
+import type { BatchStatement } from '@/lib/commands';
 import type { SqlExecutor } from '@/lib/db';
 import type { Meeting } from '@/types';
 import { buildUpdate, parseOptional, parseRows, runUpdate } from './_shared';
@@ -13,7 +14,34 @@ const UPDATABLE = [
   'notes',
   'decisions',
   'risks',
+  'source_rule_id',
+  'source_occurrence_date',
 ] as const;
+
+const INSERT_SQL = `INSERT INTO meetings
+  (id, project_id, topic, date, start_time, attendees, agenda, notes, decisions, risks,
+   source_rule_id, source_occurrence_date, is_sample, created_at, updated_at)
+ VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`;
+
+function insertParams(meeting: Meeting): unknown[] {
+  return [
+    meeting.id,
+    meeting.project_id,
+    meeting.topic,
+    meeting.date,
+    meeting.start_time,
+    meeting.attendees,
+    meeting.agenda,
+    meeting.notes,
+    meeting.decisions,
+    meeting.risks,
+    meeting.source_rule_id,
+    meeting.source_occurrence_date,
+    meeting.is_sample,
+    meeting.created_at,
+    meeting.updated_at,
+  ];
+}
 
 export function createMeetingRepository(db: SqlExecutor) {
   return {
@@ -48,27 +76,11 @@ export function createMeetingRepository(db: SqlExecutor) {
     },
 
     async insert(meeting: Meeting): Promise<void> {
-      await db.execute(
-        `INSERT INTO meetings
-          (id, project_id, topic, date, start_time, attendees, agenda, notes, decisions, risks,
-           is_sample, created_at, updated_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-        [
-          meeting.id,
-          meeting.project_id,
-          meeting.topic,
-          meeting.date,
-          meeting.start_time,
-          meeting.attendees,
-          meeting.agenda,
-          meeting.notes,
-          meeting.decisions,
-          meeting.risks,
-          meeting.is_sample,
-          meeting.created_at,
-          meeting.updated_at,
-        ],
-      );
+      await db.execute(INSERT_SQL, insertParams(meeting));
+    },
+
+    buildInsert(meeting: Meeting): BatchStatement {
+      return { sql: INSERT_SQL, params: insertParams(meeting) };
     },
 
     async update(id: string, patch: Partial<Meeting>, now: string): Promise<number> {
@@ -78,6 +90,10 @@ export function createMeetingRepository(db: SqlExecutor) {
     async deleteById(id: string): Promise<number> {
       const result = await db.execute('DELETE FROM meetings WHERE id = ?', [id]);
       return result.rowsAffected;
+    },
+
+    buildDelete(id: string): BatchStatement {
+      return { sql: 'DELETE FROM meetings WHERE id = ?', params: [id] };
     },
   };
 }

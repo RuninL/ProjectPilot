@@ -1,5 +1,23 @@
 import { addDays, inclusiveDays, mondayWeekdayOf, startOfWeekStr } from '@/lib/date';
-import type { RecurrenceException, RecurrenceRule } from '@/types';
+import type { BatchStatement } from '@/lib/commands';
+import { executeBatch } from '@/lib/commands';
+import { nowIso } from '@/lib/date';
+import { AppError } from '@/lib/errors';
+import { newId } from '@/lib/uuid';
+import type {
+  MeetingRepository,
+  ProjectRepository,
+  RecurrenceRepository,
+  TaskRepository,
+} from '@/repositories';
+import { getRepositories } from '@/repositories';
+import type { Meeting, RecurrenceException, RecurrenceRule, Task } from '@/types';
+import {
+  recurrenceExceptionInputSchema,
+  recurrenceRuleInputSchema,
+  type RecurrenceExceptionInput,
+  type RecurrenceRuleInput,
+} from './schemas';
 
 export const MAX_RECURRENCE_OCCURRENCES = 500;
 
@@ -56,4 +74,267 @@ export function expandRule(
     candidate = addDays(candidate, 7);
   }
   return { occurrences, truncated: false };
+}
+
+export interface RecurrenceServiceDeps {
+  recurrence: RecurrenceRepository;
+  projects: ProjectRepository;
+  tasks: TaskRepository;
+  meetings: MeetingRepository;
+  runBatch: (statements: BatchStatement[]) => Promise<number>;
+}
+
+export function createRecurrenceService(deps: RecurrenceServiceDeps) {
+  function parseRuleInput(input: RecurrenceRuleInput): RecurrenceRuleInput {
+    const parsed = recurrenceRuleInputSchema.safeParse(input);
+    if (!parsed.success) {
+      throw new AppError('validation', parsed.error.issues[0]?.message ?? '周期规则数据无效');
+    }
+    return parsed.data;
+  }
+
+  function parseExceptionInput(input: RecurrenceExceptionInput): RecurrenceExceptionInput {
+    const parsed = recurrenceExceptionInputSchema.safeParse(input);
+    if (!parsed.success) {
+      throw new AppError('validation', parsed.error.issues[0]?.message ?? '周期例外数据无效');
+    }
+    return parsed.data;
+  }
+
+  async function requireRule(id: string): Promise<RecurrenceRule> {
+    const rule = await deps.recurrence.findById(id);
+    if (rule === null) throw new AppError('not_found', '周期规则不存在或已被删除');
+    return rule;
+  }
+
+  async function requireProject(projectId: string): Promise<void> {
+    if ((await deps.projects.findById(projectId)) === null) {
+      throw new AppError('validation', '所属项目不存在或已被删除');
+    }
+  }
+
+  function buildRule(input: RecurrenceRuleInput, id = newId(), now = nowIso()): RecurrenceRule {
+    return {
+      id,
+      project_id: input.project_id,
+      kind: input.kind,
+      title: input.title,
+      byweekday: input.byweekday,
+      interval: input.interval,
+      start_date: input.start_date,
+      end_date: input.end_date,
+      time_of_day: input.time_of_day,
+      duration_minutes: input.duration_minutes,
+      default_priority: input.default_priority,
+      note: input.note,
+      is_active: input.is_active,
+      is_sample: 0,
+      created_at: now,
+      updated_at: now,
+    };
+  }
+
+  async function requireUnmaterialized(ruleId: string, occurrenceDate: string): Promise<void> {
+    const existing = (await deps.recurrence.findExceptions(ruleId)).find(
+      (item) => item.occurrence_date === occurrenceDate,
+    );
+    if (existing !== undefined) {
+      throw new AppError('conflict', '该周期已处理，不能重复物化');
+    }
+  }
+
+  function buildMaterializedTask(rule: RecurrenceRule, occurrenceDate: string, now: string): Task {
+    return {
+      id: newId(),
+      project_id: rule.project_id,
+      parent_task_id: null,
+      title: rule.title,
+      description: rule.note,
+      status: 'todo',
+      priority: rule.default_priority ?? 'medium',
+      start_date: occurrenceDate,
+      due_date: occurrenceDate,
+      progress: 0,
+      estimated_hours: null,
+      actual_hours: null,
+      completed_at: null,
+      archived_at: null,
+      source_meeting_id: null,
+      source_rule_id: rule.id,
+      source_occurrence_date: occurrenceDate,
+      is_sample: 0,
+      created_at: now,
+      updated_at: now,
+    };
+  }
+
+  function buildMaterializedMeeting(
+    rule: RecurrenceRule,
+    occurrenceDate: string,
+    now: string,
+  ): Meeting {
+    return {
+      id: newId(),
+      project_id: rule.project_id,
+      topic: rule.title,
+      date: occurrenceDate,
+      start_time: rule.time_of_day,
+      attendees: '[]',
+      agenda: rule.note,
+      notes: '',
+      decisions: '',
+      risks: '',
+      source_rule_id: rule.id,
+      source_occurrence_date: occurrenceDate,
+      is_sample: 0,
+      created_at: now,
+      updated_at: now,
+    };
+  }
+
+  return {
+    async createRule(input: RecurrenceRuleInput): Promise<RecurrenceRule> {
+      const parsed = parseRuleInput(input);
+      await requireProject(parsed.project_id);
+      const rule = buildRule(parsed);
+      await deps.recurrence.insert(rule);
+      return rule;
+    },
+
+    async getRule(id: string): Promise<RecurrenceRule> {
+      return requireRule(id);
+    },
+
+    async listRules(projectId: string): Promise<RecurrenceRule[]> {
+      return deps.recurrence.findByProject(projectId);
+    },
+
+    async updateRule(id: string, input: RecurrenceRuleInput): Promise<RecurrenceRule> {
+      await requireRule(id);
+      const parsed = parseRuleInput(input);
+      await requireProject(parsed.project_id);
+      await deps.recurrence.update(id, buildRule(parsed, id), nowIso());
+      return requireRule(id);
+    },
+
+    /**
+     * Materialized tasks and meetings are independent historical records, so a
+     * rule deletion only cascades its exceptions and leaves those records intact.
+     */
+    async deleteRule(id: string): Promise<void> {
+      await requireRule(id);
+      await deps.recurrence.deleteById(id);
+    },
+
+    async createException(
+      ruleId: string,
+      input: RecurrenceExceptionInput,
+    ): Promise<RecurrenceException> {
+      await requireRule(ruleId);
+      const parsed = parseExceptionInput(input);
+      await requireUnmaterialized(ruleId, parsed.occurrence_date);
+      const now = nowIso();
+      const exception: RecurrenceException = {
+        id: newId(),
+        rule_id: ruleId,
+        occurrence_date: parsed.occurrence_date,
+        action: parsed.action,
+        materialized_id: null,
+        created_at: now,
+        updated_at: now,
+      };
+      await deps.recurrence.insertException(exception);
+      return exception;
+    },
+
+    async deleteException(ruleId: string, occurrenceDate: string): Promise<void> {
+      if ((await deps.recurrence.deleteException(ruleId, occurrenceDate)) === 0) {
+        throw new AppError('not_found', '周期例外不存在或已被删除');
+      }
+    },
+
+    async materialize(ruleId: string, occurrenceDate: string): Promise<Task | Meeting> {
+      const rule = await requireRule(ruleId);
+      await requireUnmaterialized(ruleId, occurrenceDate);
+      const now = nowIso();
+      if (rule.kind === 'task') {
+        const entity = buildMaterializedTask(rule, occurrenceDate, now);
+        const exception: RecurrenceException = {
+          id: newId(),
+          rule_id: rule.id,
+          occurrence_date: occurrenceDate,
+          action: 'materialized',
+          materialized_id: entity.id,
+          created_at: now,
+          updated_at: now,
+        };
+        try {
+          await deps.runBatch([
+            deps.tasks.buildInsert(entity),
+            deps.recurrence.buildInsertException(exception),
+          ]);
+        } catch (cause) {
+          throw new AppError('db', '物化周期记录失败，未写入任何数据', { cause });
+        }
+        return entity;
+      }
+      const entity = buildMaterializedMeeting(rule, occurrenceDate, now);
+      const exception: RecurrenceException = {
+        id: newId(),
+        rule_id: rule.id,
+        occurrence_date: occurrenceDate,
+        action: 'materialized',
+        materialized_id: entity.id,
+        created_at: now,
+        updated_at: now,
+      };
+      try {
+        await deps.runBatch([
+          deps.meetings.buildInsert(entity),
+          deps.recurrence.buildInsertException(exception),
+        ]);
+      } catch (cause) {
+        throw new AppError('db', '物化周期记录失败，未写入任何数据', { cause });
+      }
+      return entity;
+    },
+
+    /**
+     * Cancelling a materialization deletes both the generated record and its
+     * exception in one transaction. Removing the exception makes that date an
+     * expected occurrence again rather than silently turning a cancellation into
+     * a permanent skip.
+     */
+    async cancelMaterialization(ruleId: string, occurrenceDate: string): Promise<void> {
+      const exception = (await deps.recurrence.findExceptions(ruleId)).find(
+        (item) => item.occurrence_date === occurrenceDate && item.action === 'materialized',
+      );
+      if (exception?.materialized_id === null || exception === undefined) {
+        throw new AppError('not_found', '该周期尚未物化');
+      }
+      const rule = await requireRule(ruleId);
+      await deps.runBatch([
+        rule.kind === 'task'
+          ? deps.tasks.buildDelete(exception.materialized_id)
+          : deps.meetings.buildDelete(exception.materialized_id),
+        {
+          sql: 'DELETE FROM recurrence_exceptions WHERE rule_id = ? AND occurrence_date = ?',
+          params: [ruleId, occurrenceDate],
+        },
+      ]);
+    },
+  };
+}
+
+export type RecurrenceService = ReturnType<typeof createRecurrenceService>;
+
+export async function getRecurrenceService(): Promise<RecurrenceService> {
+  const repos = await getRepositories();
+  return createRecurrenceService({
+    recurrence: repos.recurrence,
+    projects: repos.projects,
+    tasks: repos.tasks,
+    meetings: repos.meetings,
+    runBatch: executeBatch,
+  });
 }
