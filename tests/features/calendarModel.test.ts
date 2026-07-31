@@ -1,12 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import {
   buildCalendarMonth,
-  buildCalendarColorBar,
   CALENDAR_GRID_DAYS,
   DEFAULT_CALENDAR_BAR_COLOR,
   gridDayCount,
   monthGridRange,
   monthOf,
+  readableBarTextColor,
   shiftMonth,
   safeCalendarColor,
   type CalendarData,
@@ -90,90 +90,258 @@ describe('buildCalendarMonth', () => {
     expect(todays[0]?.date).toBe(TODAY);
   });
 
-  describe('colour-bar timeline model', () => {
+  describe('colour-bar month grid model', () => {
+    function colorBarOf(source: CalendarData) {
+      return buildCalendarMonth('2026-07', source, TODAY).colorBar;
+    }
+
+    function segmentsOf(source: CalendarData) {
+      return colorBarOf(source).weeks.flatMap((week) => week.segments);
+    }
+
+    it('splits the month into complete seven-day weeks', () => {
+      const model = colorBarOf(data());
+
+      expect(model.weeks).toHaveLength(6);
+      for (const week of model.weeks) {
+        expect(week.days).toHaveLength(7);
+      }
+      expect(model.weeks[0]?.days[0]?.date).toBe('2026-06-29');
+      expect(model.weeks[5]?.days[6]?.date).toBe('2026-08-09');
+    });
+
     it('uses inclusive task intervals and single-day fallback dates', () => {
-      const model = buildCalendarColorBar(
+      const segments = segmentsOf(
         data({
           tasks: [
-            withProject({ id: 'span', start_date: '2026-07-03', due_date: '2026-07-08' }),
+            withProject({ id: 'span', start_date: '2026-07-07', due_date: '2026-07-09' }),
             withProject({ id: 'start', start_date: '2026-07-10', due_date: null }),
             withProject({ id: 'due', start_date: null, due_date: '2026-07-12' }),
           ],
         }),
-        '2026-07-01',
-        '2026-07-31',
       );
 
-      const bars = model.lanes.flat();
-      expect(bars.find((bar) => bar.taskId === 'span')).toMatchObject({
-        displayStart: '2026-07-03',
-        displayEnd: '2026-07-08',
+      expect(segments.find((seg) => seg.sourceKey === 'task-bar:span')).toMatchObject({
+        start: '2026-07-07',
+        end: '2026-07-09',
+        span: 3,
+        isStart: true,
+        isEnd: true,
       });
-      expect(bars.find((bar) => bar.taskId === 'start')).toMatchObject({
-        displayStart: '2026-07-10',
-        displayEnd: '2026-07-10',
+      expect(segments.find((seg) => seg.sourceKey === 'task-bar:start')).toMatchObject({
+        start: '2026-07-10',
+        end: '2026-07-10',
+        span: 1,
       });
-      expect(bars.find((bar) => bar.taskId === 'due')).toMatchObject({
-        displayStart: '2026-07-12',
-        displayEnd: '2026-07-12',
+      expect(segments.find((seg) => seg.sourceKey === 'task-bar:due')).toMatchObject({
+        start: '2026-07-12',
+        end: '2026-07-12',
+        span: 1,
       });
     });
 
-    it('clips visible intervals, preserves a cross-week task identity, and packs overlaps into lanes', () => {
-      const source = data({
-        tasks: [
-          withProject({ id: 'cross', start_date: '2026-06-20', due_date: '2026-07-08' }),
-          withProject({ id: 'overlap', start_date: '2026-07-08', due_date: '2026-07-10' }),
-          withProject({ id: 'separate', start_date: '2026-07-11', due_date: '2026-07-12' }),
-        ],
-      });
-      const model = buildCalendarColorBar(source, '2026-07-01', '2026-07-31');
-      const bars = model.lanes.flat();
+    it('survives inverted dates as a safe single-day bar and keeps undated tasks listed', () => {
+      const model = colorBarOf(
+        data({
+          tasks: [
+            withProject({ id: 'undated', start_date: null, due_date: null }),
+            withProject({ id: 'inverted', start_date: '2026-07-20', due_date: '2026-07-10' }),
+          ],
+        }),
+      );
 
-      expect(bars.find((bar) => bar.taskId === 'cross')).toMatchObject({
-        id: 'task-bar:cross',
-        displayStart: '2026-07-01',
-        displayEnd: '2026-07-08',
-      });
-      expect(bars.find((bar) => bar.taskId === 'cross')).toHaveProperty('lane', 0);
-      expect(bars.find((bar) => bar.taskId === 'overlap')).toHaveProperty('lane', 1);
-      expect(bars.find((bar) => bar.taskId === 'separate')).toHaveProperty('lane', 0);
+      expect(model.unscheduledTasks.map((task) => task.id)).toEqual(['undated']);
+      const inverted = model.weeks
+        .flatMap((week) => week.segments)
+        .find((seg) => seg.sourceKey === 'task-bar:inverted');
+      expect(inverted).toMatchObject({ start: '2026-07-20', end: '2026-07-20', span: 1 });
     });
 
-    it('is deterministic, exposes unscheduled tasks, and safely handles inverted dates', () => {
+    it('clips a cross-month task to the visible grid without touching the source task', () => {
+      const task = withProject({ id: 'long', start_date: '2026-06-01', due_date: '2026-09-01' });
+      const model = colorBarOf(data({ tasks: [task] }));
+
+      const segments = model.weeks.flatMap((week) => week.segments);
+      expect(segments[0]).toMatchObject({ start: '2026-06-29', isStart: true });
+      expect(segments[segments.length - 1]).toMatchObject({ end: '2026-08-09', isEnd: true });
+      expect(task.start_date).toBe('2026-06-01');
+      expect(task.due_date).toBe('2026-09-01');
+    });
+
+    it('splits a cross-week task into per-week segments sharing one identity', () => {
+      // 2026-07-03 is a Friday; the task runs through the following Wednesday.
+      const model = colorBarOf(
+        data({ tasks: [withProject({ id: 'x', start_date: '2026-07-03', due_date: '2026-07-08' })] }),
+      );
+
+      const segments = model.weeks.flatMap((week) => week.segments);
+      expect(segments).toHaveLength(2);
+      expect(segments[0]).toMatchObject({
+        sourceKey: 'task-bar:x',
+        start: '2026-07-03',
+        end: '2026-07-05',
+        startColumn: 5,
+        span: 3,
+        isStart: true,
+        isEnd: false,
+        lane: 0,
+      });
+      expect(segments[1]).toMatchObject({
+        sourceKey: 'task-bar:x',
+        start: '2026-07-06',
+        end: '2026-07-08',
+        startColumn: 1,
+        span: 3,
+        isStart: false,
+        isEnd: true,
+        lane: 0,
+      });
+      expect(segments[0]?.href).toBe(segments[1]?.href);
+    });
+
+    it('packs every week independently from lane 0 and never inherits earlier lanes', () => {
+      // Week of 07-06: three mutually overlapping tasks; week of 07-13: one task.
+      const model = colorBarOf(
+        data({
+          tasks: [
+            withProject({ id: 'a', start_date: '2026-07-06', due_date: '2026-07-10' }),
+            withProject({ id: 'b', start_date: '2026-07-07', due_date: '2026-07-09' }),
+            withProject({ id: 'c', start_date: '2026-07-08', due_date: '2026-07-08' }),
+            withProject({ id: 'next', start_date: '2026-07-15', due_date: '2026-07-16' }),
+          ],
+        }),
+      );
+
+      const busyWeek = model.weeks[1];
+      const nextWeek = model.weeks[2];
+      expect(busyWeek?.laneCount).toBe(3);
+      expect(nextWeek?.laneCount).toBe(1);
+      expect(nextWeek?.segments[0]).toMatchObject({ sourceKey: 'task-bar:next', lane: 0 });
+    });
+
+    it('reuses the topmost free lane before opening a new one', () => {
+      const model = colorBarOf(
+        data({
+          tasks: [
+            withProject({ id: 'a', start_date: '2026-07-06', due_date: '2026-07-08' }),
+            withProject({ id: 'b', start_date: '2026-07-07', due_date: '2026-07-10' }),
+            withProject({ id: 'c', start_date: '2026-07-11', due_date: '2026-07-12' }),
+          ],
+        }),
+      );
+
+      const segments = model.weeks[1]?.segments ?? [];
+      expect(segments.find((seg) => seg.sourceKey === 'task-bar:a')?.lane).toBe(0);
+      expect(segments.find((seg) => seg.sourceKey === 'task-bar:b')?.lane).toBe(1);
+      // c starts after a ends, so lane 0 is free again and must be reused.
+      expect(segments.find((seg) => seg.sourceKey === 'task-bar:c')?.lane).toBe(0);
+      expect(model.weeks[1]?.laneCount).toBe(2);
+    });
+
+    it('treats a shared day (end equals next start) as a conflict', () => {
+      const model = colorBarOf(
+        data({
+          tasks: [
+            withProject({ id: 'a', start_date: '2026-07-06', due_date: '2026-07-08' }),
+            withProject({ id: 'b', start_date: '2026-07-08', due_date: '2026-07-10' }),
+          ],
+        }),
+      );
+
+      const segments = model.weeks[1]?.segments ?? [];
+      expect(segments.find((seg) => seg.sourceKey === 'task-bar:a')?.lane).toBe(0);
+      expect(segments.find((seg) => seg.sourceKey === 'task-bar:b')?.lane).toBe(1);
+    });
+
+    it('packs single-day meetings and milestones together with task bars', () => {
+      const model = colorBarOf(
+        data({
+          tasks: [withProject({ id: 't', start_date: '2026-07-06', due_date: '2026-07-08' })],
+          meetings: [makeMeeting({ id: 'm', project_id: 'p1', date: '2026-07-07', topic: '评审' })],
+          milestones: [makeMilestone({ id: 'ms', project_id: 'p1', date: '2026-07-07' })],
+        }),
+      );
+
+      const week = model.weeks[1];
+      expect(week?.laneCount).toBe(3);
+      const kinds = new Set(week?.segments.map((seg) => seg.kind));
+      expect(kinds).toEqual(new Set(['task', 'meeting', 'milestone']));
+      expect(week?.segments.every((seg) => seg.lane < 3)).toBe(true);
+    });
+
+    it('keeps the recurrence identity on expected occurrences', () => {
+      const model = colorBarOf(
+        data({
+          meetings: [
+            makeMeeting({
+              id: 'expected:rule:2026-07-08',
+              topic: '周期周会',
+              date: '2026-07-08',
+              source_rule_id: 'rule',
+              source_occurrence_date: '2026-07-08',
+            }),
+          ],
+        }),
+      );
+
+      const segment = model.weeks
+        .flatMap((week) => week.segments)
+        .find((seg) => seg.title === '周期周会');
+      expect(segment).toMatchObject({
+        kindLabel: '周期会议',
+        recurrence: { ruleId: 'rule', occurrenceDate: '2026-07-08' },
+      });
+    });
+
+    it('gives an empty week no lanes at all', () => {
+      const model = colorBarOf(
+        data({ tasks: [withProject({ id: 'a', start_date: '2026-07-06', due_date: '2026-07-06' })] }),
+      );
+
+      expect(model.weeks[1]?.laneCount).toBe(1);
+      expect(model.weeks[3]?.laneCount).toBe(0);
+      expect(model.weeks[3]?.segments).toHaveLength(0);
+    });
+
+    it('is deterministic for identical input', () => {
       const source = data({
         tasks: [
-          withProject({ id: 'undated', start_date: null, due_date: null }),
-          withProject({ id: 'inverted', start_date: '2026-07-20', due_date: '2026-07-10' }),
-          withProject({
-            id: 'same-a',
-            title: '甲',
-            start_date: '2026-07-03',
-            due_date: '2026-07-04',
-          }),
-          withProject({
-            id: 'same-b',
-            title: '乙',
-            start_date: '2026-07-03',
-            due_date: '2026-07-04',
-          }),
+          withProject({ id: 'same-a', title: '甲', start_date: '2026-07-03', due_date: '2026-07-04' }),
+          withProject({ id: 'same-b', title: '乙', start_date: '2026-07-03', due_date: '2026-07-04' }),
         ],
+        meetings: [makeMeeting({ id: 'm', project_id: 'p1', date: '2026-07-03' })],
       });
-      const first = buildCalendarColorBar(source, '2026-07-01', '2026-07-31');
-      const second = buildCalendarColorBar(source, '2026-07-01', '2026-07-31');
 
-      expect(first.lanes).toEqual(second.lanes);
-      expect(first.unscheduledTasks.map((task) => task.id)).toEqual(['undated']);
-      expect(first.lanes.flat().find((bar) => bar.taskId === 'inverted')).toMatchObject({
-        displayStart: '2026-07-20',
-        displayEnd: '2026-07-20',
-      });
+      const first = buildCalendarMonth('2026-07', source, TODAY).colorBar;
+      const second = buildCalendarMonth('2026-07', source, TODAY).colorBar;
+      expect(first.weeks).toEqual(second.weeks);
     });
 
     it('falls back to the safe default for missing or unsafe project colours', () => {
       expect(safeCalendarColor(null)).toBe(DEFAULT_CALENDAR_BAR_COLOR);
       expect(safeCalendarColor('url(javascript:alert(1))')).toBe(DEFAULT_CALENDAR_BAR_COLOR);
       expect(safeCalendarColor('#2563eb')).toBe('#2563eb');
+
+      const segment = segmentsOf(
+        data({
+          tasks: [
+            withProject({
+              id: 'bad',
+              start_date: '2026-07-06',
+              due_date: '2026-07-06',
+              project_color: 'red; background:url(x)',
+            }),
+          ],
+        }),
+      )[0];
+      expect(segment?.color).toBe(DEFAULT_CALENDAR_BAR_COLOR);
+    });
+
+    it('chooses a readable foreground for light and dark bar colours', () => {
+      expect(readableBarTextColor('#ffffff')).toBe('#1f2937');
+      expect(readableBarTextColor('#fde047')).toBe('#1f2937');
+      expect(readableBarTextColor('#1e3a8a')).toBe('#ffffff');
+      expect(readableBarTextColor('not-a-colour')).toBe(readableBarTextColor(DEFAULT_CALENDAR_BAR_COLOR));
     });
   });
 

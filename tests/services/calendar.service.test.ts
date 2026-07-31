@@ -153,12 +153,17 @@ describe('loadMonth', () => {
 
     const month = await service.loadMonth('2026-07', TODAY);
 
-    expect(month.colorBar.lanes.flat()).toEqual(
+    expect(month.colorBar.weeks.flatMap((week) => week.segments)).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
-          taskId: 'spanning',
-          displayStart: '2026-06-29',
-          displayEnd: '2026-08-09',
+          sourceKey: 'task-bar:spanning',
+          start: '2026-06-29',
+          isStart: true,
+        }),
+        expect.objectContaining({
+          sourceKey: 'task-bar:spanning',
+          end: '2026-08-09',
+          isEnd: true,
         }),
       ]),
     );
