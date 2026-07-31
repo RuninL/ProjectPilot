@@ -24,7 +24,7 @@ function buildService(current: TestDb): CalendarService {
 }
 
 function entriesOn(
-  month: Awaited<ReturnType<CalendarService['loadMonth']>>,
+  month: Pick<Awaited<ReturnType<CalendarService['loadMonth']>>, 'weeks'>,
   date: string,
 ): readonly { kind: string; title: string }[] {
   const day = month.weeks.flat().find((candidate) => candidate.date === date);
@@ -168,5 +168,18 @@ describe('loadMonth', () => {
       ]),
     );
     expect(month.colorBar.unscheduledTasks.map((task) => task.id)).toEqual(['undated']);
+  });
+});
+
+describe('loadCompactMonth', () => {
+  it('keeps the date-grid entries while omitting colour-bar lane packing', async () => {
+    await createTaskRepository(db.executor).insert(
+      makeTask({ id: 't1', title: '小窗任务', due_date: TODAY }),
+    );
+
+    const month = await service.loadCompactMonth('2026-07', TODAY);
+
+    expect(entriesOn(month, TODAY)).toEqual([{ kind: 'task', title: '小窗任务' }]);
+    expect('colorBar' in month).toBe(false);
   });
 });

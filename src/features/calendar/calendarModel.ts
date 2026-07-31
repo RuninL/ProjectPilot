@@ -62,6 +62,16 @@ export interface CalendarMonth {
   readonly colorBar: CalendarColorBarModel;
 }
 
+/**
+ * The lightweight grid used by the desktop companion. It deliberately omits
+ * colour-bar lane packing, which the compact date picker neither displays nor
+ * needs to calculate.
+ */
+export type CompactCalendarMonth = Pick<
+  CalendarMonth,
+  'month' | 'label' | 'rangeStart' | 'rangeEnd' | 'weeks' | 'entryCount' | 'recurrenceTruncated'
+>;
+
 export interface CalendarData {
   readonly tasks: readonly TaskWithProject[];
   readonly meetings: readonly Meeting[];
@@ -439,11 +449,15 @@ export function buildCalendarColorBar(
   return { weeks: packedWeeks, unscheduledTasks };
 }
 
-export function buildCalendarMonth(
+interface CalendarGridData extends CompactCalendarMonth {
+  readonly entries: readonly CalendarEntry[];
+}
+
+function buildCalendarGrid(
   month: string,
   data: CalendarData,
   today: string = todayHK(),
-): CalendarMonth {
+): CalendarGridData {
   const { from, to } = monthGridRange(month);
   const projectsById = new Map(data.projects.map((project) => [project.id, project]));
 
@@ -500,7 +514,38 @@ export function buildCalendarMonth(
     weeks,
     entryCount,
     recurrenceTruncated: data.recurrenceTruncated ?? false,
-    colorBar: buildCalendarColorBar(data, weeks, all),
+    entries: all,
+  };
+}
+
+/** Build the month model for the companion without the main Calendar's bar layout. */
+export function buildCompactCalendarMonth(
+  month: string,
+  data: CalendarData,
+  today: string = todayHK(),
+): CompactCalendarMonth {
+  const grid = buildCalendarGrid(month, data, today);
+  return {
+    month: grid.month,
+    label: grid.label,
+    rangeStart: grid.rangeStart,
+    rangeEnd: grid.rangeEnd,
+    weeks: grid.weeks,
+    entryCount: grid.entryCount,
+    recurrenceTruncated: grid.recurrenceTruncated,
+  };
+}
+
+export function buildCalendarMonth(
+  month: string,
+  data: CalendarData,
+  today: string = todayHK(),
+): CalendarMonth {
+  const grid = buildCalendarGrid(month, data, today);
+  const { entries, ...calendar } = grid;
+  return {
+    ...calendar,
+    colorBar: buildCalendarColorBar(data, grid.weeks, entries),
   };
 }
 

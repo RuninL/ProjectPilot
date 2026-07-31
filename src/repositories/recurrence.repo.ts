@@ -91,6 +91,28 @@ export function createRecurrenceRepository(db: SqlExecutor) {
         ),
       );
     },
+    async findExceptionsByRuleIds(
+      ruleIds: readonly string[],
+    ): Promise<Map<string, RecurrenceException[]>> {
+      const byRuleId = new Map<string, RecurrenceException[]>();
+      if (ruleIds.length === 0) return byRuleId;
+      const rows = parseRows(
+        recurrenceExceptionRowSchema,
+        await db.select(
+          `SELECT * FROM recurrence_exceptions WHERE rule_id IN (${ruleIds.map(() => '?').join(', ')}) ORDER BY rule_id ASC, occurrence_date ASC`,
+          [...ruleIds],
+        ),
+      );
+      for (const exception of rows) {
+        const existing = byRuleId.get(exception.rule_id);
+        if (existing === undefined) {
+          byRuleId.set(exception.rule_id, [exception]);
+        } else {
+          existing.push(exception);
+        }
+      }
+      return byRuleId;
+    },
     async insertException(exception: RecurrenceException): Promise<void> {
       const statement = this.buildInsertException(exception);
       await db.execute(statement.sql, statement.params);
