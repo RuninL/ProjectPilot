@@ -13,7 +13,7 @@ const rank: Record<CompanionItemKind, number> = {
   other: 4,
 };
 /** Stable, deterministic ordering for the compact Today view. */
-export function sortCompanionItems(items: readonly CompanionItem[]): CompanionItem[] {
+export function sortCompanionItems<T extends CompanionItem>(items: readonly T[]): T[] {
   return items
     .map((item, index) => ({ item, index }))
     .sort(
