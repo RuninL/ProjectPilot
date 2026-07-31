@@ -20,7 +20,9 @@ export function CompanionApp() {
           role="tab"
           aria-selected={view === 'today'}
           variant={view === 'today' ? 'default' : 'outline'}
-          onClick={() => setView('today')}
+          onClick={() => {
+            setView('today');
+          }}
         >
           Today tasks
         </Button>
@@ -29,7 +31,9 @@ export function CompanionApp() {
           role="tab"
           aria-selected={view === 'calendar'}
           variant={view === 'calendar' ? 'default' : 'outline'}
-          onClick={() => setView('calendar')}
+          onClick={() => {
+            setView('calendar');
+          }}
         >
           Calendar
         </Button>
