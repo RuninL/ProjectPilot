@@ -143,4 +143,25 @@ describe('loadMonth', () => {
     expect(entriesOn(month, '2026-07-20')).toEqual([{ kind: 'milestone', title: '乙' }]);
     expect(month.entryCount).toBe(2);
   });
+
+  it('loads a task spanning the complete visible range and retains undated tasks for the colour-bar view', async () => {
+    const tasks = createTaskRepository(db.executor);
+    await tasks.insert(
+      makeTask({ id: 'spanning', start_date: '2026-06-01', due_date: '2026-09-01' }),
+    );
+    await tasks.insert(makeTask({ id: 'undated', start_date: null, due_date: null }));
+
+    const month = await service.loadMonth('2026-07', TODAY);
+
+    expect(month.colorBar.lanes.flat()).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          taskId: 'spanning',
+          displayStart: '2026-06-29',
+          displayEnd: '2026-08-09',
+        }),
+      ]),
+    );
+    expect(month.colorBar.unscheduledTasks.map((task) => task.id)).toEqual(['undated']);
+  });
 });

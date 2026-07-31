@@ -74,8 +74,9 @@ export function createCalendarService(deps: CalendarServiceDeps) {
   return {
     async loadMonth(month: string, today: string = todayHK()): Promise<CalendarMonth> {
       const { from, to } = monthGridRange(month);
-      const [tasks, meetings, milestones, projects] = await Promise.all([
+      const [tasks, unscheduledTasks, meetings, milestones, projects] = await Promise.all([
         deps.tasks.findInDateRange(from, to),
+        deps.tasks.findUndated(),
         deps.meetings.findByDateRange(from, to),
         deps.milestones.findByDateRange(from, to),
         deps.projects.findAll(),
@@ -151,7 +152,7 @@ export function createCalendarService(deps: CalendarServiceDeps) {
       return buildCalendarMonth(
         month,
         {
-          tasks: [...tasks, ...recurringTasks],
+          tasks: [...tasks, ...unscheduledTasks, ...recurringTasks],
           meetings: [...meetings, ...recurringMeetings],
           milestones,
           projects,

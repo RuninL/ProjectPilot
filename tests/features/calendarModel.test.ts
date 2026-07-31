@@ -1,11 +1,14 @@
 import { describe, expect, it } from 'vitest';
 import {
   buildCalendarMonth,
+  buildCalendarColorBar,
   CALENDAR_GRID_DAYS,
+  DEFAULT_CALENDAR_BAR_COLOR,
   gridDayCount,
   monthGridRange,
   monthOf,
   shiftMonth,
+  safeCalendarColor,
   type CalendarData,
 } from '@/features/calendar/calendarModel';
 import type { TaskWithProject } from '@/types';
@@ -85,6 +88,83 @@ describe('buildCalendarMonth', () => {
     const todays = month.weeks.flat().filter((day) => day.isToday);
     expect(todays).toHaveLength(1);
     expect(todays[0]?.date).toBe(TODAY);
+  });
+
+  describe('colour-bar timeline model', () => {
+    it('uses inclusive task intervals and single-day fallback dates', () => {
+      const model = buildCalendarColorBar(
+        data({
+          tasks: [
+            withProject({ id: 'span', start_date: '2026-07-03', due_date: '2026-07-08' }),
+            withProject({ id: 'start', start_date: '2026-07-10', due_date: null }),
+            withProject({ id: 'due', start_date: null, due_date: '2026-07-12' }),
+          ],
+        }),
+        '2026-07-01',
+        '2026-07-31',
+      );
+
+      const bars = model.lanes.flat();
+      expect(bars.find((bar) => bar.taskId === 'span')).toMatchObject({
+        displayStart: '2026-07-03',
+        displayEnd: '2026-07-08',
+      });
+      expect(bars.find((bar) => bar.taskId === 'start')).toMatchObject({
+        displayStart: '2026-07-10',
+        displayEnd: '2026-07-10',
+      });
+      expect(bars.find((bar) => bar.taskId === 'due')).toMatchObject({
+        displayStart: '2026-07-12',
+        displayEnd: '2026-07-12',
+      });
+    });
+
+    it('clips visible intervals, preserves a cross-week task identity, and packs overlaps into lanes', () => {
+      const source = data({
+        tasks: [
+          withProject({ id: 'cross', start_date: '2026-06-20', due_date: '2026-07-08' }),
+          withProject({ id: 'overlap', start_date: '2026-07-08', due_date: '2026-07-10' }),
+          withProject({ id: 'separate', start_date: '2026-07-11', due_date: '2026-07-12' }),
+        ],
+      });
+      const model = buildCalendarColorBar(source, '2026-07-01', '2026-07-31');
+      const bars = model.lanes.flat();
+
+      expect(bars.find((bar) => bar.taskId === 'cross')).toMatchObject({
+        id: 'task-bar:cross',
+        displayStart: '2026-07-01',
+        displayEnd: '2026-07-08',
+      });
+      expect(bars.find((bar) => bar.taskId === 'cross')).toHaveProperty('lane', 0);
+      expect(bars.find((bar) => bar.taskId === 'overlap')).toHaveProperty('lane', 1);
+      expect(bars.find((bar) => bar.taskId === 'separate')).toHaveProperty('lane', 0);
+    });
+
+    it('is deterministic, exposes unscheduled tasks, and safely handles inverted dates', () => {
+      const source = data({
+        tasks: [
+          withProject({ id: 'undated', start_date: null, due_date: null }),
+          withProject({ id: 'inverted', start_date: '2026-07-20', due_date: '2026-07-10' }),
+          withProject({ id: 'same-a', title: '甲', start_date: '2026-07-03', due_date: '2026-07-04' }),
+          withProject({ id: 'same-b', title: '乙', start_date: '2026-07-03', due_date: '2026-07-04' }),
+        ],
+      });
+      const first = buildCalendarColorBar(source, '2026-07-01', '2026-07-31');
+      const second = buildCalendarColorBar(source, '2026-07-01', '2026-07-31');
+
+      expect(first.lanes).toEqual(second.lanes);
+      expect(first.unscheduledTasks.map((task) => task.id)).toEqual(['undated']);
+      expect(first.lanes.flat().find((bar) => bar.taskId === 'inverted')).toMatchObject({
+        displayStart: '2026-07-20',
+        displayEnd: '2026-07-20',
+      });
+    });
+
+    it('falls back to the safe default for missing or unsafe project colours', () => {
+      expect(safeCalendarColor(null)).toBe(DEFAULT_CALENDAR_BAR_COLOR);
+      expect(safeCalendarColor('url(javascript:alert(1))')).toBe(DEFAULT_CALENDAR_BAR_COLOR);
+      expect(safeCalendarColor('#2563eb')).toBe('#2563eb');
+    });
   });
 
   it('labels the month in Simplified Chinese', () => {

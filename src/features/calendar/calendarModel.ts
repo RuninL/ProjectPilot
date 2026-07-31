@@ -59,6 +59,7 @@ export interface CalendarMonth {
   /** Entries inside the month proper, for the empty state. */
   readonly entryCount: number;
   readonly recurrenceTruncated: boolean;
+  readonly colorBar: CalendarColorBarModel;
 }
 
 export interface CalendarData {
@@ -70,7 +71,45 @@ export interface CalendarData {
   readonly recurrenceTruncated?: boolean;
 }
 
+export interface CalendarColorBar {
+  readonly id: string;
+  readonly taskId: string;
+  readonly title: string;
+  readonly projectName: string;
+  readonly startDate: string;
+  readonly endDate: string;
+  readonly displayStart: string;
+  readonly displayEnd: string;
+  readonly lane: number;
+  readonly color: string;
+  readonly status: TaskWithProject['status'];
+  readonly statusLabel: string;
+  readonly href: string;
+  readonly recurrence: CalendarEntry['recurrence'];
+}
+
+export interface CalendarColorBarEvent {
+  readonly id: string;
+  readonly date: string;
+  readonly kind: Exclude<CalendarEntryKind, 'task'>;
+  readonly kindLabel: string;
+  readonly title: string;
+  readonly detail: string;
+  readonly href: string;
+  readonly color: string;
+  readonly recurrence: CalendarEntry['recurrence'];
+}
+
+export interface CalendarColorBarModel {
+  readonly dates: readonly string[];
+  readonly lanes: readonly (readonly CalendarColorBar[])[];
+  readonly unscheduledTasks: readonly TaskWithProject[];
+  readonly events: readonly CalendarColorBarEvent[];
+}
+
 const MONTH_RE = /^\d{4}-\d{2}$/;
+const HEX_COLOR_RE = /^#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/;
+export const DEFAULT_CALENDAR_BAR_COLOR = '#64748b';
 
 export function monthOf(date: string): string {
   return date.slice(0, 7);
@@ -209,6 +248,120 @@ function milestoneEntries(
   });
 }
 
+const TASK_STATUS_LABELS: Record<TaskWithProject['status'], string> = {
+  todo: '待办',
+  in_progress: '进行中',
+  blocked: '受阻',
+  postponed: '已延期',
+  done: '已完成',
+  cancelled: '已取消',
+};
+
+/** Restrict decorative project colours to literal hex values before applying inline styles. */
+export function safeCalendarColor(color: string | null | undefined): string {
+  return color !== null && color !== undefined && HEX_COLOR_RE.test(color)
+    ? color
+    : DEFAULT_CALENDAR_BAR_COLOR;
+}
+
+function taskInterval(task: TaskWithProject): { start: string; end: string } | null {
+  if (task.start_date === null && task.due_date === null) return null;
+  if (task.start_date === null) return { start: task.due_date as string, end: task.due_date as string };
+  if (task.due_date === null) return { start: task.start_date, end: task.start_date };
+  // Legacy inverted dates are displayed as a safe single-day task rather than corrupting the lane layout.
+  if (task.start_date > task.due_date) return { start: task.start_date, end: task.start_date };
+  return { start: task.start_date, end: task.due_date };
+}
+
+/**
+ * Builds clipped, deterministically packed task intervals for the continuous colour-bar timeline.
+ * The source tasks remain untouched; clipping only affects this visible range.
+ */
+export function buildCalendarColorBar(
+  data: CalendarData,
+  rangeStart: string,
+  rangeEnd: string,
+  entries: readonly CalendarEntry[] = [],
+): CalendarColorBarModel {
+  const unscheduledTasks = data.tasks.filter((task) => taskInterval(task) === null);
+  const candidates = data.tasks
+    .flatMap((task) => {
+      const interval = taskInterval(task);
+      if (interval === null || interval.end < rangeStart || interval.start > rangeEnd) return [];
+      return [
+        {
+          task,
+          start: interval.start < rangeStart ? rangeStart : interval.start,
+          end: interval.end > rangeEnd ? rangeEnd : interval.end,
+        },
+      ];
+    })
+    .sort((a, b) => {
+      const durationA = inclusiveDays(a.start, a.end);
+      const durationB = inclusiveDays(b.start, b.end);
+      return (
+        a.start.localeCompare(b.start) ||
+        durationB - durationA ||
+        a.end.localeCompare(b.end) ||
+        a.task.project_id.localeCompare(b.task.project_id) ||
+        a.task.title.localeCompare(b.task.title, 'zh-CN') ||
+        a.task.id.localeCompare(b.task.id)
+      );
+    });
+  const laneEnds: string[] = [];
+  const lanes: CalendarColorBar[][] = [];
+  for (const candidate of candidates) {
+    let lane = laneEnds.findIndex((end) => end < candidate.start);
+    if (lane === -1) {
+      lane = laneEnds.length;
+      laneEnds.push(candidate.end);
+      lanes.push([]);
+    } else {
+      laneEnds[lane] = candidate.end;
+    }
+    const { task } = candidate;
+    lanes[lane]?.push({
+      id: `task-bar:${task.id}`,
+      taskId: task.id,
+      title: task.title,
+      projectName: task.project_name,
+      startDate: task.start_date ?? task.due_date ?? '',
+      endDate: task.due_date ?? task.start_date ?? '',
+      displayStart: candidate.start,
+      displayEnd: candidate.end,
+      lane,
+      color: safeCalendarColor(task.project_color),
+      status: task.status,
+      statusLabel: TASK_STATUS_LABELS[task.status],
+      href: `/tasks?taskId=${encodeURIComponent(task.id)}`,
+      recurrence:
+        task.source_rule_id === null || task.source_occurrence_date === null
+          ? null
+          : { ruleId: task.source_rule_id, occurrenceDate: task.source_occurrence_date },
+    });
+  }
+  const events = entries
+    .filter(
+      (entry): entry is CalendarEntry & { kind: Exclude<CalendarEntryKind, 'task'> } =>
+        entry.kind !== 'task' && entry.date >= rangeStart && entry.date <= rangeEnd,
+    )
+    .map((entry) => ({
+      id: `calendar-event:${entry.key}`,
+      date: entry.date,
+      kind: entry.kind,
+      kindLabel: entry.kindLabel,
+      title: entry.title,
+      detail: entry.detail,
+      href: entry.href,
+      color: safeCalendarColor(entry.color),
+      recurrence: entry.recurrence,
+    }));
+  const dates = Array.from({ length: inclusiveDays(rangeStart, rangeEnd) }, (_, index) =>
+    addDays(rangeStart, index),
+  );
+  return { dates, lanes, unscheduledTasks, events };
+}
+
 export function buildCalendarMonth(
   month: string,
   data: CalendarData,
@@ -270,6 +423,7 @@ export function buildCalendarMonth(
     weeks,
     entryCount,
     recurrenceTruncated: data.recurrenceTruncated ?? false,
+    colorBar: buildCalendarColorBar(data, from, to, all),
   };
 }
 

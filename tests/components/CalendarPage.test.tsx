@@ -293,4 +293,51 @@ describe('CalendarPage', () => {
     });
     expect(await getRepositories().then((repos) => repos.meetings.findAll())).toHaveLength(0);
   });
+
+  it('switches from the default month grid to the accessible colour-bar timeline', async () => {
+    const user = userEvent.setup();
+    useRealDb();
+    const repos = await getRepositories();
+    await repos.projects.insert(makeProject({ id: 'p1', name: '内网门户重构' }));
+    await repos.tasks.insert(
+      makeTask({
+        id: 'span',
+        project_id: 'p1',
+        title: '连续排期任务',
+        start_date: '2026-07-03',
+        due_date: '2026-07-08',
+        status: 'blocked',
+      }),
+    );
+
+    renderPage('2026-07');
+
+    expect(await screen.findByRole('tab', { name: '常规视图', selected: true })).toBeInTheDocument();
+    await user.click(screen.getByRole('tab', { name: '颜色条视图' }));
+
+    expect(await screen.findByRole('region', { name: '颜色条视图' })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: /连续排期任务.*项目：内网门户重构.*2026-07-03 至 2026-07-08.*状态：受阻/ })).toHaveAttribute(
+      'href',
+      '/tasks?taskId=span',
+    );
+    expect(screen.getByLabelText('颜色条时间轴')).toHaveClass('overflow-x-auto');
+    expect(screen.getByLabelText('颜色条图例')).toHaveTextContent('任务：连续时间条');
+  });
+
+  it('keeps unscheduled tasks reachable from the colour-bar view', async () => {
+    const user = userEvent.setup();
+    useRealDb();
+    const repos = await getRepositories();
+    await repos.projects.insert(makeProject({ id: 'p1' }));
+    await repos.tasks.insert(makeTask({ id: 'undated', project_id: 'p1', title: '尚未排期' }));
+
+    renderPage('2026-07');
+    await user.click(await screen.findByRole('tab', { name: '颜色条视图' }));
+    expect(await screen.findByText('未排期任务（1）')).toBeInTheDocument();
+    await user.click(screen.getByText('未排期任务（1）'));
+    expect(await screen.findByRole('link', { name: '尚未排期' })).toHaveAttribute(
+      'href',
+      '/tasks?taskId=undated',
+    );
+  });
 });

@@ -197,21 +197,39 @@ export function createTaskRepository(db: SqlExecutor) {
       return parseRows(taskWithProjectRowSchema, rows);
     },
 
-    /**
-     * Tasks touching `[from, to]` through either endpoint, for the calendar.
-     * Archived tasks are excluded, matching every other read path. A task with
-     * only one of the two dates still appears on the date it does have.
-     */
+    /** Tasks whose date interval intersects `[from, to]`, for the calendar. */
     async findInDateRange(from: string, to: string): Promise<TaskWithProject[]> {
       const rows = await db.select(
         `SELECT t.*, p.name AS project_name, p.color AS project_color, p.status AS project_status
            FROM tasks t
            JOIN projects p ON p.id = t.project_id
           WHERE t.archived_at IS NULL
-            AND ((t.start_date IS NOT NULL AND t.start_date BETWEEN ? AND ?)
-              OR (t.due_date IS NOT NULL AND t.due_date BETWEEN ? AND ?))
+            AND (
+              (t.start_date IS NOT NULL AND t.due_date IS NOT NULL
+                AND t.start_date <= ? AND t.due_date >= ?)
+              OR (t.start_date IS NOT NULL AND t.start_date BETWEEN ? AND ?)
+              OR (t.due_date IS NOT NULL AND t.due_date BETWEEN ? AND ?)
+              OR (t.start_date IS NOT NULL AND t.due_date IS NULL
+                AND t.start_date BETWEEN ? AND ?)
+              OR (t.start_date IS NULL AND t.due_date IS NOT NULL
+                AND t.due_date BETWEEN ? AND ?)
+            )
           ORDER BY t.due_date IS NULL, t.due_date ASC, t.created_at ASC`,
-        [from, to, from, to],
+        [to, from, from, to, from, to, from, to, from, to],
+      );
+      return parseRows(taskWithProjectRowSchema, rows);
+    },
+
+    /** Non-archived tasks without either date, displayed in Calendar's unscheduled section. */
+    async findUndated(): Promise<TaskWithProject[]> {
+      const rows = await db.select(
+        `SELECT t.*, p.name AS project_name, p.color AS project_color, p.status AS project_status
+          FROM tasks t
+          JOIN projects p ON p.id = t.project_id
+          WHERE t.archived_at IS NULL
+           AND t.start_date IS NULL
+           AND t.due_date IS NULL
+          ORDER BY t.created_at ASC`,
       );
       return parseRows(taskWithProjectRowSchema, rows);
     },

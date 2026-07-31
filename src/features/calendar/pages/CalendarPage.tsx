@@ -5,6 +5,7 @@ import { Link } from 'react-router-dom';
 import { ErrorState } from '@/components/common/ErrorState';
 import { LoadingState } from '@/components/common/LoadingState';
 import { Button } from '@/components/ui/button';
+import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import {
   Dialog,
   DialogContent,
@@ -19,6 +20,7 @@ import { getCalendarService, type CalendarAttentionTask } from '@/services/calen
 import { useCalendarStore } from '@/stores/useCalendarStore';
 import { useRecurrenceStore } from '@/stores/useRecurrenceStore';
 import { WEEKDAY_LABELS, type CalendarEntry, type CalendarEntryKind } from '../calendarModel';
+import { CalendarColorBarView } from '../components/CalendarColorBarView';
 
 /** Entries shown before a busy day collapses into a count. */
 const VISIBLE_PER_DAY = 3;
@@ -93,6 +95,7 @@ export function CalendarPage() {
   const rescheduleOccurrence = useRecurrenceStore((state) => state.reschedule);
 
   const [expandedDays, setExpandedDays] = useState<readonly string[]>([]);
+  const [view, setView] = useState<'calendar' | 'color-bar'>('calendar');
   const [attentionDate, setAttentionDate] = useState<string | null>(null);
   const [attentionTasks, setAttentionTasks] = useState<readonly CalendarAttentionTask[]>([]);
   const [attentionLoading, setAttentionLoading] = useState(false);
@@ -181,6 +184,18 @@ export function CalendarPage() {
             显示任务、会议与里程碑，不能拖动排期；周期会议可按次调整。
           </p>
           <p className="mt-1 text-xs text-muted-foreground">右键日期查看当日任务</p>
+          <Tabs
+            value={view}
+            onValueChange={(value) => {
+              if (value === 'calendar' || value === 'color-bar') setView(value);
+            }}
+            className="mt-3"
+          >
+            <TabsList aria-label="日历视图切换">
+              <TabsTrigger value="calendar">常规视图</TabsTrigger>
+              <TabsTrigger value="color-bar">颜色条视图</TabsTrigger>
+            </TabsList>
+          </Tabs>
         </div>
         <div className="flex items-center gap-2">
           <Button
@@ -232,6 +247,16 @@ export function CalendarPage() {
         </p>
       )}
 
+      {view === 'color-bar' && data !== null ? (
+        <CalendarColorBarView
+          month={data}
+          onOpenOccurrence={(selected) => {
+            setOccurrence(selected);
+            setReplacementDate(selected.date);
+            setOccurrenceError(null);
+          }}
+        />
+      ) : (
       <div className="overflow-hidden rounded-lg border bg-card">
         <div className="grid grid-cols-7 border-b bg-muted/40">
           {WEEKDAY_LABELS.map((label) => (
@@ -322,6 +347,7 @@ export function CalendarPage() {
           </div>
         ))}
       </div>
+      )}
       {contextMenu !== null && (
         <div
           ref={contextMenuRef}
