@@ -9,6 +9,8 @@ import { router } from '@/router';
 import { ensureSampleDataSeeded } from '@/services/sampleData.service';
 import { loadThemePreference } from '@/features/settings/services/settingsPreference.service';
 import { useAppStore } from '@/stores/useAppStore';
+import { getCurrentWebviewWindow } from '@tauri-apps/api/webviewWindow';
+import { CompanionApp } from '@/features/companion/CompanionApp';
 
 /**
  * Initialize the database (runs migration 0001 + the foreign-keys assertion)
@@ -72,5 +74,9 @@ export function App() {
   if (!dbReady) {
     return <LoadingState label="正在初始化数据库…" />;
   }
-  return <RouterProvider router={router} />;
+  return getCurrentWebviewWindow().label === 'companion' ? (
+    <CompanionApp />
+  ) : (
+    <RouterProvider router={router} />
+  );
 }
