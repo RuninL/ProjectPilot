@@ -29,7 +29,12 @@ export const reminderSettingsSchema = z
     companionAlwaysOnTop: z.boolean().default(false),
     companionView: z.enum(['today', 'calendar']).default('today'),
     companionGeometry: z
-      .object({ x: z.number(), y: z.number(), width: z.number().positive(), height: z.number().positive() })
+      .object({
+        x: z.number(),
+        y: z.number(),
+        width: z.number().positive(),
+        height: z.number().positive(),
+      })
       .nullable()
       .default(null),
   })

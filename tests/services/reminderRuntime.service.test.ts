@@ -44,7 +44,10 @@ describe('reminder runtime candidates', () => {
           occurrenceDate: '2026-08-03',
           scheduledAt: '2026-08-03T08:45:00+08:00',
         }),
-        expect.objectContaining({ kind: 'date-only-meetings', scheduledAt: '2026-08-03T08:30:00+08:00' }),
+        expect.objectContaining({
+          kind: 'date-only-meetings',
+          scheduledAt: '2026-08-03T08:30:00+08:00',
+        }),
       ]),
     );
   });
