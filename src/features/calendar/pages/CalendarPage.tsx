@@ -225,7 +225,11 @@ export function CalendarPage() {
             variant="outline"
             size="sm"
             onClick={() => {
-              void goToToday();
+              void goToToday().then(() => {
+                document
+                  .querySelector('[data-calendar-today]')
+                  ?.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+              });
             }}
           >
             <CalendarDays className="h-4 w-4" aria-hidden />
@@ -280,6 +284,7 @@ export function CalendarPage() {
                     role="gridcell"
                     tabIndex={0}
                     aria-label={`${day.date} 的日期菜单`}
+                    data-calendar-today={day.isToday ? true : undefined}
                     className={cn(
                       'min-h-24 border-r p-1 outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring last:border-r-0',
                       day.inMonth ? '' : 'bg-muted/30 text-muted-foreground',
