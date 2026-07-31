@@ -80,7 +80,7 @@ pub(crate) fn validate_database(path: &Path) -> CommandResult<Connection> {
     Ok(conn)
 }
 
-fn copy_database(source: &Connection, destination: &Path) -> CommandResult<()> {
+pub(crate) fn copy_database(source: &Connection, destination: &Path) -> CommandResult<()> {
     if let Some(parent) = destination.parent() {
         std::fs::create_dir_all(parent)?;
     }
@@ -97,6 +97,16 @@ pub(crate) fn pre_restore_path(database: &Path) -> CommandResult<PathBuf> {
         .map_err(|e| CommandError::Invalid(e.to_string()))?
         .as_secs();
     Ok(database.with_file_name(format!("projectpilot-pre-restore-{timestamp}.db")))
+}
+
+pub(crate) fn pre_migration_checksum_path(database: &Path) -> CommandResult<PathBuf> {
+    let timestamp = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map_err(|e| CommandError::Invalid(e.to_string()))?
+        .as_secs();
+    Ok(database.with_file_name(format!(
+        "projectpilot-pre-migration-checksum-{timestamp}.db"
+    )))
 }
 
 /// Create a consistent SQLite online backup at `dest_path`.

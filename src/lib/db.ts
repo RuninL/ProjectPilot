@@ -1,4 +1,5 @@
 import Database from '@tauri-apps/plugin-sql';
+import { invoke } from '@tauri-apps/api/core';
 import { AppError } from './errors';
 
 /** Result of a write statement (mirrors tauri-plugin-sql's QueryResult). */
@@ -18,6 +19,11 @@ export interface SqlExecutor {
 }
 
 const DB_URL = 'sqlite:projectpilot.db';
+
+interface MigrationChecksumRepair {
+  repaired: boolean;
+  backup_path: string | null;
+}
 
 let instance: SqlExecutor | null = null;
 
@@ -52,6 +58,10 @@ export async function getDb(): Promise<SqlExecutor> {
   if (instance !== null) {
     return instance;
   }
+  // SQLx correctly blocks edited migration files. Earlier development builds
+  // changed migration 1, so reconcile only a complete, integrity-checked local
+  // history after making a SQLite safety copy; new/incomplete databases are untouched.
+  await invoke<MigrationChecksumRepair>('reconcile_migration_checksum');
   const db = await Database.load(DB_URL);
   await assertForeignKeys(db);
   instance = db;
