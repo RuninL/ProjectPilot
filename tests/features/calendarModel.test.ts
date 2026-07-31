@@ -171,7 +171,9 @@ describe('buildCalendarMonth', () => {
     it('splits a cross-week task into per-week segments sharing one identity', () => {
       // 2026-07-03 is a Friday; the task runs through the following Wednesday.
       const model = colorBarOf(
-        data({ tasks: [withProject({ id: 'x', start_date: '2026-07-03', due_date: '2026-07-08' })] }),
+        data({
+          tasks: [withProject({ id: 'x', start_date: '2026-07-03', due_date: '2026-07-08' })],
+        }),
       );
 
       const segments = model.weeks.flatMap((week) => week.segments);
@@ -295,7 +297,9 @@ describe('buildCalendarMonth', () => {
 
     it('gives an empty week no lanes at all', () => {
       const model = colorBarOf(
-        data({ tasks: [withProject({ id: 'a', start_date: '2026-07-06', due_date: '2026-07-06' })] }),
+        data({
+          tasks: [withProject({ id: 'a', start_date: '2026-07-06', due_date: '2026-07-06' })],
+        }),
       );
 
       expect(model.weeks[1]?.laneCount).toBe(1);
@@ -306,8 +310,18 @@ describe('buildCalendarMonth', () => {
     it('is deterministic for identical input', () => {
       const source = data({
         tasks: [
-          withProject({ id: 'same-a', title: '甲', start_date: '2026-07-03', due_date: '2026-07-04' }),
-          withProject({ id: 'same-b', title: '乙', start_date: '2026-07-03', due_date: '2026-07-04' }),
+          withProject({
+            id: 'same-a',
+            title: '甲',
+            start_date: '2026-07-03',
+            due_date: '2026-07-04',
+          }),
+          withProject({
+            id: 'same-b',
+            title: '乙',
+            start_date: '2026-07-03',
+            due_date: '2026-07-04',
+          }),
         ],
         meetings: [makeMeeting({ id: 'm', project_id: 'p1', date: '2026-07-03' })],
       });
@@ -341,7 +355,9 @@ describe('buildCalendarMonth', () => {
       expect(readableBarTextColor('#ffffff')).toBe('#1f2937');
       expect(readableBarTextColor('#fde047')).toBe('#1f2937');
       expect(readableBarTextColor('#1e3a8a')).toBe('#ffffff');
-      expect(readableBarTextColor('not-a-colour')).toBe(readableBarTextColor(DEFAULT_CALENDAR_BAR_COLOR));
+      expect(readableBarTextColor('not-a-colour')).toBe(
+        readableBarTextColor(DEFAULT_CALENDAR_BAR_COLOR),
+      );
     });
   });
 

@@ -282,7 +282,12 @@ export function safeCalendarColor(color: string | null | undefined): string {
 export function readableBarTextColor(background: string): string {
   const hex = safeCalendarColor(background).slice(1);
   const full =
-    hex.length === 3 ? hex.split('').map((digit) => digit + digit).join('') : hex;
+    hex.length === 3
+      ? hex
+          .split('')
+          .map((digit) => digit + digit)
+          .join('')
+      : hex;
   const r = parseInt(full.slice(0, 2), 16);
   const g = parseInt(full.slice(2, 4), 16);
   const b = parseInt(full.slice(4, 6), 16);
