@@ -4,6 +4,10 @@ import {
 } from '@/features/settings/services/settingsPreference.service';
 import { setDbForTesting } from '@/lib/db';
 import { createAppSettingRepository } from '@/repositories/appSetting.repo';
+import {
+  loadDeliveredReminderIds,
+  saveDeliveredReminderIds,
+} from '@/features/settings/services/reminderSettings.service';
 import { createTestDb, NOW, type TestDb } from '../helpers/testDb';
 
 describe('settingsPreference.service', () => {
@@ -27,5 +31,9 @@ describe('settingsPreference.service', () => {
   it('忽略无法识别的旧主题设置', async () => {
     await createAppSettingRepository(db.executor).set('theme', 'unknown', NOW);
     expect(await loadThemePreference()).toBeNull();
+  });
+  it('persists a bounded reminder delivery ledger', async () => {
+    await saveDeliveredReminderIds(['one', 'two']);
+    expect(await loadDeliveredReminderIds()).toEqual(new Set(['one', 'two']));
   });
 });

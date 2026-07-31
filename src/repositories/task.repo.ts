@@ -197,6 +197,39 @@ export function createTaskRepository(db: SqlExecutor) {
       return parseRows(taskWithProjectRowSchema, rows);
     },
 
+    /**
+     * Open tasks relevant to the desktop companion's business day: overdue,
+     * due today, starting today, or spanning today. Kept as one scoped query
+     * so opening the small window never scans the entire task table.
+     */
+    async findForCompanionToday(date: string): Promise<TaskWithProject[]> {
+      const rows = await db.select(
+        `SELECT t.*, p.name AS project_name, p.color AS project_color, p.status AS project_status
+           FROM tasks t
+           JOIN projects p ON p.id = t.project_id
+          WHERE t.archived_at IS NULL
+            AND t.status NOT IN ('done', 'cancelled')
+            AND (
+              (t.due_date IS NOT NULL AND t.due_date <= ?)
+              OR t.start_date = ?
+              OR (
+                t.start_date IS NOT NULL
+                AND t.due_date IS NOT NULL
+                AND t.start_date <= ?
+                AND t.due_date >= ?
+              )
+            )
+          ORDER BY
+            CASE WHEN t.due_date < ? THEN 0 ELSE 1 END,
+            t.due_date IS NULL,
+            t.due_date ASC,
+            t.start_date ASC,
+            t.created_at ASC`,
+        [date, date, date, date, date],
+      );
+      return parseRows(taskWithProjectRowSchema, rows);
+    },
+
     /** Tasks whose date interval intersects `[from, to]`, for the calendar. */
     async findInDateRange(from: string, to: string): Promise<TaskWithProject[]> {
       const rows = await db.select(

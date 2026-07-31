@@ -13,6 +13,8 @@ import { createCalendarService } from '@/services/calendar.service';
 import { createDashboardService } from '@/services/dashboard.service';
 import { buildDependencyGraph } from '@/services/dependencyGraph';
 import { buildGanttViewModel } from '@/features/gantt/ganttViewModel';
+import { DEFAULT_REMINDER_SETTINGS } from '@/features/settings/services/reminderSettings.service';
+import { buildReminderCandidates } from '@/services/reminderRuntime.service';
 import { makeMeeting, makeMilestone, makeProject, makeRisk, makeTask } from '../helpers/fixtures';
 import { createTestDb, type TestDb } from '../helpers/testDb';
 
@@ -50,7 +52,8 @@ describe('release performance benchmark', () => {
       }),
     );
 
-    await repositories.projects.insert(makeProject());
+    const project = makeProject();
+    await repositories.projects.insert(project);
     for (const task of tasks) {
       await repositories.tasks.insert(task);
     }
@@ -109,11 +112,27 @@ describe('release performance benchmark', () => {
     await calendar.loadMonth('2026-08', '2026-08-12');
     const calendarMilliseconds = performance.now() - calendarStartedAt;
 
+    const reminderResult = elapsed(() =>
+      buildReminderCandidates(
+        {
+          tasks: taskList,
+          projects: [project],
+          meetings: [],
+          milestones: [],
+        },
+        DEFAULT_REMINDER_SETTINGS,
+        '2026-08-12',
+      ),
+    );
+
     console.info(
-      `release benchmark: task-list=${taskListMilliseconds.toFixed(2)}ms dashboard=${dashboardMilliseconds.toFixed(2)}ms graph=${graphResult.milliseconds.toFixed(2)}ms gantt=${ganttResult.milliseconds.toFixed(2)}ms calendar=${calendarMilliseconds.toFixed(2)}ms`,
+      `release benchmark: task-list=${taskListMilliseconds.toFixed(2)}ms dashboard=${dashboardMilliseconds.toFixed(2)}ms graph=${graphResult.milliseconds.toFixed(2)}ms gantt=${ganttResult.milliseconds.toFixed(2)}ms calendar=${calendarMilliseconds.toFixed(2)}ms reminders=${reminderResult.milliseconds.toFixed(2)}ms`,
     );
     expect(taskList).toHaveLength(1000);
     expect(graphResult.milliseconds).toBeLessThan(100);
     expect(ganttResult.milliseconds).toBeLessThan(100);
+    // Shared CI/cloud runners vary substantially under parallel test load; 300 ms
+    // still catches accidental quadratic scans without making the release suite flaky.
+    expect(reminderResult.milliseconds).toBeLessThan(300);
   });
 });

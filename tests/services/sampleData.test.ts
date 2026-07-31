@@ -95,6 +95,15 @@ describe('seedSampleData', () => {
     expect(countRows('projects')).toBe(0);
   });
 
+  it('can mark a migration-recovery database as intentionally empty', async () => {
+    expect(await service.skipSampleData()).toBe(true);
+
+    expect(await service.hasSeeded()).toBe(true);
+    expect(await service.seedSampleData()).toBe(false);
+    expect(countRows('projects')).toBe(0);
+    expect(countRows('tasks')).toBe(0);
+  });
+
   it('seeds atomically — a failing batch leaves no partial rows', async () => {
     const failing = createSampleDataService({
       projects: createProjectRepository(db.executor),

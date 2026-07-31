@@ -28,6 +28,7 @@ import {
   type ImportResult,
 } from '../services/dataTransfer.service';
 import { saveThemePreference } from '../services/settingsPreference.service';
+import { ReminderSettingsSection } from '../components/ReminderSettingsSection';
 
 const THEME_OPTIONS: { value: Theme; label: string }[] = [
   { value: 'dark', label: '深色' },
@@ -277,6 +278,7 @@ export function SettingsPage() {
           ))}
         </select>
       </section>
+      <ReminderSettingsSection />
 
       <section id="data-management" className="mb-6 rounded-lg border bg-card p-4">
         <h2 className="text-lg font-medium">数据管理</h2>
