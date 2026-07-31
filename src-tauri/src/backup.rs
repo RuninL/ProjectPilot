@@ -34,7 +34,7 @@ fn open_read_only(path: &Path) -> CommandResult<Connection> {
         .map_err(|_| CommandError::Invalid("所选文件不是有效的 SQLite 数据库".into()))
 }
 
-pub(crate) fn validate_database(path: &Path) -> CommandResult<Connection> {
+pub(crate) fn validate_sqlite_file(path: &Path) -> CommandResult<Connection> {
     if !path.is_file() {
         return Err(CommandError::Invalid("数据库文件不存在".into()));
     }
@@ -47,6 +47,11 @@ pub(crate) fn validate_database(path: &Path) -> CommandResult<Connection> {
             "数据库完整性检查失败：{check}"
         )));
     }
+    Ok(conn)
+}
+
+pub(crate) fn validate_database(path: &Path) -> CommandResult<Connection> {
+    let conn = validate_sqlite_file(path)?;
     let required = [
         "projects",
         "tasks",
@@ -109,6 +114,14 @@ pub(crate) fn pre_migration_checksum_path(database: &Path) -> CommandResult<Path
     )))
 }
 
+pub(crate) fn migration_failure_path(database: &Path) -> CommandResult<PathBuf> {
+    let timestamp = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map_err(|e| CommandError::Invalid(e.to_string()))?
+        .as_nanos();
+    Ok(database.with_file_name(format!("projectpilot-migration-failed-{timestamp}.db")))
+}
+
 /// Create a consistent SQLite online backup at `dest_path`.
 #[tauri::command]
 pub fn backup_database(app: AppHandle, dest_path: String) -> CommandResult<String> {
@@ -145,7 +158,7 @@ pub fn restore_database(app: AppHandle, src_path: String) -> CommandResult<Strin
 
 #[cfg(test)]
 mod tests {
-    use super::validate_database;
+    use super::{validate_database, validate_sqlite_file};
     use std::time::{SystemTime, UNIX_EPOCH};
 
     #[test]
@@ -161,5 +174,23 @@ mod tests {
         std::fs::remove_file(path).expect("fixture should be removable");
 
         assert!(result.is_err());
+    }
+
+    #[test]
+    fn accepts_a_valid_partial_upgrade_database_for_integrity_checks() {
+        let suffix = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .expect("system clock should be valid")
+            .as_nanos();
+        let path = std::env::temp_dir().join(format!("projectpilot-partial-{suffix}.db"));
+        rusqlite::Connection::open(&path)
+            .expect("fixture database should be created")
+            .execute("CREATE TABLE projects (id TEXT)", [])
+            .expect("fixture table should be created");
+
+        assert!(validate_sqlite_file(&path).is_ok());
+        assert!(validate_database(&path).is_err());
+
+        std::fs::remove_file(path).expect("fixture should be removable");
     }
 }

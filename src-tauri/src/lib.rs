@@ -34,6 +34,7 @@ pub fn run() {
             backup::backup_database,
             backup::restore_database,
             migration_repair::reconcile_migration_checksum,
+            migration_repair::isolate_failed_migration_database,
             project_links::local_path_exists,
             project_links::open_local_path,
         ])

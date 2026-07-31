@@ -1,4 +1,4 @@
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 use rusqlite::{params, Connection};
 use serde::Serialize;
@@ -6,7 +6,10 @@ use sha2::{Digest, Sha384};
 use tauri::AppHandle;
 
 use crate::atomic::db_path;
-use crate::backup::{copy_database, pre_migration_checksum_path, validate_database};
+use crate::backup::{
+    copy_database, migration_failure_path, pre_migration_checksum_path, validate_database,
+    validate_sqlite_file,
+};
 use crate::error::{CommandError, CommandResult};
 
 const CURRENT_MIGRATION_COUNT: i64 = 11;
@@ -46,6 +49,12 @@ pub struct MigrationChecksumRepair {
     pub backup_path: Option<String>,
 }
 
+#[derive(Debug, Serialize)]
+pub struct MigrationFailureRecovery {
+    pub archived_path: String,
+    pub snapshot_path: Option<String>,
+}
+
 fn current_migration_checksums() -> Vec<(i64, Vec<u8>)> {
     CURRENT_MIGRATIONS
         .iter()
@@ -53,23 +62,35 @@ fn current_migration_checksums() -> Vec<(i64, Vec<u8>)> {
         .collect()
 }
 
-fn validated_complete_history(connection: &Connection) -> CommandResult<()> {
-    let successful_count: i64 = connection.query_row(
-        "SELECT COUNT(*) FROM _sqlx_migrations WHERE success = 1 AND version BETWEEN 1 AND ?1",
-        [CURRENT_MIGRATION_COUNT],
-        |row| row.get(0),
-    )?;
-    let total_successful: i64 = connection.query_row(
-        "SELECT COUNT(*) FROM _sqlx_migrations WHERE success = 1",
+/// Return the applied prefix only when it is continuous, successful and known.
+/// A valid database from an older release is intentionally allowed to have a
+/// short prefix: sqlx can then apply the later migrations normally.
+fn applied_migration_versions(connection: &Connection) -> CommandResult<Vec<i64>> {
+    let migration_table_exists: i64 = connection.query_row(
+        "SELECT EXISTS(SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = '_sqlx_migrations')",
         [],
         |row| row.get(0),
     )?;
-    if successful_count != CURRENT_MIGRATION_COUNT || total_successful != CURRENT_MIGRATION_COUNT {
-        return Err(CommandError::Invalid(
-            "migration history is incomplete; checksum repair was not applied".into(),
-        ));
+    if migration_table_exists == 0 {
+        return Ok(Vec::new());
     }
-    Ok(())
+
+    let mut statement =
+        connection.prepare("SELECT version, success FROM _sqlx_migrations ORDER BY version ASC")?;
+    let rows = statement
+        .query_map([], |row| {
+            Ok((row.get::<_, i64>(0)?, row.get::<_, bool>(1)?))
+        })?
+        .collect::<Result<Vec<_>, _>>()?;
+    for (index, (version, success)) in rows.iter().enumerate() {
+        let expected_version = index as i64 + 1;
+        if *version != expected_version || *version > CURRENT_MIGRATION_COUNT || !success {
+            return Err(CommandError::Invalid(
+                "migration history is not a complete successful prefix; checksum repair was not applied".into(),
+            ));
+        }
+    }
+    Ok(rows.into_iter().map(|(version, _)| version).collect())
 }
 
 pub(crate) fn reconcile_database(path: &Path) -> CommandResult<MigrationChecksumRepair> {
@@ -80,10 +101,16 @@ pub(crate) fn reconcile_database(path: &Path) -> CommandResult<MigrationChecksum
         });
     }
 
-    let verified = validate_database(path)?;
-    validated_complete_history(&verified)?;
+    let verified = validate_sqlite_file(path)?;
+    let applied_versions = applied_migration_versions(&verified)?;
+    if applied_versions.len() == CURRENT_MIGRATION_COUNT as usize {
+        // A current database must still satisfy the full schema whitelist
+        // before changing metadata for an old development checksum.
+        validate_database(path)?;
+    }
     let mismatches = current_migration_checksums()
         .into_iter()
+        .filter(|(version, _)| applied_versions.contains(version))
         .map(|(version, expected_checksum)| {
             let stored_checksum: Vec<u8> = verified.query_row(
                 "SELECT checksum FROM _sqlx_migrations WHERE version = ?1 AND success = 1",
@@ -134,38 +161,90 @@ pub(crate) fn reconcile_database(path: &Path) -> CommandResult<MigrationChecksum
     })
 }
 
+fn sibling_with_suffix(path: &Path, suffix: &str) -> CommandResult<PathBuf> {
+    let file_name = path
+        .file_name()
+        .ok_or_else(|| CommandError::Path("database path has no file name".into()))?;
+    Ok(path.with_file_name(format!("{}{suffix}", file_name.to_string_lossy())))
+}
+
+/// Preserve a database that sqlx cannot migrate, then leave the default path
+/// empty so the application can create and run against a clean local database.
+pub(crate) fn isolate_failed_database(path: &Path) -> CommandResult<MigrationFailureRecovery> {
+    if !path.exists() {
+        return Err(CommandError::Invalid(
+            "migration recovery requires an existing database file".into(),
+        ));
+    }
+
+    let archived_path = migration_failure_path(path)?;
+    let snapshot_path = sibling_with_suffix(&archived_path, ".snapshot")?;
+    let snapshot = Connection::open(path).ok().and_then(|source| {
+        copy_database(&source, &snapshot_path)
+            .ok()
+            .map(|_| snapshot_path.clone())
+    });
+
+    std::fs::rename(path, &archived_path)?;
+    for suffix in ["-wal", "-shm"] {
+        let sidecar = sibling_with_suffix(path, suffix)?;
+        if sidecar.exists() {
+            let archived_sidecar = sibling_with_suffix(&archived_path, suffix)?;
+            let _ = std::fs::rename(sidecar, archived_sidecar);
+        }
+    }
+
+    Ok(MigrationFailureRecovery {
+        archived_path: archived_path.to_string_lossy().into_owned(),
+        snapshot_path: snapshot.map(|value| value.to_string_lossy().into_owned()),
+    })
+}
+
 #[tauri::command]
 pub fn reconcile_migration_checksum(app: AppHandle) -> CommandResult<MigrationChecksumRepair> {
     reconcile_database(&db_path(&app)?)
 }
 
+#[tauri::command]
+pub fn isolate_failed_migration_database(
+    app: AppHandle,
+) -> CommandResult<MigrationFailureRecovery> {
+    isolate_failed_database(&db_path(&app)?)
+}
+
 #[cfg(test)]
 mod tests {
-    use super::{current_migration_checksums, reconcile_database};
+    use super::{current_migration_checksums, isolate_failed_database, reconcile_database};
     use rusqlite::{params, Connection};
     use std::path::Path;
 
-    fn create_current_database(path: &std::path::Path, mismatched_versions: &[i64]) {
+    fn create_database_with_history(
+        path: &std::path::Path,
+        applied_versions: &[i64],
+        mismatched_versions: &[i64],
+    ) {
         let connection = Connection::open(path).expect("test database should open");
-        for table in [
-            "projects",
-            "tasks",
-            "task_dependencies",
-            "milestones",
-            "meetings",
-            "action_items",
-            "project_links",
-            "app_settings",
-            "risks",
-            "people",
-            "project_participants",
-            "task_participants",
-            "recurrence_rules",
-            "recurrence_exceptions",
-        ] {
-            connection
-                .execute(&format!("CREATE TABLE {table} (id TEXT)"), [])
-                .expect("required table should be created");
+        if applied_versions.len() == 11 {
+            for table in [
+                "projects",
+                "tasks",
+                "task_dependencies",
+                "milestones",
+                "meetings",
+                "action_items",
+                "project_links",
+                "app_settings",
+                "risks",
+                "people",
+                "project_participants",
+                "task_participants",
+                "recurrence_rules",
+                "recurrence_exceptions",
+            ] {
+                connection
+                    .execute(&format!("CREATE TABLE {table} (id TEXT)"), [])
+                    .expect("required table should be created");
+            }
         }
         connection
             .execute(
@@ -173,7 +252,10 @@ mod tests {
                 [],
             )
             .expect("migration table should be created");
-        for (version, expected_checksum) in current_migration_checksums() {
+        for (version, expected_checksum) in current_migration_checksums()
+            .into_iter()
+            .filter(|(version, _)| applied_versions.contains(version))
+        {
             let checksum = if mismatched_versions.contains(&version) {
                 vec![0; 48]
             } else {
@@ -189,13 +271,13 @@ mod tests {
     }
 
     #[test]
-    fn backs_up_and_repairs_changed_metadata_for_the_current_complete_history() {
+    fn backs_up_and_repairs_changed_metadata_for_a_current_complete_history() {
         let path = std::env::temp_dir().join(format!(
             "projectpilot-checksum-repair-{}.db",
             std::process::id()
         ));
         let _ = std::fs::remove_file(&path);
-        create_current_database(&path, &[1, 2]);
+        create_database_with_history(&path, &(1..=11).collect::<Vec<_>>(), &[1, 2]);
 
         let repaired = reconcile_database(&path).expect("checksum should be repaired safely");
         assert!(repaired.repaired);
@@ -220,6 +302,50 @@ mod tests {
         let _ = std::fs::remove_file(&path);
         if let Some(backup) = repaired.backup_path {
             let _ = std::fs::remove_file(backup);
+        }
+    }
+
+    #[test]
+    fn repairs_a_valid_partial_history_without_blocking_a_normal_upgrade() {
+        let path = std::env::temp_dir().join(format!(
+            "projectpilot-partial-checksum-repair-{}.db",
+            std::process::id()
+        ));
+        let _ = std::fs::remove_file(&path);
+        create_database_with_history(&path, &[1, 2], &[2]);
+
+        let repaired = reconcile_database(&path).expect("partial history should be repaired");
+        assert!(repaired.repaired);
+
+        let _ = std::fs::remove_file(&path);
+        if let Some(backup) = repaired.backup_path {
+            let _ = std::fs::remove_file(backup);
+        }
+    }
+
+    #[test]
+    fn isolates_an_unmigratable_database_without_deleting_it() {
+        let path = std::env::temp_dir().join(format!(
+            "projectpilot-migration-failure-{}.db",
+            std::process::id()
+        ));
+        let _ = std::fs::remove_file(&path);
+        Connection::open(&path)
+            .expect("fixture database should open")
+            .execute("CREATE TABLE preserved_data (id TEXT)", [])
+            .expect("fixture table should be created");
+
+        let recovery = isolate_failed_database(&path).expect("database should be isolated");
+        assert!(!path.exists());
+        assert!(Path::new(&recovery.archived_path).is_file());
+        assert!(recovery
+            .snapshot_path
+            .as_deref()
+            .is_some_and(|value| Path::new(value).is_file()));
+
+        let _ = std::fs::remove_file(recovery.archived_path);
+        if let Some(snapshot) = recovery.snapshot_path {
+            let _ = std::fs::remove_file(snapshot);
         }
     }
 }

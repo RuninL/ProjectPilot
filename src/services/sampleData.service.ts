@@ -157,6 +157,15 @@ export function createSampleDataService(deps: SampleDataDeps) {
       return true;
     },
 
+    /** Mark a recovery-created database as deliberately empty without inserting samples. */
+    async skipSampleData(): Promise<boolean> {
+      if ((await deps.appSettings.get(SAMPLE_SEEDED_KEY)) !== null) {
+        return false;
+      }
+      await deps.runBatch([deps.appSettings.buildSet(SAMPLE_SEEDED_KEY, '1', nowIso())]);
+      return true;
+    },
+
     /** Delete every `is_sample = 1` row — and nothing else — in one transaction. */
     async clearSampleData(): Promise<number> {
       return deps.runBatch(deps.sample.buildClear());
@@ -194,6 +203,11 @@ let bootstrapSeed: Promise<boolean> | null = null;
 export function ensureSampleDataSeeded(): Promise<boolean> {
   bootstrapSeed ??= getSampleDataService().then((service) => service.seedSampleData());
   return bootstrapSeed;
+}
+
+/** Keep a migration-recovery database empty on this and later launches. */
+export async function skipSampleDataForMigrationRecovery(): Promise<boolean> {
+  return (await getSampleDataService()).skipSampleData();
 }
 
 /** Clears the process-lifetime guard so each test starts from a cold bootstrap. */

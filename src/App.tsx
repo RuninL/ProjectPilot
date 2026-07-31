@@ -2,11 +2,14 @@ import { useEffect, useState } from 'react';
 import { RouterProvider } from 'react-router-dom';
 import { ErrorState } from '@/components/common/ErrorState';
 import { LoadingState } from '@/components/common/LoadingState';
-import { getDb } from '@/lib/db';
+import { getDb, takeDatabaseRecoveryNotice } from '@/lib/db';
 import { toAppError } from '@/lib/errors';
 import { applyTheme, subscribeToSystemTheme } from '@/lib/theme';
 import { router } from '@/router';
-import { ensureSampleDataSeeded } from '@/services/sampleData.service';
+import {
+  ensureSampleDataSeeded,
+  skipSampleDataForMigrationRecovery,
+} from '@/services/sampleData.service';
 import { loadThemePreference } from '@/features/settings/services/settingsPreference.service';
 import { useAppStore } from '@/stores/useAppStore';
 import { getCurrentWebviewWindow } from '@tauri-apps/api/webviewWindow';
@@ -33,6 +36,7 @@ export function App() {
   const setTheme = useAppStore((state) => state.setTheme);
   const setGlobalError = useAppStore((state) => state.setGlobalError);
   const [error, setError] = useState<string | null>(null);
+  const [startupRecoveryNotice, setStartupRecoveryNotice] = useState<string | null>(null);
 
   useEffect(() => {
     const syncTheme = () => {
@@ -50,8 +54,14 @@ export function App() {
   useEffect(() => {
     const controller = new AbortController();
     void (async () => {
+      let recoveredDatabase = false;
       try {
         await getDb();
+        const recoveryNotice = takeDatabaseRecoveryNotice();
+        if (recoveryNotice !== null && !controller.signal.aborted) {
+          setStartupRecoveryNotice(recoveryNotice);
+        }
+        recoveredDatabase = recoveryNotice !== null;
         const savedTheme = await loadThemePreference();
         if (savedTheme !== null && !controller.signal.aborted) {
           setTheme(savedTheme);
@@ -67,7 +77,11 @@ export function App() {
       // shared promise is what keeps StrictMode's second mount from seeding a
       // duplicate — abort only gates the state updates below.
       try {
-        await ensureSampleDataSeeded();
+        if (recoveredDatabase) {
+          await skipSampleDataForMigrationRecovery();
+        } else {
+          await ensureSampleDataSeeded();
+        }
       } catch (caught) {
         if (!controller.signal.aborted) {
           setGlobalError(toAppError(caught));
@@ -147,6 +161,16 @@ export function App() {
   return getCurrentWebviewWindow().label === 'companion' ? (
     <CompanionApp />
   ) : (
-    <RouterProvider router={router} />
+    <>
+      {startupRecoveryNotice !== null && (
+        <div
+          className="border-b border-amber-500/40 bg-amber-100 px-4 py-3 text-sm text-amber-950 dark:bg-amber-950/40 dark:text-amber-100"
+          role="alert"
+        >
+          <strong>数据库已安全恢复：</strong> {startupRecoveryNotice}
+        </div>
+      )}
+      <RouterProvider router={router} />
+    </>
   );
 }
