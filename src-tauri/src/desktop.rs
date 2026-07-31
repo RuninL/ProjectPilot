@@ -1,6 +1,8 @@
 use tauri::menu::{Menu, MenuItem};
 use tauri::tray::TrayIconBuilder;
-use tauri::{AppHandle, Emitter, Manager, WebviewUrl, WebviewWindow, WebviewWindowBuilder, WindowEvent};
+use tauri::{
+    AppHandle, Emitter, Manager, WebviewUrl, WebviewWindow, WebviewWindowBuilder, WindowEvent,
+};
 
 const COMPANION_LABEL: &str = "companion";
 
@@ -44,11 +46,35 @@ pub fn setup_desktop(app: &AppHandle) -> tauri::Result<()> {
     let companion = MenuItem::with_id(app, "companion", "Open companion", true, None::<&str>)?;
     let today = MenuItem::with_id(app, "today", "Today overview", true, None::<&str>)?;
     let pause = MenuItem::with_id(app, "pause", "Pause notifications", true, None::<&str>)?;
-    let pause_hour = MenuItem::with_id(app, "pause-hour", "Pause notifications for 1 hour", true, None::<&str>)?;
-    let pause_tomorrow = MenuItem::with_id(app, "pause-tomorrow", "Pause notifications until tomorrow", true, None::<&str>)?;
+    let pause_hour = MenuItem::with_id(
+        app,
+        "pause-hour",
+        "Pause notifications for 1 hour",
+        true,
+        None::<&str>,
+    )?;
+    let pause_tomorrow = MenuItem::with_id(
+        app,
+        "pause-tomorrow",
+        "Pause notifications until tomorrow",
+        true,
+        None::<&str>,
+    )?;
     let settings = MenuItem::with_id(app, "settings", "Notification settings", true, None::<&str>)?;
     let quit = MenuItem::with_id(app, "quit", "Quit ProjectPilot", true, None::<&str>)?;
-    let menu = Menu::with_items(app, &[&open, &companion, &today, &pause, &pause_hour, &pause_tomorrow, &settings, &quit])?;
+    let menu = Menu::with_items(
+        app,
+        &[
+            &open,
+            &companion,
+            &today,
+            &pause,
+            &pause_hour,
+            &pause_tomorrow,
+            &settings,
+            &quit,
+        ],
+    )?;
     let app_handle = app.clone();
     TrayIconBuilder::with_id("projectpilot-tray")
         .menu(&menu)
