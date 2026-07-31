@@ -10,7 +10,13 @@ import { ensureSampleDataSeeded } from '@/services/sampleData.service';
 import { loadThemePreference } from '@/features/settings/services/settingsPreference.service';
 import { useAppStore } from '@/stores/useAppStore';
 import { getCurrentWebviewWindow } from '@tauri-apps/api/webviewWindow';
+import { listen } from '@tauri-apps/api/event';
 import { CompanionApp } from '@/features/companion/CompanionApp';
+import { addDays, todayHK } from '@/lib/date';
+import {
+  loadReminderSettings,
+  saveReminderSettings,
+} from '@/features/settings/services/reminderSettings.service';
 
 /**
  * Initialize the database (runs migration 0001 + the foreign-keys assertion)
@@ -67,6 +73,36 @@ export function App() {
       controller.abort();
     };
   }, [setDbReady, setGlobalError, setTheme]);
+
+  useEffect(() => {
+    let unlisten: (() => void) | null = null;
+    void listen<string>('projectpilot:tray-command', (event) => {
+      if (event.payload === 'settings') {
+        void router.navigate('/settings');
+        return;
+      }
+      if (
+        event.payload !== 'pause' &&
+        event.payload !== 'pause-hour' &&
+        event.payload !== 'pause-tomorrow'
+      )
+        return;
+      void loadReminderSettings().then((settings) => {
+        const pausedUntil =
+          event.payload === 'pause'
+            ? null
+            : event.payload === 'pause-hour'
+              ? new Date(Date.now() + 3_600_000).toISOString()
+              : `${addDays(todayHK(), 1)}T00:00:00+08:00`;
+        return saveReminderSettings({ ...settings, pausedUntil });
+      });
+    }).then((cleanup) => {
+      unlisten = cleanup;
+    });
+    return () => {
+      unlisten?.();
+    };
+  }, []);
 
   if (error !== null) {
     return <ErrorState title="数据库初始化失败" message={error} />;

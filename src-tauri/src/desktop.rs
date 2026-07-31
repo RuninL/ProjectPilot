@@ -1,6 +1,6 @@
 use tauri::menu::{Menu, MenuItem};
 use tauri::tray::TrayIconBuilder;
-use tauri::{AppHandle, Manager, WebviewUrl, WebviewWindow, WebviewWindowBuilder, WindowEvent};
+use tauri::{AppHandle, Emitter, Manager, WebviewUrl, WebviewWindow, WebviewWindowBuilder, WindowEvent};
 
 const COMPANION_LABEL: &str = "companion";
 
@@ -42,8 +42,13 @@ pub fn show_companion(app: &AppHandle) -> tauri::Result<()> {
 pub fn setup_desktop(app: &AppHandle) -> tauri::Result<()> {
     let open = MenuItem::with_id(app, "open", "Open ProjectPilot", true, None::<&str>)?;
     let companion = MenuItem::with_id(app, "companion", "Open companion", true, None::<&str>)?;
+    let today = MenuItem::with_id(app, "today", "Today overview", true, None::<&str>)?;
+    let pause = MenuItem::with_id(app, "pause", "Pause notifications", true, None::<&str>)?;
+    let pause_hour = MenuItem::with_id(app, "pause-hour", "Pause notifications for 1 hour", true, None::<&str>)?;
+    let pause_tomorrow = MenuItem::with_id(app, "pause-tomorrow", "Pause notifications until tomorrow", true, None::<&str>)?;
+    let settings = MenuItem::with_id(app, "settings", "Notification settings", true, None::<&str>)?;
     let quit = MenuItem::with_id(app, "quit", "Quit ProjectPilot", true, None::<&str>)?;
-    let menu = Menu::with_items(app, &[&open, &companion, &quit])?;
+    let menu = Menu::with_items(app, &[&open, &companion, &today, &pause, &pause_hour, &pause_tomorrow, &settings, &quit])?;
     let app_handle = app.clone();
     TrayIconBuilder::with_id("projectpilot-tray")
         .menu(&menu)
@@ -51,6 +56,13 @@ pub fn setup_desktop(app: &AppHandle) -> tauri::Result<()> {
             "open" => show_main(&app_handle),
             "companion" => {
                 let _ = show_companion(&app_handle);
+            }
+            "today" => {
+                let _ = show_companion(&app_handle);
+            }
+            "pause" | "pause-hour" | "pause-tomorrow" | "settings" => {
+                show_main(&app_handle);
+                let _ = app_handle.emit("projectpilot:tray-command", event.id.as_ref());
             }
             "quit" => app_handle.exit(0),
             _ => {}
