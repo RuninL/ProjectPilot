@@ -25,7 +25,7 @@ pub fn show_companion(app: &AppHandle) -> tauri::Result<()> {
 
     let window =
         WebviewWindowBuilder::new(app, COMPANION_LABEL, WebviewUrl::App("index.html".into()))
-            .title("ProjectPilot Companion")
+            .title("ProjectPilot 桌面小窗")
             .inner_size(380.0, 520.0)
             .min_inner_size(320.0, 420.0)
             .resizable(true)
@@ -42,26 +42,15 @@ pub fn show_companion(app: &AppHandle) -> tauri::Result<()> {
 }
 
 pub fn setup_desktop(app: &AppHandle) -> tauri::Result<()> {
-    let open = MenuItem::with_id(app, "open", "Open ProjectPilot", true, None::<&str>)?;
-    let companion = MenuItem::with_id(app, "companion", "Open companion", true, None::<&str>)?;
-    let today = MenuItem::with_id(app, "today", "Today overview", true, None::<&str>)?;
-    let pause = MenuItem::with_id(app, "pause", "Pause notifications", true, None::<&str>)?;
-    let pause_hour = MenuItem::with_id(
-        app,
-        "pause-hour",
-        "Pause notifications for 1 hour",
-        true,
-        None::<&str>,
-    )?;
-    let pause_tomorrow = MenuItem::with_id(
-        app,
-        "pause-tomorrow",
-        "Pause notifications until tomorrow",
-        true,
-        None::<&str>,
-    )?;
-    let settings = MenuItem::with_id(app, "settings", "Notification settings", true, None::<&str>)?;
-    let quit = MenuItem::with_id(app, "quit", "Quit ProjectPilot", true, None::<&str>)?;
+    let open = MenuItem::with_id(app, "open", "打开 ProjectPilot", true, None::<&str>)?;
+    let companion = MenuItem::with_id(app, "companion", "打开桌面小窗", true, None::<&str>)?;
+    let today = MenuItem::with_id(app, "today", "查看今日概览", true, None::<&str>)?;
+    let pause = MenuItem::with_id(app, "pause", "暂停通知", true, None::<&str>)?;
+    let pause_hour = MenuItem::with_id(app, "pause-hour", "暂停通知 1 小时", true, None::<&str>)?;
+    let pause_tomorrow =
+        MenuItem::with_id(app, "pause-tomorrow", "暂停通知至明天", true, None::<&str>)?;
+    let settings = MenuItem::with_id(app, "settings", "通知与提醒设置", true, None::<&str>)?;
+    let quit = MenuItem::with_id(app, "quit", "退出 ProjectPilot", true, None::<&str>)?;
     let menu = Menu::with_items(
         app,
         &[
@@ -76,7 +65,7 @@ pub fn setup_desktop(app: &AppHandle) -> tauri::Result<()> {
         ],
     )?;
     let app_handle = app.clone();
-    TrayIconBuilder::with_id("projectpilot-tray")
+    let mut tray = TrayIconBuilder::with_id("projectpilot-tray")
         .menu(&menu)
         .on_menu_event(move |_, event| match event.id.as_ref() {
             "open" => show_main(&app_handle),
@@ -92,8 +81,11 @@ pub fn setup_desktop(app: &AppHandle) -> tauri::Result<()> {
             }
             "quit" => app_handle.exit(0),
             _ => {}
-        })
-        .build(app)?;
+        });
+    if let Some(icon) = app.default_window_icon() {
+        tray = tray.icon(icon.clone());
+    }
+    tray.build(app)?;
 
     if let Some(window) = app.get_webview_window("main") {
         let main = window.clone();

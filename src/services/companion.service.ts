@@ -25,7 +25,7 @@ export async function loadCompanionToday(date = todayHK()): Promise<CompanionTod
       id: meeting.id,
       kind: 'meeting' as const,
       title: meeting.topic,
-      subtitle: meeting.start_time ?? 'Today meeting',
+      subtitle: meeting.start_time ?? '今日会议',
       ...(meeting.start_time === null ? {} : { startsAt: meeting.start_time }),
     })),
     ...tasks

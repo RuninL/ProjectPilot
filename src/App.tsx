@@ -10,7 +10,7 @@ import { ensureSampleDataSeeded } from '@/services/sampleData.service';
 import { loadThemePreference } from '@/features/settings/services/settingsPreference.service';
 import { useAppStore } from '@/stores/useAppStore';
 import { getCurrentWebviewWindow } from '@tauri-apps/api/webviewWindow';
-import { listen } from '@tauri-apps/api/event';
+import { emit, listen } from '@tauri-apps/api/event';
 import { CompanionApp } from '@/features/companion/CompanionApp';
 import { addDays, todayHK } from '@/lib/date';
 import {
@@ -35,9 +35,15 @@ export function App() {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    applyTheme(theme);
-    return subscribeToSystemTheme(() => {
+    const syncTheme = () => {
       applyTheme(theme);
+      if (getCurrentWebviewWindow().label === 'main') {
+        void emit('projectpilot:theme-changed', theme);
+      }
+    };
+    syncTheme();
+    return subscribeToSystemTheme(() => {
+      syncTheme();
     });
   }, [theme]);
 
@@ -96,7 +102,11 @@ export function App() {
             : event.payload === 'pause-hour'
               ? new Date(Date.now() + 3_600_000).toISOString()
               : `${addDays(todayHK(), 1)}T00:00:00+08:00`;
-        return saveReminderSettings({ ...settings, enabled: event.payload === 'pause' ? false : settings.enabled, pausedUntil });
+        return saveReminderSettings({
+          ...settings,
+          enabled: event.payload === 'pause' ? false : settings.enabled,
+          pausedUntil,
+        });
       });
     }).then((cleanup) => {
       unlisten = cleanup;

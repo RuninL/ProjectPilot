@@ -63,7 +63,7 @@ export function overdueSummaryCandidate(
     entityId: date,
     kind: 'overdue-summary',
     scheduledAt: `${date}T08:30:00+08:00`,
-    title: `${String(overdueCount)} overdue task${overdueCount === 1 ? '' : 's'}`,
+    title: `共 ${String(overdueCount)} 项逾期任务`,
   };
 }
 
@@ -112,6 +112,6 @@ export function dailySummaryCandidate(date = todayHK()): ReminderCandidate {
     entityId: date,
     kind: 'daily-summary',
     scheduledAt: `${date}T08:30:00+08:00`,
-    title: 'Daily ProjectPilot summary',
+    title: 'ProjectPilot 每日摘要',
   };
 }

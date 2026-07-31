@@ -42,11 +42,11 @@ export function ReminderSettingsSection() {
   return (
     <section className="mb-6 rounded-lg border bg-card p-4" aria-labelledby="reminders-heading">
       <h2 id="reminders-heading" className="text-lg font-medium">
-        Notifications and reminders
+        通知与提醒
       </h2>
       <p className="mt-1 text-sm text-muted-foreground">
-        Native Windows notifications stay local. Permission:{' '}
-        {permission === 'granted' ? 'granted' : 'not granted'}.
+        原生 Windows 通知仅在本机发送。权限状态：
+        {permission === 'granted' ? '已授予' : '未授予'}。
       </p>
       <div className="mt-3 flex flex-wrap gap-2">
         <Button
@@ -61,7 +61,7 @@ export function ReminderSettingsSection() {
               })
           }
         >
-          Request permission
+          请求通知权限
         </Button>
         <Button
           disabled={permission !== 'granted'}
@@ -71,7 +71,7 @@ export function ReminderSettingsSection() {
             })
           }
         >
-          Send test notification
+          发送测试通知
         </Button>
       </div>
       <div className="mt-4 grid gap-3 sm:grid-cols-2">
@@ -81,7 +81,7 @@ export function ReminderSettingsSection() {
             checked={settings.enabled}
             onChange={(event) => void save({ ...settings, enabled: event.target.checked })}
           />{' '}
-          Enable reminders
+          启用提醒
         </Label>
         <Label className="flex items-center gap-2">
           <input
@@ -89,10 +89,10 @@ export function ReminderSettingsSection() {
             checked={settings.closeToTray}
             onChange={(event) => void save({ ...settings, closeToTray: event.target.checked })}
           />{' '}
-          Close to tray
+          关闭主窗口时隐藏到托盘
         </Label>
         <Label>
-          Meeting lead
+          会议提前提醒
           <select
             className="ml-2 rounded border bg-background p-1"
             value={settings.meetingMinutesBefore}
@@ -104,53 +104,57 @@ export function ReminderSettingsSection() {
               })
             }
           >
-            <option value="none">Off</option>
-            <option value="5">5 min</option>
-            <option value="10">10 min</option>
-            <option value="15">15 min</option>
-            <option value="30">30 min</option>
-            <option value="60">1 hour</option>
-            <option value="1440">1 day</option>
+            <option value="none">关闭</option>
+            <option value="5">5 分钟</option>
+            <option value="10">10 分钟</option>
+            <option value="15">15 分钟</option>
+            <option value="30">30 分钟</option>
+            <option value="60">1 小时</option>
+            <option value="1440">1 天</option>
           </select>
         </Label>
         <Label>
-          Task lead
+          任务提前提醒
           <select
             className="ml-2 rounded border bg-background p-1"
             value={settings.taskLeadDays}
             onChange={(event) =>
-              void save({ ...settings, taskLeadDays: event.target.value as ReminderSettings['taskLeadDays'] })
+              void save({
+                ...settings,
+                taskLeadDays: event.target.value as ReminderSettings['taskLeadDays'],
+              })
             }
           >
-            <option value="none">Off</option>
-            <option value="0">Due today</option>
-            <option value="1">1 day</option>
-            <option value="3">3 days</option>
+            <option value="none">关闭</option>
+            <option value="0">今日 due</option>
+            <option value="1">提前 1 天</option>
+            <option value="3">提前 3 天</option>
           </select>
         </Label>
         <Label>
-          Project and milestone lead
+          项目和里程碑提前提醒
           <select
             className="ml-2 rounded border bg-background p-1"
             value={settings.projectMilestoneLeadDays}
             onChange={(event) =>
               void save({
                 ...settings,
-                projectMilestoneLeadDays: event.target.value as ReminderSettings['projectMilestoneLeadDays'],
+                projectMilestoneLeadDays: event.target
+                  .value as ReminderSettings['projectMilestoneLeadDays'],
               })
             }
           >
-            <option value="none">Off</option>
-            <option value="0">Due today</option>
-            <option value="1">1 day</option>
-            <option value="3">3 days</option>
-            <option value="7">7 days</option>
+            <option value="none">关闭</option>
+            <option value="0">今日 due</option>
+            <option value="1">提前 1 天</option>
+            <option value="3">提前 3 天</option>
+            <option value="7">提前 7 天</option>
           </select>
         </Label>
         <Label>
-          Quiet start
+          勿扰开始时间
           <input
-            aria-label="Quiet start"
+            aria-label="勿扰开始时间"
             className="ml-2 rounded border bg-background p-1"
             type="time"
             value={settings.quietStart}
@@ -158,9 +162,9 @@ export function ReminderSettingsSection() {
           />
         </Label>
         <Label>
-          Quiet end
+          勿扰结束时间
           <input
-            aria-label="Quiet end"
+            aria-label="勿扰结束时间"
             className="ml-2 rounded border bg-background p-1"
             type="time"
             value={settings.quietEnd}
@@ -168,9 +172,9 @@ export function ReminderSettingsSection() {
           />
         </Label>
         <Label>
-          Daily summary
+          每日摘要时间
           <input
-            aria-label="Daily summary time"
+            aria-label="每日摘要时间"
             className="ml-2 rounded border bg-background p-1"
             type="time"
             value={settings.dailySummaryTime}
@@ -181,18 +185,20 @@ export function ReminderSettingsSection() {
           <input
             type="checkbox"
             checked={settings.companionAlwaysOnTop}
-            onChange={(event) => void save({ ...settings, companionAlwaysOnTop: event.target.checked })}
+            onChange={(event) =>
+              void save({ ...settings, companionAlwaysOnTop: event.target.checked })
+            }
           />{' '}
-          Keep companion on top
+          桌面小窗保持置顶
         </Label>
       </div>
       <p className="mt-3 text-sm text-muted-foreground" aria-live="polite">
-        {settings.enabled ? 'Reminders are enabled.' : 'Reminders are paused.'}
-        {settings.pausedUntil !== null ? ` Resume time: ${settings.pausedUntil}.` : ''}
+        {settings.enabled ? '提醒已启用。' : '提醒已暂停。'}
+        {settings.pausedUntil !== null ? `恢复时间：${settings.pausedUntil}。` : ''}
       </p>
       {saved && (
         <p className="mt-3 text-sm text-primary" role="status">
-          Settings saved.
+          设置已保存。
         </p>
       )}
       {error !== null && (

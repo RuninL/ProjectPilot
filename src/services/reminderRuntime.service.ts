@@ -71,7 +71,11 @@ export function buildReminderCandidates(
   const projectLead = selectedLead(settings.projectMilestoneLeadDays);
   if (projectLead !== null) {
     for (const project of data.projects) {
-      if (project.status === 'archived' || project.status === 'completed' || project.target_end_date === null)
+      if (
+        project.status === 'archived' ||
+        project.status === 'completed' ||
+        project.target_end_date === null
+      )
         continue;
       const candidate = dueDateCandidate(
         'project',
@@ -95,22 +99,30 @@ export function buildReminderCandidates(
     }
   }
   const overdue = data.tasks.filter(
-    (task) => task.due_date !== null && task.due_date < date && !['done', 'cancelled', 'postponed'].includes(task.status),
+    (task) =>
+      task.due_date !== null &&
+      task.due_date < date &&
+      !['done', 'cancelled', 'postponed'].includes(task.status),
   );
   const overdueCandidate = overdueSummaryCandidate(overdue.length, date);
   if (overdueCandidate !== null) candidates.push(overdueCandidate);
   if (settings.dailySummaryTime !== '') {
-    candidates.push({ ...dailySummaryCandidate(date), scheduledAt: `${date}T${settings.dailySummaryTime}:00+08:00` });
+    candidates.push({
+      ...dailySummaryCandidate(date),
+      scheduledAt: `${date}T${settings.dailySummaryTime}:00+08:00`,
+    });
   }
   // Date-only meetings belong in the daily summary, never in a timed reminder.
-  const dateOnlyMeetingCount = data.meetings.filter((meeting) => meeting.start_time === null).length;
+  const dateOnlyMeetingCount = data.meetings.filter(
+    (meeting) => meeting.start_time === null,
+  ).length;
   if (dateOnlyMeetingCount > 0) {
     candidates.push({
       entityType: 'summary',
       entityId: date,
       kind: 'date-only-meetings',
       scheduledAt: `${date}T${settings.dailySummaryTime}:00+08:00`,
-      title: `${String(dateOnlyMeetingCount)} date-only meeting${dateOnlyMeetingCount === 1 ? '' : 's'} today`,
+      title: `今天有 ${String(dateOnlyMeetingCount)} 场未设置时间的会议`,
     });
   }
   return candidates;
@@ -119,8 +131,15 @@ export function buildReminderCandidates(
 function nowInHongKong(): string {
   const parts = new Intl.DateTimeFormat('en-CA', {
     timeZone: 'Asia/Hong_Kong',
-    year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hourCycle: 'h23',
-  }).formatToParts(new Date()).reduce<Record<string, string>>((result, part) => ({ ...result, [part.type]: part.value }), {});
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    hourCycle: 'h23',
+  })
+    .formatToParts(new Date())
+    .reduce<Record<string, string>>((result, part) => ({ ...result, [part.type]: part.value }), {});
   const { year = '1970', month = '01', day = '01', hour = '00', minute = '00' } = parts;
   return `${year}-${month}-${day}T${hour}:${minute}:00+08:00`;
 }
@@ -140,14 +159,22 @@ export async function scanAndNotifyReminders(now = new Date().toISOString()): Pr
   const delivered = await loadDeliveredReminderIds();
   const localNow = now.endsWith('Z') ? nowInHongKong() : now;
   const currentTime = localNow.slice(11, 16);
-  const next = dedupeCandidates(buildReminderCandidates({ tasks, meetings, projects, milestones }, settings, date), delivered)
-    .filter((candidate) => candidate.scheduledAt.slice(0, 10) === date && candidate.scheduledAt.slice(11, 16) <= currentTime)
+  const next = dedupeCandidates(
+    buildReminderCandidates({ tasks, meetings, projects, milestones }, settings, date),
+    delivered,
+  )
+    .filter(
+      (candidate) =>
+        candidate.scheduledAt.slice(0, 10) === date &&
+        candidate.scheduledAt.slice(11, 16) <= currentTime,
+    )
     .filter(() => !isQuietHour(currentTime, settings.quietStart, settings.quietEnd));
   if (next.length === 0) return;
   for (const group of groupByMinute(next)) {
     const titles = group.slice(0, 3).map((candidate) => candidate.title);
-    const suffix = group.length > titles.length ? ` and ${String(group.length - titles.length)} more` : '';
-    await sendNativeNotification('ProjectPilot reminder', `${titles.join('; ')}${suffix}`);
+    const suffix =
+      group.length > titles.length ? `，另有 ${String(group.length - titles.length)} 项` : '';
+    await sendNativeNotification('ProjectPilot 提醒', `${titles.join('；')}${suffix}`);
   }
   await saveDeliveredReminderIds([...delivered, ...next.map(reminderIdentity)]);
 }
