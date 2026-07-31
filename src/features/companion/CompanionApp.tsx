@@ -2,6 +2,9 @@ import { useEffect, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { toAppError } from '@/lib/errors';
 import { emitInvalidation, listenForInvalidation } from '@/lib/invalidation';
+import { todayHK } from '@/lib/date';
+import { getCalendarService } from '@/services/calendar.service';
+import type { CalendarMonth } from '@/features/calendar/calendarModel';
 import {
   completeCompanionTask,
   loadCompanionToday,
@@ -13,6 +16,8 @@ export function CompanionApp() {
   const [view, setView] = useState<'today' | 'calendar'>('today');
   const [items, setItems] = useState<CompanionTodayItem[] | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [calendar, setCalendar] = useState<CalendarMonth | null>(null);
+  const [selectedDate, setSelectedDate] = useState(todayHK());
   const reload = () => {
     setError(null);
     void loadCompanionToday()
@@ -33,8 +38,17 @@ export function CompanionApp() {
         setError(toAppError(caught).message);
       });
   };
+  const reloadCalendar = () => {
+    void getCalendarService()
+      .then((service) => service.loadMonth(todayHK().slice(0, 7)))
+      .then(setCalendar)
+      .catch((caught: unknown) => {
+        setError(toAppError(caught).message);
+      });
+  };
   useEffect(() => {
     reload();
+    reloadCalendar();
   }, []);
   useEffect(() => {
     let unlisten: (() => void) | null = null;
@@ -129,9 +143,38 @@ export function CompanionApp() {
       ) : (
         <section className="mt-4 rounded-lg border p-4" role="tabpanel">
           <h2 className="font-medium">Calendar</h2>
-          <p className="mt-2 text-sm text-muted-foreground">
-            Select a date to view its local ProjectPilot schedule.
-          </p>
+          {calendar === null ? (
+            <p className="mt-2 text-sm text-muted-foreground">Loading calendar.</p>
+          ) : (
+            <>
+              <div className="mt-2 grid grid-cols-7 gap-1" aria-label={calendar.label}>
+                {calendar.weeks.flat().map((day) => (
+                  <button
+                    key={day.date}
+                    type="button"
+                    className="min-h-8 rounded border text-xs"
+                    aria-pressed={selectedDate === day.date}
+                    onClick={() => {
+                      setSelectedDate(day.date);
+                    }}
+                  >
+                    {day.dayOfMonth}
+                    {day.entries.length > 0 ? ' •' : ''}
+                  </button>
+                ))}
+              </div>
+              <ul className="mt-3 space-y-1 text-sm">
+                {calendar.weeks
+                  .flat()
+                  .find((day) => day.date === selectedDate)
+                  ?.entries.map((entry) => (
+                    <li key={entry.key}>
+                      <span className="font-medium">{entry.kindLabel}</span> {entry.title}
+                    </li>
+                  ))}
+              </ul>
+            </>
+          )}
         </section>
       )}
     </main>
