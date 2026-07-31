@@ -16,11 +16,16 @@ export async function requestNotificationPermission(): Promise<NotificationPermi
 }
 
 export async function sendTestNotification(): Promise<void> {
+  await sendNativeNotification('ProjectPilot', 'Native Windows notifications are enabled.');
+}
+
+/** Sends a single native toast after the official plugin permission boundary. */
+export async function sendNativeNotification(title: string, body: string): Promise<void> {
   if ((await getNotificationPermission()) !== 'granted') {
     throw new Error('Windows notification permission is not granted.');
   }
   sendNotification({
-    title: 'ProjectPilot',
-    body: 'Native Windows notifications are enabled.',
+    title,
+    body,
   });
 }

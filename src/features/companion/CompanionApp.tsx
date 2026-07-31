@@ -3,7 +3,15 @@ import { Button } from '@/components/ui/button';
 import { toAppError } from '@/lib/errors';
 import { emitInvalidation, listenForInvalidation } from '@/lib/invalidation';
 import { todayHK } from '@/lib/date';
+import { emit } from '@tauri-apps/api/event';
+import { WebviewWindow } from '@tauri-apps/api/webviewWindow';
+import { PhysicalPosition, PhysicalSize } from '@tauri-apps/api/dpi';
+import { currentMonitor, getCurrentWindow } from '@tauri-apps/api/window';
 import { getCalendarService } from '@/services/calendar.service';
+import {
+  loadReminderSettings,
+  saveReminderSettings,
+} from '@/features/settings/services/reminderSettings.service';
 import type { CalendarMonth } from '@/features/calendar/calendarModel';
 import {
   completeCompanionTask,
@@ -11,6 +19,7 @@ import {
   type CompanionTodayItem,
 } from '@/services/companion.service';
 import { sortCompanionItems } from './companionModel';
+import { safeCompanionGeometry } from './windowGeometry';
 
 export function CompanionApp() {
   const [view, setView] = useState<'today' | 'calendar'>('today');
@@ -23,6 +32,18 @@ export function CompanionApp() {
     void loadCompanionToday()
       .then((next) => {
         setItems(sortCompanionItems(next));
+      })
+      .catch((caught: unknown) => {
+        setError(toAppError(caught).message);
+      });
+  };
+  const openMain = () => {
+    void WebviewWindow.getByLabel('main')
+      .then(async (window) => {
+        if (window === null) throw new Error('The main ProjectPilot window is unavailable.');
+        await window.show();
+        await window.setFocus();
+        await emit('projectpilot:navigate', { target: 'dashboard' });
       })
       .catch((caught: unknown) => {
         setError(toAppError(caught).message);
@@ -49,6 +70,54 @@ export function CompanionApp() {
   useEffect(() => {
     reload();
     reloadCalendar();
+    void loadReminderSettings().then((settings) => {
+      setView(settings.companionView);
+    });
+  }, []);
+  useEffect(() => {
+    const window = getCurrentWindow();
+    let resizeCleanup: (() => void) | null = null;
+    let moveCleanup: (() => void) | null = null;
+    let timer: ReturnType<typeof setTimeout> | null = null;
+    const persist = () => {
+      if (timer !== null) clearTimeout(timer);
+      timer = setTimeout(() => {
+        void Promise.all([window.outerPosition(), window.outerSize(), loadReminderSettings()])
+          .then(([position, size, settings]) =>
+            saveReminderSettings({
+              ...settings,
+              companionGeometry: { x: position.x, y: position.y, width: size.width, height: size.height },
+            }),
+          )
+          .catch((caught: unknown) => {
+            setError(toAppError(caught).message);
+          });
+      }, 500);
+    };
+    void Promise.all([loadReminderSettings(), currentMonitor()])
+      .then(async ([settings, monitor]) => {
+        await window.setAlwaysOnTop(settings.companionAlwaysOnTop);
+        if (monitor !== null) {
+          const geometry = safeCompanionGeometry(settings.companionGeometry, {
+            x: monitor.workArea.position.x,
+            y: monitor.workArea.position.y,
+            width: monitor.workArea.size.width,
+            height: monitor.workArea.size.height,
+          });
+          await window.setSize(new PhysicalSize(geometry.width, geometry.height));
+          await window.setPosition(new PhysicalPosition(geometry.x, geometry.y));
+        }
+        resizeCleanup = await window.onResized(persist);
+        moveCleanup = await window.onMoved(persist);
+      })
+      .catch((caught: unknown) => {
+        setError(toAppError(caught).message);
+      });
+    return () => {
+      if (timer !== null) clearTimeout(timer);
+      resizeCleanup?.();
+      moveCleanup?.();
+    };
   }, []);
   useEffect(() => {
     let unlisten: (() => void) | null = null;
@@ -61,6 +130,17 @@ export function CompanionApp() {
       unlisten?.();
     };
   }, []);
+  const selectView = (next: 'today' | 'calendar') => {
+    setView(next);
+    void loadReminderSettings()
+      .then((settings) => saveReminderSettings({ ...settings, companionView: next }))
+      .catch((caught: unknown) => {
+        setError(toAppError(caught).message);
+      });
+  };
+  const nextMeeting = items?.find((item) => item.kind === 'meeting');
+  const overdueCount = items?.filter((item) => item.kind === 'overdue-task').length ?? 0;
+  const todayTaskCount = items?.filter((item) => item.kind === 'today-task').length ?? 0;
   return (
     <main className="min-h-screen overflow-x-hidden bg-background p-4 text-foreground">
       <header className="flex items-center justify-between gap-2">
@@ -68,7 +148,7 @@ export function CompanionApp() {
           <h1 className="text-lg font-semibold">ProjectPilot</h1>
           <p className="text-sm text-muted-foreground">Companion</p>
         </div>
-        <Button size="sm" variant="outline" aria-label="Open main ProjectPilot window">
+        <Button size="sm" variant="outline" aria-label="Open main ProjectPilot window" onClick={openMain}>
           Open main
         </Button>
       </header>
@@ -79,7 +159,7 @@ export function CompanionApp() {
           aria-selected={view === 'today'}
           variant={view === 'today' ? 'default' : 'outline'}
           onClick={() => {
-            setView('today');
+            selectView('today');
           }}
         >
           Today tasks
@@ -90,7 +170,7 @@ export function CompanionApp() {
           aria-selected={view === 'calendar'}
           variant={view === 'calendar' ? 'default' : 'outline'}
           onClick={() => {
-            setView('calendar');
+            selectView('calendar');
           }}
         >
           Calendar
@@ -99,6 +179,10 @@ export function CompanionApp() {
       {view === 'today' ? (
         <section className="mt-4 rounded-lg border p-4" role="tabpanel">
           <h2 className="font-medium">Today</h2>
+          <p className="mt-1 text-sm text-muted-foreground">
+            {todayHK()} · {todayTaskCount} due · {overdueCount} overdue
+            {nextMeeting === undefined ? '' : ` · Next: ${nextMeeting.title}`}
+          </p>
           {items === null && error === null && (
             <p className="mt-2 text-sm text-muted-foreground">Loading today’s schedule.</p>
           )}

@@ -110,10 +110,45 @@ export function ReminderSettingsSection() {
             <option value="15">15 min</option>
             <option value="30">30 min</option>
             <option value="60">1 hour</option>
+            <option value="1440">1 day</option>
           </select>
         </Label>
         <Label>
-          Quiet hours
+          Task lead
+          <select
+            className="ml-2 rounded border bg-background p-1"
+            value={settings.taskLeadDays}
+            onChange={(event) =>
+              void save({ ...settings, taskLeadDays: event.target.value as ReminderSettings['taskLeadDays'] })
+            }
+          >
+            <option value="none">Off</option>
+            <option value="0">Due today</option>
+            <option value="1">1 day</option>
+            <option value="3">3 days</option>
+          </select>
+        </Label>
+        <Label>
+          Project and milestone lead
+          <select
+            className="ml-2 rounded border bg-background p-1"
+            value={settings.projectMilestoneLeadDays}
+            onChange={(event) =>
+              void save({
+                ...settings,
+                projectMilestoneLeadDays: event.target.value as ReminderSettings['projectMilestoneLeadDays'],
+              })
+            }
+          >
+            <option value="none">Off</option>
+            <option value="0">Due today</option>
+            <option value="1">1 day</option>
+            <option value="3">3 days</option>
+            <option value="7">7 days</option>
+          </select>
+        </Label>
+        <Label>
+          Quiet start
           <input
             aria-label="Quiet start"
             className="ml-2 rounded border bg-background p-1"
@@ -122,7 +157,39 @@ export function ReminderSettingsSection() {
             onChange={(event) => void save({ ...settings, quietStart: event.target.value })}
           />
         </Label>
+        <Label>
+          Quiet end
+          <input
+            aria-label="Quiet end"
+            className="ml-2 rounded border bg-background p-1"
+            type="time"
+            value={settings.quietEnd}
+            onChange={(event) => void save({ ...settings, quietEnd: event.target.value })}
+          />
+        </Label>
+        <Label>
+          Daily summary
+          <input
+            aria-label="Daily summary time"
+            className="ml-2 rounded border bg-background p-1"
+            type="time"
+            value={settings.dailySummaryTime}
+            onChange={(event) => void save({ ...settings, dailySummaryTime: event.target.value })}
+          />
+        </Label>
+        <Label className="flex items-center gap-2">
+          <input
+            type="checkbox"
+            checked={settings.companionAlwaysOnTop}
+            onChange={(event) => void save({ ...settings, companionAlwaysOnTop: event.target.checked })}
+          />{' '}
+          Keep companion on top
+        </Label>
       </div>
+      <p className="mt-3 text-sm text-muted-foreground" aria-live="polite">
+        {settings.enabled ? 'Reminders are enabled.' : 'Reminders are paused.'}
+        {settings.pausedUntil !== null ? ` Resume time: ${settings.pausedUntil}.` : ''}
+      </p>
       {saved && (
         <p className="mt-3 text-sm text-primary" role="status">
           Settings saved.

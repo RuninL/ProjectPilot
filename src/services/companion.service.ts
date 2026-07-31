@@ -8,6 +8,7 @@ export interface CompanionTodayItem {
   title: string;
   subtitle: string;
   taskId?: string;
+  startsAt?: string;
 }
 
 export async function loadCompanionToday(date = todayHK()): Promise<CompanionTodayItem[]> {
@@ -25,6 +26,7 @@ export async function loadCompanionToday(date = todayHK()): Promise<CompanionTod
       kind: 'meeting' as const,
       title: meeting.topic,
       subtitle: meeting.start_time ?? 'Today meeting',
+      ...(meeting.start_time === null ? {} : { startsAt: meeting.start_time }),
     })),
     ...tasks
       .filter(

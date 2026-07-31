@@ -92,12 +92,25 @@ export function App() {
       void loadReminderSettings().then((settings) => {
         const pausedUntil =
           event.payload === 'pause'
-            ? null
+            ? settings.pausedUntil
             : event.payload === 'pause-hour'
               ? new Date(Date.now() + 3_600_000).toISOString()
               : `${addDays(todayHK(), 1)}T00:00:00+08:00`;
-        return saveReminderSettings({ ...settings, pausedUntil });
+        return saveReminderSettings({ ...settings, enabled: event.payload === 'pause' ? false : settings.enabled, pausedUntil });
       });
+    }).then((cleanup) => {
+      unlisten = cleanup;
+    });
+    return () => {
+      unlisten?.();
+    };
+  }, []);
+
+  useEffect(() => {
+    let unlisten: (() => void) | null = null;
+    void listen<{ target?: string }>('projectpilot:navigate', (event) => {
+      const target = event.payload.target;
+      if (target === 'dashboard') void router.navigate('/');
     }).then((cleanup) => {
       unlisten = cleanup;
     });
