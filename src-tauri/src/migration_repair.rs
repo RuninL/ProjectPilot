@@ -11,14 +11,46 @@ use crate::error::{CommandError, CommandResult};
 
 const CURRENT_MIGRATION_COUNT: i64 = 11;
 
+const CURRENT_MIGRATIONS: &[(i64, &str)] = &[
+    (1, include_str!("../migrations/0001_init.sql")),
+    (2, include_str!("../migrations/0002_task_lifecycle.sql")),
+    (3, include_str!("../migrations/0003_task_dependencies.sql")),
+    (
+        4,
+        include_str!("../migrations/0004_meetings_action_items.sql"),
+    ),
+    (5, include_str!("../migrations/0005_dashboard_risks.sql")),
+    (
+        6,
+        include_str!("../migrations/0006_project_links_description.sql"),
+    ),
+    (7, include_str!("../migrations/0007_people.sql")),
+    (
+        8,
+        include_str!("../migrations/0008_postponed_people_fields.sql"),
+    ),
+    (9, include_str!("../migrations/0009_recurrence_rules.sql")),
+    (
+        10,
+        include_str!("../migrations/0010_recurrence_standalone_meetings.sql"),
+    ),
+    (
+        11,
+        include_str!("../migrations/0011_recurrence_exceptions_reschedule.sql"),
+    ),
+];
+
 #[derive(Debug, Serialize)]
 pub struct MigrationChecksumRepair {
     pub repaired: bool,
     pub backup_path: Option<String>,
 }
 
-fn migration_one_checksum() -> Vec<u8> {
-    Sha384::digest(include_str!("../migrations/0001_init.sql").as_bytes()).to_vec()
+fn current_migration_checksums() -> Vec<(i64, Vec<u8>)> {
+    CURRENT_MIGRATIONS
+        .iter()
+        .map(|(version, source)| (*version, Sha384::digest(source.as_bytes()).to_vec()))
+        .collect()
 }
 
 fn validated_complete_history(connection: &Connection) -> CommandResult<()> {
@@ -50,13 +82,23 @@ pub(crate) fn reconcile_database(path: &Path) -> CommandResult<MigrationChecksum
 
     let verified = validate_database(path)?;
     validated_complete_history(&verified)?;
-    let stored_checksum: Vec<u8> = verified.query_row(
-        "SELECT checksum FROM _sqlx_migrations WHERE version = 1 AND success = 1",
-        [],
-        |row| row.get(0),
-    )?;
-    let expected_checksum = migration_one_checksum();
-    if stored_checksum == expected_checksum {
+    let mismatches = current_migration_checksums()
+        .into_iter()
+        .map(|(version, expected_checksum)| {
+            let stored_checksum: Vec<u8> = verified.query_row(
+                "SELECT checksum FROM _sqlx_migrations WHERE version = ?1 AND success = 1",
+                [version],
+                |row| row.get(0),
+            )?;
+            Ok((version, expected_checksum, stored_checksum))
+        })
+        .collect::<CommandResult<Vec<_>>>()?
+        .into_iter()
+        .filter_map(|(version, expected_checksum, stored_checksum)| {
+            (stored_checksum != expected_checksum).then_some((version, expected_checksum))
+        })
+        .collect::<Vec<_>>();
+    if mismatches.is_empty() {
         return Ok(MigrationChecksumRepair {
             repaired: false,
             backup_path: None,
@@ -69,13 +111,19 @@ pub(crate) fn reconcile_database(path: &Path) -> CommandResult<MigrationChecksum
 
     let mut writable = Connection::open(path)?;
     let transaction = writable.transaction()?;
-    let changed = transaction.execute(
-        "UPDATE _sqlx_migrations SET checksum = ?1 WHERE version = 1 AND success = 1",
-        params![expected_checksum],
-    )?;
-    if changed != 1 {
+    let changed = mismatches
+        .iter()
+        .try_fold(0usize, |count, (version, checksum)| {
+            transaction
+                .execute(
+                    "UPDATE _sqlx_migrations SET checksum = ?1 WHERE version = ?2 AND success = 1",
+                    params![checksum, version],
+                )
+                .map(|updated| count + updated)
+        })?;
+    if changed != mismatches.len() {
         return Err(CommandError::Invalid(
-            "migration 1 metadata was not updated; database was left unchanged".into(),
+            "migration metadata was not fully updated; database was left unchanged".into(),
         ));
     }
     transaction.commit()?;
@@ -93,11 +141,11 @@ pub fn reconcile_migration_checksum(app: AppHandle) -> CommandResult<MigrationCh
 
 #[cfg(test)]
 mod tests {
-    use super::{migration_one_checksum, reconcile_database};
+    use super::{current_migration_checksums, reconcile_database};
     use rusqlite::{params, Connection};
     use std::path::Path;
 
-    fn create_current_database(path: &std::path::Path) {
+    fn create_current_database(path: &std::path::Path, mismatched_versions: &[i64]) {
         let connection = Connection::open(path).expect("test database should open");
         for table in [
             "projects",
@@ -125,11 +173,11 @@ mod tests {
                 [],
             )
             .expect("migration table should be created");
-        for version in 1..=11 {
-            let checksum = if version == 1 {
+        for (version, expected_checksum) in current_migration_checksums() {
+            let checksum = if mismatched_versions.contains(&version) {
                 vec![0; 48]
             } else {
-                vec![version as u8]
+                expected_checksum
             };
             connection
                 .execute(
@@ -141,13 +189,13 @@ mod tests {
     }
 
     #[test]
-    fn backs_up_and_repairs_only_the_current_complete_history() {
+    fn backs_up_and_repairs_changed_metadata_for_the_current_complete_history() {
         let path = std::env::temp_dir().join(format!(
             "projectpilot-checksum-repair-{}.db",
             std::process::id()
         ));
         let _ = std::fs::remove_file(&path);
-        create_current_database(&path);
+        create_current_database(&path, &[1, 2]);
 
         let repaired = reconcile_database(&path).expect("checksum should be repaired safely");
         assert!(repaired.repaired);
@@ -158,12 +206,16 @@ mod tests {
         let connection = Connection::open(&path).expect("repaired database should open");
         let checksum: Vec<u8> = connection
             .query_row(
-                "SELECT checksum FROM _sqlx_migrations WHERE version = 1",
+                "SELECT checksum FROM _sqlx_migrations WHERE version = 2",
                 [],
                 |row| row.get(0),
             )
             .expect("checksum should be readable");
-        assert_eq!(checksum, migration_one_checksum());
+        let expected = current_migration_checksums()
+            .into_iter()
+            .find_map(|(version, checksum)| (version == 2).then_some(checksum))
+            .expect("migration 2 checksum should exist");
+        assert_eq!(checksum, expected);
 
         let _ = std::fs::remove_file(&path);
         if let Some(backup) = repaired.backup_path {

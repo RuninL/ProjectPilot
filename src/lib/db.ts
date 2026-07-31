@@ -59,8 +59,9 @@ export async function getDb(): Promise<SqlExecutor> {
     return instance;
   }
   // SQLx correctly blocks edited migration files. Earlier development builds
-  // changed migration 1, so reconcile only a complete, integrity-checked local
-  // history after making a SQLite safety copy; new/incomplete databases are untouched.
+  // changed historical migration metadata, so reconcile only a complete,
+  // integrity-checked local history after making a SQLite safety copy;
+  // new/incomplete databases are untouched.
   await invoke<MigrationChecksumRepair>('reconcile_migration_checksum');
   const db = await Database.load(DB_URL);
   await assertForeignKeys(db);
