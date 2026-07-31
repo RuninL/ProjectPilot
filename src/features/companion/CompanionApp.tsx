@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { toAppError } from '@/lib/errors';
+import { emitInvalidation, listenForInvalidation } from '@/lib/invalidation';
 import {
   completeCompanionTask,
   loadCompanionToday,
@@ -25,6 +26,7 @@ export function CompanionApp() {
   const complete = (taskId: string) => {
     void completeCompanionTask(taskId)
       .then(() => {
+        void emitInvalidation(['tasks']);
         reload();
       })
       .catch((caught: unknown) => {
@@ -33,6 +35,17 @@ export function CompanionApp() {
   };
   useEffect(() => {
     reload();
+  }, []);
+  useEffect(() => {
+    let unlisten: (() => void) | null = null;
+    void listenForInvalidation(() => {
+      reload();
+    }).then((cleanup) => {
+      unlisten = cleanup;
+    });
+    return () => {
+      unlisten?.();
+    };
   }, []);
   return (
     <main className="min-h-screen overflow-x-hidden bg-background p-4 text-foreground">
