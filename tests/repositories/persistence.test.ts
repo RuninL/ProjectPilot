@@ -41,6 +41,8 @@ describe('migration 0001 schema', () => {
       'project_links',
       'project_participants',
       'projects',
+      'recurrence_exceptions',
+      'recurrence_rules',
       'risks',
       'task_dependencies',
       'task_participants',

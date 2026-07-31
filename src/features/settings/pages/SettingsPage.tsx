@@ -49,6 +49,8 @@ const COUNT_LABELS: Record<keyof EntityCounts, string> = {
   meetings: '会议',
   tasks: '任务',
   taskDependencies: '任务依赖',
+  recurrenceRules: '周期规则',
+  recurrenceExceptions: '周期例外',
   milestones: '里程碑',
   actionItems: '行动项',
   projectLinks: '项目链接',

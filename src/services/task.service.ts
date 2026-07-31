@@ -121,6 +121,8 @@ export function createTaskService(deps: TaskServiceDeps) {
         completed_at: rules.completed_at,
         archived_at: null,
         source_meeting_id: null,
+        source_rule_id: null,
+        source_occurrence_date: null,
         is_sample: 0,
         created_at: now,
         updated_at: now,

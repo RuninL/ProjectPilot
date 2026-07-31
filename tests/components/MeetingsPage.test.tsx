@@ -7,6 +7,7 @@ import { setDbForTesting, type SqlExecutor } from '@/lib/db';
 import { getRepositories } from '@/repositories';
 import { useMeetingStore } from '@/stores/useMeetingStore';
 import { useProjectStore } from '@/stores/useProjectStore';
+import { useRecurrenceStore } from '@/stores/useRecurrenceStore';
 import { makeActionItem, makeMeeting, makeProject } from '../helpers/fixtures';
 import { createTestDb, type TestDb } from '../helpers/testDb';
 
@@ -28,6 +29,7 @@ function renderPage() {
 
 beforeEach(() => {
   useMeetingStore.getState().reset();
+  useRecurrenceStore.getState().reset();
   useProjectStore.setState({ options: [] });
 });
 
@@ -180,5 +182,58 @@ describe('MeetingsPage', () => {
       expect(await repos.meetings.findById('m1')).toBeNull();
     });
     expect(await repos.actionItems.findByMeeting('m1')).toHaveLength(0);
+  });
+
+  it('creates, edits and deletes standalone and project recurring meeting rules', async () => {
+    const user = userEvent.setup();
+    useRealDb();
+    const repos = await getRepositories();
+    await repos.projects.insert(makeProject({ id: 'p1', name: '内网门户重构' }));
+
+    renderPage();
+    await screen.findByText('还没有会议记录');
+    await user.click(screen.getByRole('button', { name: '创建会议' }));
+    await user.click(screen.getByRole('button', { name: '周期会议' }));
+    await user.type(screen.getByLabelText('会议主题'), '项目周会');
+    await user.selectOptions(screen.getByLabelText('所属项目'), 'p1');
+    await user.selectOptions(screen.getByLabelText('每周星期'), '2');
+    fireEvent.change(screen.getByLabelText('开始日期'), { target: { value: '2026-07-01' } });
+    fireEvent.change(screen.getByLabelText('结束日期'), { target: { value: '2026-12-31' } });
+    await user.click(screen.getByRole('button', { name: '保存规则' }));
+
+    expect(await screen.findByText(/每周三，至 2026-12-31/)).toBeInTheDocument();
+    const first = (await repos.recurrence.findAll())[0];
+    expect(first).toMatchObject({ kind: 'meeting', project_id: 'p1', title: '项目周会' });
+    if (first === undefined) throw new Error('周期规则应已创建');
+
+    await user.click(screen.getByRole('button', { name: '修改整个系列' }));
+    expect(screen.getByLabelText('会议主题')).toHaveValue('项目周会');
+    await user.clear(screen.getByLabelText('会议主题'));
+    await user.type(screen.getByLabelText('会议主题'), '项目例会');
+    await user.click(screen.getByRole('button', { name: '保存规则' }));
+    expect(
+      await screen.findByText(
+        '确定修改整个周期会议「项目周会」吗？新规则会立即重新展开；为避免旧日期被错误套用，历史单次调整将被清除。',
+      ),
+    ).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: '修改整个系列' }));
+    expect(await screen.findByText(/项目例会 \[周期会议\]/)).toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: '删除整个系列' }));
+    expect(await screen.findByText(/删除整个周期会议/)).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: '删除整个系列' }));
+    await waitFor(async () => {
+      expect(await repos.recurrence.findById(first.id)).toBeNull();
+    });
+
+    await user.click(screen.getByRole('button', { name: '创建会议' }));
+    await user.click(screen.getByRole('button', { name: '周期会议' }));
+    await user.type(screen.getByLabelText('会议主题'), '独立同步会');
+    await user.selectOptions(screen.getByLabelText('每周星期'), '0');
+    fireEvent.change(screen.getByLabelText('开始日期'), { target: { value: '2026-07-06' } });
+    fireEvent.change(screen.getByLabelText('结束日期'), { target: { value: '2026-12-31' } });
+    await user.click(screen.getByRole('button', { name: '保存规则' }));
+    expect(await screen.findByText(/独立同步会 \[周期会议\]/)).toBeInTheDocument();
+    expect((await repos.recurrence.findAll())[0]?.project_id).toBeNull();
   });
 });

@@ -9,6 +9,7 @@ import {
   riskImpactEnum,
   riskLikelihoodEnum,
   riskStatusEnum,
+  recurrenceActionEnum,
   taskPriorityEnum,
   taskStatusEnum,
 } from '@/db/schemas';
@@ -209,6 +210,50 @@ export const milestoneInputSchema = z.object({
   status: milestoneStatusEnum.default('upcoming'),
 });
 
+export const recurrenceRuleInputSchema = z
+  .object({
+    project_id: optionalId,
+    kind: z.enum(['task', 'meeting'], {
+      errorMap: () => ({ message: '周期规则类型必须是任务或会议' }),
+    }),
+    title: z
+      .string()
+      .trim()
+      .min(1, '周期规则标题不能为空')
+      .max(160, '周期规则标题不能超过 160 个字符'),
+    byweekday: z.coerce
+      .number()
+      .int('星期编号必须是整数')
+      .min(0, '星期编号必须在 0 到 6 之间')
+      .max(6, '星期编号必须在 0 到 6 之间'),
+    interval: z.coerce.number().int('间隔周数必须是整数').min(1, '间隔周数至少为 1'),
+    start_date: requiredDate,
+    end_date: requiredDate,
+    time_of_day: optionalTime,
+    duration_minutes: z.coerce
+      .number()
+      .int('会议时长必须是整数')
+      .positive('会议时长必须大于 0')
+      .nullable()
+      .default(null),
+    default_priority: taskPriorityEnum.nullable().default(null),
+    note: z.string().trim().max(2000, '备注不能超过 2000 个字符').default(''),
+    is_active: z.union([z.literal(0), z.literal(1)]).default(1),
+  })
+  .refine((value) => value.end_date >= value.start_date, {
+    message: '结束日期不得早于开始日期',
+    path: ['end_date'],
+  })
+  .refine((value) => value.kind === 'meeting' || value.project_id !== null, {
+    message: '周期任务必须选择所属项目',
+    path: ['project_id'],
+  });
+
+export const recurrenceExceptionInputSchema = z.object({
+  occurrence_date: requiredDate,
+  action: recurrenceActionEnum,
+});
+
 export const riskInputSchema = z.object({
   project_id: z.string().min(1, '必须选择所属项目'),
   title: z.string().trim().min(1, '风险标题不能为空').max(160, '风险标题不能超过 160 个字符'),
@@ -300,6 +345,8 @@ export type MeetingInput = z.infer<typeof meetingInputSchema>;
 export type ActionItemInput = z.infer<typeof actionItemInputSchema>;
 export type ConvertActionItemInput = z.infer<typeof convertActionItemSchema>;
 export type MilestoneInput = z.infer<typeof milestoneInputSchema>;
+export type RecurrenceRuleInput = z.infer<typeof recurrenceRuleInputSchema>;
+export type RecurrenceExceptionInput = z.infer<typeof recurrenceExceptionInputSchema>;
 export type RiskInput = z.infer<typeof riskInputSchema>;
 export type ProjectLinkInput = z.infer<typeof projectLinkInputSchema>;
 export type PersonInput = z.input<typeof personInputSchema>;

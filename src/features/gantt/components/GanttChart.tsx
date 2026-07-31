@@ -1,4 +1,5 @@
-import { TASK_STATUS_LABELS } from '@/lib/labels';
+import { MILESTONE_STATUS_LABELS, TASK_STATUS_LABELS } from '@/lib/labels';
+import type { MilestoneStatus } from '@/types';
 import type { TaskStatus } from '@/types';
 import type { GanttLink, GanttRow, GanttViewModel } from '../ganttViewModel';
 
@@ -16,6 +17,7 @@ interface GanttChartProps {
   model: GanttViewModel;
   selectedTaskId: string | null;
   onSelectTask: (taskId: string | null) => void;
+  onSelectMilestone: (milestoneId: string) => void;
 }
 
 const STATUS_FILL: Record<TaskStatus, string> = {
@@ -30,6 +32,11 @@ const STATUS_FILL: Record<TaskStatus, string> = {
 const CONFLICT_STROKE = '#DC2626';
 
 function barLabel(row: GanttRow): string {
+  if (row.kind === 'milestone') {
+    const linked =
+      row.linkedTaskTitle === null ? '，关联任务不可用' : `，关联任务：${row.linkedTaskTitle}`;
+    return `里程碑：${row.title}，${row.date}，${MILESTONE_STATUS_LABELS[row.status]}${linked}`;
+  }
   const range = row.singleDay
     ? `${row.startDate}（未设置截止日期，按单日显示）`
     : `${row.startDate} 至 ${row.endDate}`;
@@ -42,7 +49,23 @@ function linkPoints(link: GanttLink): string {
   return link.points.map((point) => `${String(point.x)},${String(point.y)}`).join(' ');
 }
 
-export function GanttChart({ model, selectedTaskId, onSelectTask }: GanttChartProps) {
+const MILESTONE_FILL: Record<MilestoneStatus, string> = {
+  upcoming: 'hsl(var(--primary))',
+  achieved: 'hsl(var(--success))',
+  missed: 'hsl(var(--destructive))',
+  cancelled: 'hsl(var(--muted-foreground))',
+};
+
+function diamondPoints(x: number, y: number, size = 7): string {
+  return `${String(x)},${String(y - size)} ${String(x + size)},${String(y)} ${String(x)},${String(y + size)} ${String(x - size)},${String(y)}`;
+}
+
+export function GanttChart({
+  model,
+  selectedTaskId,
+  onSelectTask,
+  onSelectMilestone,
+}: GanttChartProps) {
   const chartHeight = model.headerHeight + Math.max(model.height, model.rowHeight);
 
   return (
@@ -61,22 +84,29 @@ export function GanttChart({ model, selectedTaskId, onSelectTask }: GanttChartPr
         <ul className="text-sm">
           {model.rows.map((row) => (
             <li
-              key={row.taskId}
+              key={row.kind === 'task' ? row.taskId : row.milestoneId}
               className="flex items-center gap-1 border-b px-3 last:border-b-0"
               style={{ height: model.rowHeight }}
             >
               <button
                 type="button"
                 onClick={() => {
-                  onSelectTask(row.taskId === selectedTaskId ? null : row.taskId);
+                  if (row.kind === 'task') {
+                    onSelectTask(row.taskId === selectedTaskId ? null : row.taskId);
+                  } else {
+                    onSelectMilestone(row.milestoneId);
+                  }
                 }}
-                className={`truncate text-left hover:underline ${
-                  row.taskId === selectedTaskId ? 'font-semibold' : ''
+                className={`min-w-0 truncate text-left hover:underline ${
+                  row.kind === 'task' && row.taskId === selectedTaskId ? 'font-semibold' : ''
                 }`}
                 title={row.title}
               >
-                {row.title}
+                {row.kind === 'milestone' ? `◆ 里程碑：${row.title}` : row.title}
               </button>
+              {row.kind === 'milestone' && (
+                <span className="shrink-0 text-xs text-muted-foreground">{row.date}</span>
+              )}
             </li>
           ))}
         </ul>
@@ -90,6 +120,9 @@ export function GanttChart({ model, selectedTaskId, onSelectTask }: GanttChartPr
           aria-label={`甘特图时间轴，${model.rangeStart} 至 ${model.rangeEnd}`}
         >
           <defs>
+            <clipPath id="gantt-timeline-clip">
+              <rect x={0} y={0} width={model.width} height={chartHeight} />
+            </clipPath>
             <marker
               id="gantt-arrow"
               markerWidth="6"
@@ -144,7 +177,7 @@ export function GanttChart({ model, selectedTaskId, onSelectTask }: GanttChartPr
           <g transform={`translate(0, ${String(model.headerHeight)})`}>
             {model.rows.map((row) => (
               <line
-                key={`grid-${row.taskId}`}
+                key={`grid-${row.kind === 'task' ? row.taskId : row.milestoneId}`}
                 x1={0}
                 y1={row.y + model.rowHeight}
                 x2={model.width}
@@ -167,44 +200,84 @@ export function GanttChart({ model, selectedTaskId, onSelectTask }: GanttChartPr
 
             {model.rows.map((row) => (
               <g
-                key={row.taskId}
+                key={row.kind === 'task' ? row.taskId : row.milestoneId}
                 role="button"
                 tabIndex={0}
                 aria-label={barLabel(row)}
-                aria-pressed={row.taskId === selectedTaskId}
-                className="cursor-pointer focus:outline-none"
+                aria-pressed={row.kind === 'task' ? row.taskId === selectedTaskId : undefined}
+                className="cursor-pointer focus:outline-none focus-visible:[&>polygon]:stroke-ring focus-visible:[&>rect]:stroke-ring"
                 onClick={() => {
-                  onSelectTask(row.taskId === selectedTaskId ? null : row.taskId);
+                  if (row.kind === 'task') {
+                    onSelectTask(row.taskId === selectedTaskId ? null : row.taskId);
+                  } else {
+                    onSelectMilestone(row.milestoneId);
+                  }
                 }}
                 onKeyDown={(event) => {
                   if (event.key === 'Enter' || event.key === ' ') {
                     event.preventDefault();
-                    onSelectTask(row.taskId === selectedTaskId ? null : row.taskId);
+                    if (row.kind === 'task') {
+                      onSelectTask(row.taskId === selectedTaskId ? null : row.taskId);
+                    } else {
+                      onSelectMilestone(row.milestoneId);
+                    }
                   }
                 }}
               >
                 <title>{barLabel(row)}</title>
-                <rect
-                  x={row.bar.x}
-                  y={row.bar.y}
-                  width={Math.max(row.bar.width, 2)}
-                  height={row.bar.height}
-                  rx={3}
-                  fill={STATUS_FILL[row.status]}
-                  fillOpacity={row.taskId === selectedTaskId ? 1 : 0.85}
-                  stroke={row.hasConflict ? CONFLICT_STROKE : 'none'}
-                  strokeWidth={row.hasConflict ? 2 : 0}
-                  strokeDasharray={row.hasConflict ? '3 2' : undefined}
-                />
-                {row.blockedBy.length > 0 && (
-                  <text
-                    x={row.bar.x + Math.max(row.bar.width, 2) + 4}
-                    y={row.bar.y + row.bar.height - 5}
-                    fontSize={11}
-                    fill={CONFLICT_STROKE}
-                  >
-                    受阻风险
-                  </text>
+                {row.kind === 'task' ? (
+                  <>
+                    <rect
+                      x={row.bar.x}
+                      y={row.bar.y}
+                      width={Math.max(row.bar.width, 2)}
+                      height={row.bar.height}
+                      rx={3}
+                      fill={STATUS_FILL[row.status]}
+                      fillOpacity={row.taskId === selectedTaskId ? 1 : 0.85}
+                      stroke={row.hasConflict ? CONFLICT_STROKE : 'none'}
+                      strokeWidth={row.hasConflict ? 2 : 0}
+                      strokeDasharray={row.hasConflict ? '3 2' : undefined}
+                    />
+                    {row.blockedBy.length > 0 && (
+                      <text
+                        x={row.bar.x + Math.max(row.bar.width, 2) + 4}
+                        y={row.bar.y + row.bar.height - 5}
+                        fontSize={11}
+                        fill={CONFLICT_STROKE}
+                      >
+                        受阻风险
+                      </text>
+                    )}
+                  </>
+                ) : (
+                  <>
+                    <polygon
+                      points={diamondPoints(row.x, row.y + model.rowHeight / 2)}
+                      fill={MILESTONE_FILL[row.status]}
+                      fillOpacity={row.status === 'cancelled' ? 0.45 : 1}
+                      stroke={row.status === 'cancelled' ? 'hsl(var(--muted-foreground))' : 'none'}
+                      strokeWidth={row.status === 'cancelled' ? 1.5 : 0}
+                    />
+                    <text
+                      x={
+                        row.x > model.width - Math.min(model.width / 2, row.title.length * 11 + 12)
+                          ? row.x - 10
+                          : row.x + 10
+                      }
+                      y={row.y + model.rowHeight / 2 + 4}
+                      fontSize={11}
+                      className="fill-foreground"
+                      textAnchor={
+                        row.x > model.width - Math.min(model.width / 2, row.title.length * 11 + 12)
+                          ? 'end'
+                          : 'start'
+                      }
+                      clipPath="url(#gantt-timeline-clip)"
+                    >
+                      {row.title}
+                    </text>
+                  </>
                 )}
               </g>
             ))}
@@ -261,6 +334,8 @@ export function GanttLegend() {
         />
         今日线
       </li>
+      <li>里程碑 ◆</li>
+      <li>待达成 / 已达成 / 已错过 / 已取消</li>
     </ul>
   );
 }

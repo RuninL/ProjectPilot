@@ -280,6 +280,8 @@ export function ProjectDetailPage() {
           onRetry={() => {
             void loadDependencies(project.id);
           }}
+          projectId={project.id}
+          canEdit={!archived}
         />
       </section>
 

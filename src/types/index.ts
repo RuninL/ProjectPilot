@@ -18,6 +18,10 @@ import type {
   projectParticipantPersonRowSchema,
   projectRowSchema,
   projectStatusEnum,
+  recurrenceExceptionRowSchema,
+  recurrenceActionEnum,
+  recurrenceKindEnum,
+  recurrenceRuleRowSchema,
   riskCategoryEnum,
   riskImpactEnum,
   riskLevelEnum,
@@ -41,6 +45,8 @@ export type TaskWithProject = z.infer<typeof taskWithProjectRowSchema>;
 export type TaskDependency = z.infer<typeof taskDependencyRowSchema>;
 export type Milestone = z.infer<typeof milestoneRowSchema>;
 export type Meeting = z.infer<typeof meetingRowSchema>;
+export type RecurrenceRule = z.infer<typeof recurrenceRuleRowSchema>;
+export type RecurrenceException = z.infer<typeof recurrenceExceptionRowSchema>;
 export type ActionItem = z.infer<typeof actionItemRowSchema>;
 export type ProjectLink = z.infer<typeof projectLinkRowSchema>;
 export type ProjectLinkWithProject = z.infer<typeof projectLinkWithProjectRowSchema>;
@@ -68,3 +74,5 @@ export type RiskLikelihood = z.infer<typeof riskLikelihoodEnum>;
 export type RiskImpact = z.infer<typeof riskImpactEnum>;
 export type RiskLevel = z.infer<typeof riskLevelEnum>;
 export type RiskStatus = z.infer<typeof riskStatusEnum>;
+export type RecurrenceKind = z.infer<typeof recurrenceKindEnum>;
+export type RecurrenceAction = z.infer<typeof recurrenceActionEnum>;

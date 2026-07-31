@@ -11,6 +11,9 @@ import {
   isOverdue,
   isThisWeek,
   isValidDateStr,
+  jsDayFromMondayWeekday,
+  mondayWeekdayFromJsDay,
+  mondayWeekdayOf,
   parseInput,
   startOfMonthStr,
   startOfNextMonthStr,
@@ -135,6 +138,13 @@ describe('gantt date helpers', () => {
     expect(startOfWeekStr('2026-08-12')).toBe('2026-08-10');
     expect(startOfWeekStr('2026-08-10')).toBe('2026-08-10');
     expect(startOfWeekStr('2026-08-16')).toBe('2026-08-10');
+  });
+
+  it('converts every weekday between JavaScript Sunday-first and app Monday-first indexes', () => {
+    expect([0, 1, 2, 3, 4, 5, 6].map(mondayWeekdayFromJsDay)).toEqual([6, 0, 1, 2, 3, 4, 5]);
+    expect([0, 1, 2, 3, 4, 5, 6].map(jsDayFromMondayWeekday)).toEqual([1, 2, 3, 4, 5, 6, 0]);
+    expect(mondayWeekdayOf('2025-12-29')).toBe(0);
+    expect(mondayWeekdayOf('2026-01-04')).toBe(6);
   });
 
   it('finds month and quarter starts', () => {

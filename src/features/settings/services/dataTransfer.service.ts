@@ -38,6 +38,8 @@ const ENTITY_KEYS = [
   'meetings',
   'tasks',
   'taskDependencies',
+  'recurrenceRules',
+  'recurrenceExceptions',
   'milestones',
   'actionItems',
   'projectLinks',
@@ -179,6 +181,8 @@ function countSnapshot(snapshot: DatabaseSnapshot): EntityCounts {
     meetings: snapshot.meetings.length,
     tasks: snapshot.tasks.length,
     taskDependencies: snapshot.taskDependencies.length,
+    recurrenceRules: snapshot.recurrenceRules.length,
+    recurrenceExceptions: snapshot.recurrenceExceptions.length,
     milestones: snapshot.milestones.length,
     actionItems: snapshot.actionItems.length,
     projectLinks: snapshot.projectLinks.length,
@@ -196,6 +200,8 @@ function emptyCounts(): EntityCounts {
     meetings: 0,
     tasks: 0,
     taskDependencies: 0,
+    recurrenceRules: 0,
+    recurrenceExceptions: 0,
     milestones: 0,
     actionItems: 0,
     projectLinks: 0,
@@ -232,6 +238,12 @@ function withoutConflicts(incoming: ExportData, current: DatabaseSnapshot): Data
     taskDependencies: excludeIds(
       incoming.taskDependencies,
       current.taskDependencies,
+      (row) => row.id,
+    ),
+    recurrenceRules: excludeIds(incoming.recurrenceRules, current.recurrenceRules, (row) => row.id),
+    recurrenceExceptions: excludeIds(
+      incoming.recurrenceExceptions,
+      current.recurrenceExceptions,
       (row) => row.id,
     ),
     milestones: excludeIds(incoming.milestones, current.milestones, (row) => row.id),
@@ -278,6 +290,10 @@ function withoutSampleData(snapshot: DatabaseSnapshot): DatabaseSnapshot {
     (row) => row.parent_task_id === null || candidateTaskIds.has(row.parent_task_id),
   );
   const taskIds = new Set(tasks.map((row) => row.id));
+  const recurrenceRules = snapshot.recurrenceRules.filter(
+    (row) => row.is_sample === 0 && (row.project_id === null || projectIds.has(row.project_id)),
+  );
+  const recurrenceRuleIds = new Set(recurrenceRules.map((row) => row.id));
 
   return {
     projects,
@@ -285,6 +301,10 @@ function withoutSampleData(snapshot: DatabaseSnapshot): DatabaseSnapshot {
     tasks,
     taskDependencies: snapshot.taskDependencies.filter(
       (row) => taskIds.has(row.predecessor_id) && taskIds.has(row.successor_id),
+    ),
+    recurrenceRules,
+    recurrenceExceptions: snapshot.recurrenceExceptions.filter((row) =>
+      recurrenceRuleIds.has(row.rule_id),
     ),
     milestones: snapshot.milestones.filter(
       (row) =>
@@ -325,6 +345,8 @@ function mergeSnapshots(current: DatabaseSnapshot, incoming: DatabaseSnapshot): 
     meetings: [...current.meetings, ...incoming.meetings],
     tasks: [...current.tasks, ...incoming.tasks],
     taskDependencies: [...current.taskDependencies, ...incoming.taskDependencies],
+    recurrenceRules: [...current.recurrenceRules, ...incoming.recurrenceRules],
+    recurrenceExceptions: [...current.recurrenceExceptions, ...incoming.recurrenceExceptions],
     milestones: [...current.milestones, ...incoming.milestones],
     actionItems: [...current.actionItems, ...incoming.actionItems],
     projectLinks: [...current.projectLinks, ...incoming.projectLinks],
@@ -342,6 +364,7 @@ function validateSnapshot(snapshot: DatabaseSnapshot): void {
   const meetingIds = new Set(snapshot.meetings.map((row) => row.id));
   const tasks = new Map(snapshot.tasks.map((row) => [row.id, row]));
   const taskIds = new Set(tasks.keys());
+  const recurrenceRules = new Map(snapshot.recurrenceRules.map((row) => [row.id, row]));
   const personIds = new Set(snapshot.people.map((row) => row.id));
 
   for (const meeting of snapshot.meetings) {
@@ -370,6 +393,41 @@ function validateSnapshot(snapshot: DatabaseSnapshot): void {
     const successor = tasks.get(dependency.successor_id);
     if (predecessor?.project_id !== successor?.project_id) {
       throw validationError(`依赖 ${dependency.id} 跨越了不同项目`);
+    }
+  }
+  for (const rule of snapshot.recurrenceRules) {
+    if (rule.project_id !== null) {
+      assertReference(rule.project_id, projectIds, `周期规则 ${rule.id} 的项目`);
+    }
+  }
+  for (const exception of snapshot.recurrenceExceptions) {
+    const rule = recurrenceRules.get(exception.rule_id);
+    if (rule === undefined) {
+      throw validationError(`周期例外 ${exception.id} 的规则不存在`);
+    }
+    if (exception.action === 'rescheduled') {
+      if (exception.replacement_date === null || exception.materialized_id !== null) {
+        throw validationError(`周期例外 ${exception.id} 的改期数据无效`);
+      }
+    } else if (exception.action === 'materialized') {
+      if (exception.materialized_id === null) {
+        throw validationError(`周期例外 ${exception.id} 缺少旧版关联记录 ID`);
+      }
+      if (rule.kind === 'task') {
+        assertReference(
+          exception.materialized_id,
+          taskIds,
+          `周期例外 ${exception.id} 的旧版关联任务`,
+        );
+      } else {
+        assertReference(
+          exception.materialized_id,
+          meetingIds,
+          `周期例外 ${exception.id} 的旧版关联会议`,
+        );
+      }
+    } else if (exception.replacement_date !== null || exception.materialized_id !== null) {
+      throw validationError(`周期例外 ${exception.id} 的跳过动作不应包含关联记录 ID`);
     }
   }
   for (const milestone of snapshot.milestones) {
@@ -439,6 +497,18 @@ function assertUniqueKeys(snapshot: DatabaseSnapshot): void {
     '任务依赖 ID',
   );
   assertUnique(
+    snapshot.recurrenceRules.map((row) => row.id),
+    '周期规则 ID',
+  );
+  assertUnique(
+    snapshot.recurrenceExceptions.map((row) => row.id),
+    '周期例外 ID',
+  );
+  assertUnique(
+    snapshot.recurrenceExceptions.map((row) => `${row.rule_id}\u0000${row.occurrence_date}`),
+    '周期例外规则日期组合',
+  );
+  assertUnique(
     snapshot.milestones.map((row) => row.id),
     '里程碑 ID',
   );
@@ -493,6 +563,7 @@ function normalizePeopleData(snapshot: DatabaseSnapshot): DatabaseSnapshot {
   }
   const projectIds = new Set(snapshot.projects.map((row) => row.id));
   const taskIds = new Set(snapshot.tasks.map((row) => row.id));
+  const recurrenceRuleIds = new Set(snapshot.recurrenceRules.map((row) => row.id));
   return {
     ...snapshot,
     people,
@@ -507,6 +578,10 @@ function normalizePeopleData(snapshot: DatabaseSnapshot): DatabaseSnapshot {
         (row) => taskIds.has(row.task_id) && personIds.has(row.person_id),
       ),
       (row) => `${row.task_id}\u0000${row.person_id}`,
+    ),
+    recurrenceExceptions: uniqueBy(
+      snapshot.recurrenceExceptions.filter((row) => recurrenceRuleIds.has(row.rule_id)),
+      (row) => `${row.rule_id}\u0000${row.occurrence_date}`,
     ),
   };
 }

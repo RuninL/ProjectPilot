@@ -6,9 +6,11 @@ interface GanttState {
   scale: GanttScale;
   selectedTaskId: string | null;
   showConflicts: boolean;
+  showMilestones: boolean;
   setScale: (scale: GanttScale) => void;
   setSelectedTaskId: (id: string | null) => void;
   setShowConflicts: (show: boolean) => void;
+  setShowMilestones: (show: boolean) => void;
 }
 
 /** Gantt view state: scale, selection, conflict overlay. Rendering arrives in Phase 3. */
@@ -16,6 +18,7 @@ export const useGanttStore = create<GanttState>((set) => ({
   scale: 'month',
   selectedTaskId: null,
   showConflicts: true,
+  showMilestones: true,
   setScale: (scale) => {
     set({ scale });
   },
@@ -24,5 +27,8 @@ export const useGanttStore = create<GanttState>((set) => ({
   },
   setShowConflicts: (showConflicts) => {
     set({ showConflicts });
+  },
+  setShowMilestones: (showMilestones) => {
+    set({ showMilestones });
   },
 }));

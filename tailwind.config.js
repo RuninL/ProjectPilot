@@ -35,6 +35,10 @@ export default {
           foreground: 'hsl(var(--card-foreground))',
         },
         heading: 'hsl(var(--heading))',
+        recurrence: {
+          DEFAULT: 'hsl(var(--recurrence))',
+          background: 'hsl(var(--recurrence-background))',
+        },
       },
       borderRadius: {
         lg: 'var(--radius)',

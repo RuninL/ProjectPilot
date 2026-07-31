@@ -110,6 +110,8 @@ function buildSampleTask(seed: SampleTaskSeed, projectId: string, now: string): 
     completed_at: seed.status === 'done' ? now : null,
     archived_at: null,
     source_meeting_id: null,
+    source_rule_id: null,
+    source_occurrence_date: null,
     is_sample: 1,
     created_at: now,
     updated_at: now,

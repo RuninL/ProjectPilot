@@ -2,6 +2,8 @@ import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { GanttSection } from '@/features/gantt/components/GanttSection';
+import { GanttChart } from '@/features/gantt/components/GanttChart';
+import { buildGanttViewModel } from '@/features/gantt/ganttViewModel';
 import { buildDependencyGraph } from '@/services/dependencyGraph';
 import type { ProjectDependencyAnalysis } from '@/services/dependency.service';
 import { useGanttStore } from '@/stores/useGanttStore';
@@ -53,7 +55,12 @@ function setup(
 }
 
 beforeEach(() => {
-  useGanttStore.setState({ scale: 'month', selectedTaskId: null, showConflicts: true });
+  useGanttStore.setState({
+    scale: 'month',
+    selectedTaskId: null,
+    showConflicts: true,
+    showMilestones: true,
+  });
 });
 
 describe('GanttSection', () => {
@@ -183,9 +190,48 @@ describe('GanttSection', () => {
     }
   });
 
-  it('keeps milestones marked as a later phase rather than faking them', () => {
+  it('offers a milestone visibility control', async () => {
     setup(analyze([]));
 
-    expect(screen.getByText('里程碑（后续阶段）')).toBeInTheDocument();
+    const checkbox = screen.getByRole('checkbox', { name: '显示里程碑' });
+    expect(checkbox).toBeChecked();
+    await userEvent.setup().click(checkbox);
+    expect(useGanttStore.getState().showMilestones).toBe(false);
+  });
+
+  it('renders an accessible milestone diamond and opens it with click or keyboard', async () => {
+    const onSelectMilestone = vi.fn();
+    const model = buildGanttViewModel({
+      tasks: [],
+      milestones: [
+        {
+          id: 'm1',
+          name: '发布',
+          date: '2026-08-16',
+          status: 'achieved',
+          linked_task_id: null,
+        },
+      ],
+      dependencies: [],
+      conflicts: [],
+      blockedRisks: [],
+      scale: 'month',
+      today: '2026-08-12',
+    });
+    const { user } = setup(analyze([]));
+    render(
+      <GanttChart
+        model={model}
+        selectedTaskId={null}
+        onSelectTask={vi.fn()}
+        onSelectMilestone={onSelectMilestone}
+      />,
+    );
+
+    const diamond = screen.getByRole('button', { name: /里程碑：发布，2026-08-16，已达成/ });
+    expect(diamond.querySelector('polygon')).not.toBeNull();
+    await user.click(diamond);
+    await user.keyboard('{Enter}');
+    expect(onSelectMilestone).toHaveBeenCalledTimes(2);
   });
 });

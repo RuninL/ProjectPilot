@@ -2,6 +2,8 @@ import { describe, expect, it } from 'vitest';
 import {
   buildGanttViewModel,
   GANTT_ROW_HEIGHT,
+  type GanttMilestone,
+  type GanttTaskRow,
   type GanttTask,
 } from '@/features/gantt/ganttViewModel';
 import type { GraphEdgeInput } from '@/services/dependencyGraph';
@@ -18,6 +20,7 @@ function task(id: string, overrides: Partial<GanttTask> = {}): GanttTask {
     start_date: null,
     due_date: null,
     archived_at: null,
+    parent_task_id: null,
     ...overrides,
   };
 }
@@ -29,6 +32,7 @@ function build(params: {
   risks?: readonly { taskId: string; blockedBy: readonly string[] }[];
   scale?: 'week' | 'month' | 'quarter';
   today?: string;
+  milestones?: readonly GanttMilestone[];
 }) {
   return buildGanttViewModel({
     tasks: params.tasks,
@@ -43,7 +47,78 @@ function build(params: {
     blockedRisks: params.risks ?? [],
     scale: params.scale ?? 'month',
     today: params.today ?? TODAY,
+    ...(params.milestones === undefined ? {} : { milestones: params.milestones }),
   });
+
+  describe('buildGanttViewModel — milestones', () => {
+    const milestone = (id: string, overrides: Partial<GanttMilestone> = {}): GanttMilestone => ({
+      id,
+      name: `里程碑 ${id}`,
+      date: '2026-08-16',
+      status: 'upcoming',
+      linked_task_id: null,
+      ...overrides,
+    });
+
+    it('renders milestones as distinct rows at their date coordinate and extends the range', () => {
+      const model = build({
+        tasks: [task('a', { start_date: '2026-08-03' })],
+        milestones: [milestone('m', { date: '2026-10-03' })],
+      });
+      const row = model.rows.find((item) => item.kind === 'milestone');
+
+      expect(row).toMatchObject({ kind: 'milestone', milestoneId: 'm', date: '2026-10-03' });
+      expect(row?.kind === 'milestone' && row.x).toBe(63 * model.dayWidth);
+      expect(model.rangeEnd).toBe('2026-10-31');
+    });
+
+    it('builds a valid non-empty model for a project containing only milestones', () => {
+      const model = build({ tasks: [], milestones: [milestone('m')] });
+
+      expect(model.isEmpty).toBe(false);
+      expect(model.rows[0]).toMatchObject({ kind: 'milestone', milestoneId: 'm' });
+      expect(model.links).toEqual([]);
+    });
+
+    it('places linked milestones after the linked task subtree and unlinked milestones by date and name', () => {
+      const model = build({
+        tasks: [
+          task('parent', { start_date: '2026-08-01' }),
+          task('child', { start_date: '2026-08-02', parent_task_id: 'parent' }),
+        ],
+        milestones: [
+          milestone('attached', { linked_task_id: 'parent', name: '关联' }),
+          milestone('later', { date: '2026-08-20', name: '乙' }),
+          milestone('earlier', { date: '2026-08-19', name: '甲' }),
+        ],
+      });
+
+      expect(model.rows.map((row) => (row.kind === 'task' ? row.taskId : row.milestoneId))).toEqual(
+        ['parent', 'child', 'attached', 'earlier', 'later'],
+      );
+    });
+
+    it('safely degrades an unavailable linked task without adding dependency links', () => {
+      const model = build({
+        tasks: [task('a', { start_date: '2026-08-03' })],
+        milestones: [milestone('missing', { linked_task_id: 'gone', status: 'cancelled' })],
+      });
+      const row = model.rows.find((item) => item.kind === 'milestone');
+
+      expect(row).toMatchObject({
+        linkedTaskId: 'gone',
+        linkedTaskTitle: null,
+        status: 'cancelled',
+      });
+      expect(model.links).toEqual([]);
+    });
+  });
+}
+
+function taskRow(
+  row: ReturnType<typeof build>['rows'][number] | undefined,
+): GanttTaskRow | undefined {
+  return row?.kind === 'task' ? row : undefined;
 }
 
 describe('buildGanttViewModel — empty and undated projects', () => {
@@ -73,7 +148,9 @@ describe('buildGanttViewModel — empty and undated projects', () => {
       ],
     });
 
-    expect(model.rows.map((row) => row.taskId)).toEqual(['live']);
+    expect(model.rows.filter((row) => row.kind === 'task').map((row) => row.taskId)).toEqual([
+      'live',
+    ]);
     expect(model.undated).toEqual([]);
   });
 });
@@ -83,7 +160,7 @@ describe('buildGanttViewModel — bars', () => {
     const model = build({
       tasks: [task('a', { start_date: '2026-08-03', due_date: '2026-08-05' })],
     });
-    const row = model.rows[0];
+    const row = taskRow(model.rows[0]);
 
     expect(model.rangeStart).toBe('2026-08-01');
     expect(row?.bar.x).toBe(2 * model.dayWidth);
@@ -93,7 +170,7 @@ describe('buildGanttViewModel — bars', () => {
 
   it('draws a single-day bar when the due date is missing', () => {
     const model = build({ tasks: [task('a', { start_date: '2026-08-03' })] });
-    const row = model.rows[0];
+    const row = taskRow(model.rows[0]);
 
     expect(row?.singleDay).toBe(true);
     expect(row?.bar.width).toBe(model.dayWidth);
@@ -105,8 +182,8 @@ describe('buildGanttViewModel — bars', () => {
       tasks: [task('a', { start_date: '2026-08-10', due_date: '2026-08-01' })],
     });
 
-    expect(model.rows[0]?.endDate).toBe('2026-08-10');
-    expect(model.rows[0]?.bar.width).toBe(model.dayWidth);
+    expect(taskRow(model.rows[0])?.endDate).toBe('2026-08-10');
+    expect(taskRow(model.rows[0])?.bar.width).toBe(model.dayWidth);
   });
 
   it('stacks rows in input order at a fixed row height', () => {
@@ -133,11 +210,11 @@ describe('buildGanttViewModel — bars', () => {
       conflicts: [{ edgeId: 'e1', successorId: 'b' }],
       risks: [{ taskId: 'b', blockedBy: ['a'] }],
     });
-    const successor = model.rows[1];
+    const successor = taskRow(model.rows[1]);
 
     expect(successor?.hasConflict).toBe(true);
     expect(successor?.blockedBy).toEqual(['设计']);
-    expect(model.rows[0]?.hasConflict).toBe(false);
+    expect(taskRow(model.rows[0])?.hasConflict).toBe(false);
   });
 });
 
@@ -185,7 +262,7 @@ describe('buildGanttViewModel — scales and ticks', () => {
     const quarter = build({ tasks, scale: 'quarter' });
 
     expect(week.dayWidth).toBeGreaterThan(quarter.dayWidth);
-    expect(week.rows[0]?.startDate).toBe(quarter.rows[0]?.startDate);
+    expect(taskRow(week.rows[0])?.startDate).toBe(taskRow(quarter.rows[0])?.startDate);
     expect(week.width).toBeGreaterThan(0);
     expect(quarter.width).toBeGreaterThan(0);
   });
@@ -199,7 +276,7 @@ describe('buildGanttViewModel — scales and ticks', () => {
 
     expect(model.rangeStart).toBe('2026-12-01');
     expect(model.rangeEnd).toBe('2027-01-31');
-    expect(model.rows[0]?.bar.width).toBe(22 * model.dayWidth);
+    expect(taskRow(model.rows[0])?.bar.width).toBe(22 * model.dayWidth);
   });
 });
 
@@ -235,8 +312,8 @@ describe('buildGanttViewModel — dependency links', () => {
       dependencies: [{ id: 'e1', predecessor_id: 'a', successor_id: 'b' }],
     });
     const link = model.links[0];
-    const from = model.rows[0];
-    const to = model.rows[1];
+    const from = taskRow(model.rows[0]);
+    const to = taskRow(model.rows[1]);
 
     expect(model.links).toHaveLength(1);
     expect(link?.points).toHaveLength(4);
@@ -289,6 +366,13 @@ describe('buildGanttViewModel — performance', () => {
       predecessor_id: `n${String(index)}`,
       successor_id: `n${String(index + 1)}`,
     }));
+    const milestones: GanttMilestone[] = Array.from({ length: 100 }, (_, index) => ({
+      id: `m${String(index)}`,
+      name: `里程碑 ${String(index)}`,
+      date: `2026-09-${String((index % 28) + 1).padStart(2, '0')}`,
+      status: 'upcoming',
+      linked_task_id: index % 2 === 0 ? `n${String(index)}` : null,
+    }));
 
     const started = performance.now();
     const model = buildGanttViewModel({
@@ -296,14 +380,15 @@ describe('buildGanttViewModel — performance', () => {
       dependencies,
       conflicts: [],
       blockedRisks: [],
+      milestones,
       scale: 'month',
       today: TODAY,
     });
     const elapsed = performance.now() - started;
 
-    expect(model.rows).toHaveLength(count);
+    expect(model.rows).toHaveLength(count + milestones.length);
     expect(model.links).toHaveLength(count - 1);
-    expect(model.height).toBe(count * GANTT_ROW_HEIGHT);
+    expect(model.height).toBe((count + milestones.length) * GANTT_ROW_HEIGHT);
     // Generous ceiling; the measured run is far below it.
     expect(elapsed).toBeLessThan(1500);
   });
