@@ -145,8 +145,18 @@ describe('buildCalendarMonth', () => {
         tasks: [
           withProject({ id: 'undated', start_date: null, due_date: null }),
           withProject({ id: 'inverted', start_date: '2026-07-20', due_date: '2026-07-10' }),
-          withProject({ id: 'same-a', title: '甲', start_date: '2026-07-03', due_date: '2026-07-04' }),
-          withProject({ id: 'same-b', title: '乙', start_date: '2026-07-03', due_date: '2026-07-04' }),
+          withProject({
+            id: 'same-a',
+            title: '甲',
+            start_date: '2026-07-03',
+            due_date: '2026-07-04',
+          }),
+          withProject({
+            id: 'same-b',
+            title: '乙',
+            start_date: '2026-07-03',
+            due_date: '2026-07-04',
+          }),
         ],
       });
       const first = buildCalendarColorBar(source, '2026-07-01', '2026-07-31');

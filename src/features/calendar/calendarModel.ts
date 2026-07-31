@@ -266,7 +266,8 @@ export function safeCalendarColor(color: string | null | undefined): string {
 
 function taskInterval(task: TaskWithProject): { start: string; end: string } | null {
   if (task.start_date === null && task.due_date === null) return null;
-  if (task.start_date === null) return { start: task.due_date as string, end: task.due_date as string };
+  if (task.start_date === null)
+    return { start: task.due_date as string, end: task.due_date as string };
   if (task.due_date === null) return { start: task.start_date, end: task.start_date };
   // Legacy inverted dates are displayed as a safe single-day task rather than corrupting the lane layout.
   if (task.start_date > task.due_date) return { start: task.start_date, end: task.start_date };

@@ -257,96 +257,99 @@ export function CalendarPage() {
           }}
         />
       ) : (
-      <div className="overflow-hidden rounded-lg border bg-card">
-        <div className="grid grid-cols-7 border-b bg-muted/40">
-          {WEEKDAY_LABELS.map((label) => (
-            <div key={label} className="p-2 text-center text-xs font-medium text-muted-foreground">
-              {label}
+        <div className="overflow-hidden rounded-lg border bg-card">
+          <div className="grid grid-cols-7 border-b bg-muted/40">
+            {WEEKDAY_LABELS.map((label) => (
+              <div
+                key={label}
+                className="p-2 text-center text-xs font-medium text-muted-foreground"
+              >
+                {label}
+              </div>
+            ))}
+          </div>
+          {(data?.weeks ?? []).map((week) => (
+            <div key={week[0]?.date ?? ''} className="grid grid-cols-7 border-b last:border-b-0">
+              {week.map((day) => {
+                const expanded = expandedDays.includes(day.date);
+                const visible = expanded ? day.entries : day.entries.slice(0, VISIBLE_PER_DAY);
+                const hidden = day.entries.length - visible.length;
+                return (
+                  <div
+                    key={day.date}
+                    role="gridcell"
+                    tabIndex={0}
+                    aria-label={`${day.date} 的日期菜单`}
+                    className={cn(
+                      'min-h-24 border-r p-1 outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring last:border-r-0',
+                      day.inMonth ? '' : 'bg-muted/30 text-muted-foreground',
+                    )}
+                    onContextMenu={(event) => {
+                      if ((event.target as HTMLElement).closest('[data-calendar-entry]') !== null) {
+                        return;
+                      }
+                      event.preventDefault();
+                      openContextMenu(day.date, event.clientX, event.clientY);
+                    }}
+                    onKeyDown={(event) => {
+                      if (event.key === 'ContextMenu' || (event.key === 'F10' && event.shiftKey)) {
+                        event.preventDefault();
+                        const bounds = event.currentTarget.getBoundingClientRect();
+                        openContextMenu(day.date, bounds.left + 12, bounds.top + 24);
+                      }
+                    }}
+                  >
+                    <div className="flex items-center justify-between px-1">
+                      <span className={cn('text-xs', day.isToday && 'font-semibold text-primary')}>
+                        {day.dayOfMonth}
+                      </span>
+                      {day.isToday && (
+                        <span className="rounded bg-primary px-1 text-[10px] text-primary-foreground">
+                          今天
+                        </span>
+                      )}
+                    </div>
+                    <div className="mt-1 space-y-0.5" data-calendar-entry>
+                      {visible.map((entry) => (
+                        <EntryLink
+                          key={entry.key}
+                          entry={entry}
+                          onOpenOccurrence={(selected) => {
+                            setOccurrence(selected);
+                            setReplacementDate(selected.date);
+                            setOccurrenceError(null);
+                          }}
+                        />
+                      ))}
+                    </div>
+                    {hidden > 0 && (
+                      <button
+                        type="button"
+                        className="mt-0.5 w-full rounded px-1 text-left text-xs text-muted-foreground hover:bg-accent"
+                        onClick={() => {
+                          setExpandedDays((current) => [...current, day.date]);
+                        }}
+                      >
+                        {`还有 ${String(hidden)} 项`}
+                      </button>
+                    )}
+                    {expanded && day.entries.length > VISIBLE_PER_DAY && (
+                      <button
+                        type="button"
+                        className="mt-0.5 w-full rounded px-1 text-left text-xs text-muted-foreground hover:bg-accent"
+                        onClick={() => {
+                          setExpandedDays((current) => current.filter((date) => date !== day.date));
+                        }}
+                      >
+                        收起
+                      </button>
+                    )}
+                  </div>
+                );
+              })}
             </div>
           ))}
         </div>
-        {(data?.weeks ?? []).map((week) => (
-          <div key={week[0]?.date ?? ''} className="grid grid-cols-7 border-b last:border-b-0">
-            {week.map((day) => {
-              const expanded = expandedDays.includes(day.date);
-              const visible = expanded ? day.entries : day.entries.slice(0, VISIBLE_PER_DAY);
-              const hidden = day.entries.length - visible.length;
-              return (
-                <div
-                  key={day.date}
-                  role="gridcell"
-                  tabIndex={0}
-                  aria-label={`${day.date} 的日期菜单`}
-                  className={cn(
-                    'min-h-24 border-r p-1 outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring last:border-r-0',
-                    day.inMonth ? '' : 'bg-muted/30 text-muted-foreground',
-                  )}
-                  onContextMenu={(event) => {
-                    if ((event.target as HTMLElement).closest('[data-calendar-entry]') !== null) {
-                      return;
-                    }
-                    event.preventDefault();
-                    openContextMenu(day.date, event.clientX, event.clientY);
-                  }}
-                  onKeyDown={(event) => {
-                    if (event.key === 'ContextMenu' || (event.key === 'F10' && event.shiftKey)) {
-                      event.preventDefault();
-                      const bounds = event.currentTarget.getBoundingClientRect();
-                      openContextMenu(day.date, bounds.left + 12, bounds.top + 24);
-                    }
-                  }}
-                >
-                  <div className="flex items-center justify-between px-1">
-                    <span className={cn('text-xs', day.isToday && 'font-semibold text-primary')}>
-                      {day.dayOfMonth}
-                    </span>
-                    {day.isToday && (
-                      <span className="rounded bg-primary px-1 text-[10px] text-primary-foreground">
-                        今天
-                      </span>
-                    )}
-                  </div>
-                  <div className="mt-1 space-y-0.5" data-calendar-entry>
-                    {visible.map((entry) => (
-                      <EntryLink
-                        key={entry.key}
-                        entry={entry}
-                        onOpenOccurrence={(selected) => {
-                          setOccurrence(selected);
-                          setReplacementDate(selected.date);
-                          setOccurrenceError(null);
-                        }}
-                      />
-                    ))}
-                  </div>
-                  {hidden > 0 && (
-                    <button
-                      type="button"
-                      className="mt-0.5 w-full rounded px-1 text-left text-xs text-muted-foreground hover:bg-accent"
-                      onClick={() => {
-                        setExpandedDays((current) => [...current, day.date]);
-                      }}
-                    >
-                      {`还有 ${String(hidden)} 项`}
-                    </button>
-                  )}
-                  {expanded && day.entries.length > VISIBLE_PER_DAY && (
-                    <button
-                      type="button"
-                      className="mt-0.5 w-full rounded px-1 text-left text-xs text-muted-foreground hover:bg-accent"
-                      onClick={() => {
-                        setExpandedDays((current) => current.filter((date) => date !== day.date));
-                      }}
-                    >
-                      收起
-                    </button>
-                  )}
-                </div>
-              );
-            })}
-          </div>
-        ))}
-      </div>
       )}
       {contextMenu !== null && (
         <div

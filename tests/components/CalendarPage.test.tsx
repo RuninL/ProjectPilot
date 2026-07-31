@@ -312,16 +312,24 @@ describe('CalendarPage', () => {
 
     renderPage('2026-07');
 
-    expect(await screen.findByRole('tab', { name: '常规视图', selected: true })).toBeInTheDocument();
+    expect(
+      await screen.findByRole('tab', { name: '常规视图', selected: true }),
+    ).toBeInTheDocument();
     await user.click(screen.getByRole('tab', { name: '颜色条视图' }));
 
     expect(await screen.findByRole('region', { name: '颜色条视图' })).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: /连续排期任务.*项目：内网门户重构.*2026-07-03 至 2026-07-08.*状态：受阻/ })).toHaveAttribute(
-      'href',
-      '/tasks?taskId=span',
-    );
+    expect(
+      screen.getByRole('link', {
+        name: /连续排期任务.*项目：内网门户重构.*2026-07-03 至 2026-07-08.*状态：受阻/,
+      }),
+    ).toHaveAttribute('href', '/tasks?taskId=span');
     expect(screen.getByLabelText('颜色条时间轴')).toHaveClass('overflow-x-auto');
     expect(screen.getByLabelText('颜色条图例')).toHaveTextContent('任务：连续时间条');
+
+    await user.click(screen.getByRole('tab', { name: '常规视图' }));
+    expect(
+      await screen.findByRole('gridcell', { name: '2026-07-03 的日期菜单' }),
+    ).toBeInTheDocument();
   });
 
   it('keeps unscheduled tasks reachable from the colour-bar view', async () => {
