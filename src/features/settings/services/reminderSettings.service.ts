@@ -3,6 +3,8 @@ import { nowIso } from '@/lib/date';
 import { getRepositories } from '@/repositories';
 
 const REMINDER_SETTINGS_KEY = 'desktop.reminders.v1';
+const DELIVERY_KEY = 'desktop.reminder-deliveries.v1';
+const MAX_DELIVERIES = 500;
 
 export const reminderSettingsSchema = z
   .object({
@@ -49,4 +51,28 @@ export async function saveReminderSettings(input: ReminderSettings): Promise<voi
   await (
     await getRepositories()
   ).appSettings.set(REMINDER_SETTINGS_KEY, JSON.stringify(settings), nowIso());
+}
+
+export async function loadDeliveredReminderIds(): Promise<Set<string>> {
+  const setting = await (await getRepositories()).appSettings.get(DELIVERY_KEY);
+  if (setting === null) return new Set();
+  try {
+    const value = z
+      .array(z.string())
+      .max(MAX_DELIVERIES)
+      .safeParse(JSON.parse(setting.value) as unknown);
+    return new Set(value.success ? value.data : []);
+  } catch {
+    return new Set();
+  }
+}
+
+export async function saveDeliveredReminderIds(ids: readonly string[]): Promise<void> {
+  await (
+    await getRepositories()
+  ).appSettings.set(
+    DELIVERY_KEY,
+    JSON.stringify([...new Set(ids)].slice(-MAX_DELIVERIES)),
+    nowIso(),
+  );
 }
