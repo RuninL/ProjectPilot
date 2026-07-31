@@ -25,7 +25,7 @@ pub fn run() {
                 .add_migrations("sqlite:projectpilot.db", migrations::migrations())
                 .build(),
         )
-        .setup(|app| desktop::setup_desktop(app.handle()))
+        .setup(|app| Ok(desktop::setup_desktop(app.handle())?))
         .invoke_handler(tauri::generate_handler![
             atomic::execute_batch,
             backup::get_db_path,
