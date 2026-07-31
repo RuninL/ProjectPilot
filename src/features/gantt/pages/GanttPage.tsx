@@ -230,6 +230,7 @@ export function GanttPage() {
               onRetry={() => {
                 void load();
               }}
+              projectId={project.id}
             />
           </section>
         ))

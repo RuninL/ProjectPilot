@@ -1,13 +1,16 @@
-import { useMemo } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { ErrorState } from '@/components/common/ErrorState';
 import { LoadingState } from '@/components/common/LoadingState';
-import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { todayHK } from '@/lib/date';
+import { toAppError } from '@/lib/errors';
 import type { ProjectDependencyAnalysis } from '@/services/dependency.service';
+import { getMilestoneService } from '@/services/milestone.service';
 import { useGanttStore, type GanttScale } from '@/stores/useGanttStore';
+import type { Milestone } from '@/types';
 import { buildGanttViewModel, GANTT_SCALE_LABELS } from '../ganttViewModel';
 import { GanttChart, GanttLegend } from './GanttChart';
+import { MilestoneForm } from '@/features/milestones/components/MilestoneForm';
 
 /**
  * The Gantt panel on the project detail page: scale switch, chart, legend and
@@ -21,15 +24,50 @@ interface GanttSectionProps {
   loading: boolean;
   error: string | null;
   onRetry: () => void;
+  projectId?: string;
+  canEdit?: boolean;
 }
 
 const SCALES: GanttScale[] = ['week', 'month', 'quarter'];
 
-export function GanttSection({ analysis, loading, error, onRetry }: GanttSectionProps) {
+export function GanttSection({
+  analysis,
+  loading,
+  error,
+  onRetry,
+  projectId = '',
+  canEdit = true,
+}: GanttSectionProps) {
   const scale = useGanttStore((state) => state.scale);
   const setScale = useGanttStore((state) => state.setScale);
   const selectedTaskId = useGanttStore((state) => state.selectedTaskId);
   const setSelectedTaskId = useGanttStore((state) => state.setSelectedTaskId);
+  const showMilestones = useGanttStore((state) => state.showMilestones);
+  const setShowMilestones = useGanttStore((state) => state.setShowMilestones);
+  const [milestones, setMilestones] = useState<readonly Milestone[] | null>(null);
+  const [milestoneError, setMilestoneError] = useState<string | null>(null);
+  const [editingMilestone, setEditingMilestone] = useState<Milestone | null>(null);
+
+  const loadMilestones = useCallback((): void => {
+    if (projectId === '') {
+      setMilestones([]);
+      return;
+    }
+    setMilestoneError(null);
+    void getMilestoneService()
+      .then((service) => service.listByProject(projectId))
+      .then((details) => {
+        setMilestones(details.map((detail) => detail.milestone));
+      })
+      .catch((caught: unknown) => {
+        setMilestoneError(toAppError(caught).message);
+      });
+  }, [projectId]);
+
+  useEffect(() => {
+    setMilestones(null);
+    loadMilestones();
+  }, [loadMilestones]);
 
   const model = useMemo(() => {
     if (analysis === null) {
@@ -40,10 +78,11 @@ export function GanttSection({ analysis, loading, error, onRetry }: GanttSection
       dependencies: analysis.dependencies,
       conflicts: analysis.conflicts,
       blockedRisks: analysis.blockedRisks,
+      milestones: showMilestones ? (milestones ?? []) : [],
       scale,
       today: todayHK(),
     });
-  }, [analysis, scale]);
+  }, [analysis, milestones, scale, showMilestones]);
 
   const titleOf = useMemo(
     () => new Map((analysis?.tasks ?? []).map((task) => [task.id, task.title])),
@@ -54,8 +93,17 @@ export function GanttSection({ analysis, loading, error, onRetry }: GanttSection
     return <LoadingState label="正在加载甘特图…" />;
   }
 
-  if (error !== null) {
-    return <ErrorState title="无法加载甘特图" message={error} onRetry={onRetry} />;
+  if (error !== null || milestoneError !== null) {
+    return (
+      <ErrorState
+        title="无法加载甘特图"
+        message={error ?? milestoneError ?? ''}
+        onRetry={() => {
+          onRetry();
+          loadMilestones();
+        }}
+      />
+    );
   }
 
   if (model === null) {
@@ -80,7 +128,16 @@ export function GanttSection({ analysis, loading, error, onRetry }: GanttSection
             </Button>
           ))}
         </div>
-        <Badge variant="outline">里程碑（后续阶段）</Badge>
+        <label className="flex h-8 items-center gap-2 text-sm">
+          <input
+            type="checkbox"
+            checked={showMilestones}
+            onChange={(event) => {
+              setShowMilestones(event.target.checked);
+            }}
+          />
+          显示里程碑
+        </label>
       </div>
 
       {model.isEmpty ? (
@@ -92,6 +149,12 @@ export function GanttSection({ analysis, loading, error, onRetry }: GanttSection
           model={model}
           selectedTaskId={selectedTaskId}
           onSelectTask={setSelectedTaskId}
+          onSelectMilestone={(milestoneId) => {
+            const milestone = milestones?.find((item) => item.id === milestoneId) ?? null;
+            if (milestone !== null) {
+              setEditingMilestone(milestone);
+            }
+          }}
         />
       )}
 
@@ -104,11 +167,28 @@ export function GanttSection({ analysis, loading, error, onRetry }: GanttSection
         </p>
       )}
 
-      {model.rows.some((row) => row.singleDay) && (
+      {model.rows.some((row) => row.kind === 'task' && row.singleDay) && (
         <p className="text-xs text-muted-foreground">
           未设置截止日期的任务按单日任务条显示，仅代表开始日期。
         </p>
       )}
+      <MilestoneForm
+        open={editingMilestone !== null}
+        milestone={editingMilestone}
+        projectId={projectId}
+        tasks={analysis?.tasks ?? []}
+        onSubmit={async (input) => {
+          if (editingMilestone === null || !canEdit) {
+            return;
+          }
+          const service = await getMilestoneService();
+          await service.updateMilestone(editingMilestone.id, input);
+          loadMilestones();
+        }}
+        onClose={() => {
+          setEditingMilestone(null);
+        }}
+      />
 
       {analysis !== null && analysis.conflicts.length > 0 && (
         <div className="rounded-lg border border-destructive/40 bg-destructive/5 p-3">

@@ -16,7 +16,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { toAppError } from '@/lib/errors';
 import { MILESTONE_STATUS_OPTIONS } from '@/lib/labels';
 import { milestoneInputSchema, type MilestoneInput } from '@/services/schemas';
-import type { Milestone, MilestoneStatus, TaskWithProject } from '@/types';
+import type { Milestone, MilestoneStatus, Task } from '@/types';
 
 interface MilestoneFormValues {
   project_id: string;
@@ -43,7 +43,7 @@ interface MilestoneFormProps {
   milestone: Milestone | null;
   projectId: string;
   /** Candidate links — a milestone may only point at a task in its own project. */
-  tasks: readonly TaskWithProject[];
+  tasks: readonly Pick<Task, 'id' | 'title'>[];
   onSubmit: (input: MilestoneInput) => Promise<void>;
   onClose: () => void;
 }

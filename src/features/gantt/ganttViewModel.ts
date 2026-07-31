@@ -11,7 +11,7 @@ import {
 } from '@/lib/date';
 import type { BlockedRisk, GraphEdgeInput, ScheduleConflict } from '@/services/dependencyGraph';
 import type { GanttScale } from '@/stores/useGanttStore';
-import type { Task, TaskStatus } from '@/types';
+import type { Milestone, MilestoneStatus, Task, TaskStatus } from '@/types';
 
 /**
  * Gantt geometry as pure data: dates in, pixel coordinates out.
@@ -29,8 +29,9 @@ import type { Task, TaskStatus } from '@/types';
 
 export type GanttTask = Pick<
   Task,
-  'id' | 'title' | 'status' | 'start_date' | 'due_date' | 'archived_at'
+  'id' | 'title' | 'status' | 'start_date' | 'due_date' | 'archived_at' | 'parent_task_id'
 >;
+export type GanttMilestone = Pick<Milestone, 'id' | 'name' | 'date' | 'status' | 'linked_task_id'>;
 
 export interface GanttTick {
   /** Stable key: the first date of the period. */
@@ -47,7 +48,8 @@ export interface GanttBar {
   readonly height: number;
 }
 
-export interface GanttRow {
+export interface GanttTaskRow {
+  readonly kind: 'task';
   readonly taskId: string;
   readonly title: string;
   readonly status: TaskStatus;
@@ -65,6 +67,21 @@ export interface GanttRow {
   /** Titles of blocked upstream tasks, empty when there is no risk. */
   readonly blockedBy: readonly string[];
 }
+
+export interface GanttMilestoneRow {
+  readonly kind: 'milestone';
+  readonly milestoneId: string;
+  readonly title: string;
+  readonly date: string;
+  readonly status: MilestoneStatus;
+  readonly linkedTaskId: string | null;
+  readonly linkedTaskTitle: string | null;
+  readonly rowIndex: number;
+  readonly y: number;
+  readonly x: number;
+}
+
+export type GanttRow = GanttTaskRow | GanttMilestoneRow;
 
 export interface GanttLink {
   readonly id: string;
@@ -202,10 +219,12 @@ export function buildGanttViewModel(params: {
   readonly blockedRisks: readonly BlockedRisk[];
   readonly scale: GanttScale;
   readonly today: string;
+  readonly milestones?: readonly GanttMilestone[];
 }): GanttViewModel {
   const { scale, today } = params;
   const dayWidth = DAY_WIDTH[scale];
   const drawable = params.tasks.filter(isDrawable);
+  const visibleMilestones = params.milestones ?? [];
   const undated: GanttUndatedTask[] = params.tasks
     .filter((task) => task.archived_at === null && task.start_date === null)
     .map((task) => ({ taskId: task.id, title: task.title, status: task.status }));
@@ -215,7 +234,7 @@ export function buildGanttViewModel(params: {
   const conflictEdges = new Set(params.conflicts.map((conflict) => conflict.edgeId));
   const riskByTask = new Map(params.blockedRisks.map((risk) => [risk.taskId, risk.blockedBy]));
 
-  if (drawable.length === 0) {
+  if (drawable.length === 0 && visibleMilestones.length === 0) {
     const rangeStart = periodStart(today, scale);
     const rangeEnd = addDays(nextPeriodStart(today, scale), -1);
     const ticks = buildTicks(rangeStart, rangeEnd, scale, dayWidth);
@@ -238,13 +257,21 @@ export function buildGanttViewModel(params: {
     };
   }
 
-  let earliest = drawable[0]?.start_date ?? today;
+  let earliest = drawable[0]?.start_date ?? visibleMilestones[0]?.date ?? today;
   let latest = earliest;
   for (const task of drawable) {
     const start = task.start_date ?? today;
     const end = barEnd(task, start);
     if (start < earliest) {
       earliest = start;
+    }
+    for (const milestone of visibleMilestones) {
+      if (milestone.date < earliest) {
+        earliest = milestone.date;
+      }
+      if (milestone.date > latest) {
+        latest = milestone.date;
+      }
     }
     if (end > latest) {
       latest = end;
@@ -262,11 +289,12 @@ export function buildGanttViewModel(params: {
   const rangeEnd = addDays(nextPeriodStart(addDays(latest, RANGE_PADDING_DAYS), scale), -1);
   const xOf = (date: string): number => (inclusiveDays(rangeStart, date) - 1) * dayWidth;
 
-  const rows: GanttRow[] = drawable.map((task, rowIndex) => {
+  const taskRows: GanttTaskRow[] = drawable.map((task, rowIndex) => {
     const startDate = task.start_date ?? today;
     const endDate = barEnd(task, startDate);
     const y = rowIndex * GANTT_ROW_HEIGHT;
     return {
+      kind: 'task',
       taskId: task.id,
       title: task.title,
       status: task.status,
@@ -286,7 +314,106 @@ export function buildGanttViewModel(params: {
     };
   });
 
-  const rowByTask = new Map(rows.map((row) => [row.taskId, row]));
+  const visibleTaskIds = new Set(taskRows.map((row) => row.taskId));
+  const childrenByParent = new Map<string, string[]>();
+  for (const task of drawable) {
+    if (task.parent_task_id !== null && visibleTaskIds.has(task.parent_task_id)) {
+      const children = childrenByParent.get(task.parent_task_id) ?? [];
+      children.push(task.id);
+      childrenByParent.set(task.parent_task_id, children);
+    }
+  }
+  const descendantsOf = (taskId: string): Set<string> => {
+    const descendants = new Set<string>([taskId]);
+    const pending = [...(childrenByParent.get(taskId) ?? [])];
+    while (pending.length > 0) {
+      const childId = pending.pop();
+      if (childId === undefined || descendants.has(childId)) {
+        continue;
+      }
+      descendants.add(childId);
+      pending.push(...(childrenByParent.get(childId) ?? []));
+    }
+    return descendants;
+  };
+  const attached = new Map<string, GanttMilestone[]>();
+  const unlinked: GanttMilestone[] = [];
+  for (const milestone of visibleMilestones) {
+    if (milestone.linked_task_id !== null && visibleTaskIds.has(milestone.linked_task_id)) {
+      const milestones = attached.get(milestone.linked_task_id) ?? [];
+      milestones.push(milestone);
+      attached.set(milestone.linked_task_id, milestones);
+    } else {
+      unlinked.push(milestone);
+    }
+  }
+  const sortMilestones = (milestones: GanttMilestone[]): GanttMilestone[] =>
+    [...milestones].sort((a, b) => a.date.localeCompare(b.date) || a.name.localeCompare(b.name));
+  const rows: GanttRow[] = [];
+  const emittedMilestoneIds = new Set<string>();
+  for (const taskRow of taskRows) {
+    rows.push(taskRow);
+    const descendants = descendantsOf(taskRow.taskId);
+    const isFinalDescendant = !taskRows.slice(taskRow.rowIndex + 1).some((candidate) => {
+      return candidate.taskId !== taskRow.taskId && descendants.has(candidate.taskId);
+    });
+    if (!isFinalDescendant) {
+      continue;
+    }
+    for (const taskId of descendants) {
+      for (const milestone of sortMilestones(attached.get(taskId) ?? [])) {
+        if (!emittedMilestoneIds.has(milestone.id)) {
+          rows.push({
+            kind: 'milestone',
+            milestoneId: milestone.id,
+            title: milestone.name,
+            date: milestone.date,
+            status: milestone.status,
+            linkedTaskId: milestone.linked_task_id,
+            linkedTaskTitle:
+              milestone.linked_task_id === null
+                ? null
+                : (titleOf.get(milestone.linked_task_id) ?? null),
+            rowIndex: 0,
+            y: 0,
+            x: xOf(milestone.date),
+          });
+          emittedMilestoneIds.add(milestone.id);
+        }
+      }
+    }
+  }
+  for (const milestone of sortMilestones(unlinked)) {
+    rows.push({
+      kind: 'milestone',
+      milestoneId: milestone.id,
+      title: milestone.name,
+      date: milestone.date,
+      status: milestone.status,
+      linkedTaskId: milestone.linked_task_id,
+      linkedTaskTitle: null,
+      rowIndex: 0,
+      y: 0,
+      x: xOf(milestone.date),
+    });
+  }
+  const positionedRows = rows.map((row, rowIndex) => {
+    const y = rowIndex * GANTT_ROW_HEIGHT;
+    return row.kind === 'task'
+      ? {
+          ...row,
+          rowIndex,
+          y,
+          bar: { ...row.bar, y: y + (GANTT_ROW_HEIGHT - GANTT_BAR_HEIGHT) / 2 },
+        }
+      : { ...row, rowIndex, y };
+  });
+
+  const rowByTask = new Map(
+    positionedRows
+      .filter((row): row is GanttTaskRow => row.kind === 'task')
+      .map((row) => [row.taskId, row]),
+  );
   const links: GanttLink[] = [];
   for (const dependency of params.dependencies) {
     const from = rowByTask.get(dependency.predecessor_id);
@@ -322,9 +449,9 @@ export function buildGanttViewModel(params: {
     labelWidth: GANTT_LABEL_WIDTH,
     headerHeight: GANTT_HEADER_HEIGHT,
     width: inclusiveDays(rangeStart, rangeEnd) * dayWidth,
-    height: rows.length * GANTT_ROW_HEIGHT,
+    height: positionedRows.length * GANTT_ROW_HEIGHT,
     ticks: buildTicks(rangeStart, rangeEnd, scale, dayWidth),
-    rows,
+    rows: positionedRows,
     links,
     todayX: today >= rangeStart && today <= rangeEnd ? xOf(today) : null,
     undated,
