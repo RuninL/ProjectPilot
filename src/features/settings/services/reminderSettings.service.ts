@@ -36,8 +36,12 @@ export const DEFAULT_REMINDER_SETTINGS: ReminderSettings = reminderSettingsSchem
 export async function loadReminderSettings(): Promise<ReminderSettings> {
   const setting = await (await getRepositories()).appSettings.get(REMINDER_SETTINGS_KEY);
   if (setting === null) return DEFAULT_REMINDER_SETTINGS;
-  const parsed = reminderSettingsSchema.safeParse(JSON.parse(setting.value) as unknown);
-  return parsed.success ? parsed.data : DEFAULT_REMINDER_SETTINGS;
+  try {
+    const parsed = reminderSettingsSchema.safeParse(JSON.parse(setting.value) as unknown);
+    return parsed.success ? parsed.data : DEFAULT_REMINDER_SETTINGS;
+  } catch {
+    return DEFAULT_REMINDER_SETTINGS;
+  }
 }
 
 export async function saveReminderSettings(input: ReminderSettings): Promise<void> {
