@@ -11,14 +11,15 @@
 
 - Verify a ProjectPilot-named native notification and its installed-package icon.
 - Grant and deny notification permission; test the notification button in Settings.
-- Verify a real meeting reminder and a due-task reminder.
+- Verify a real timed-meeting reminder, date-only meeting summary, due-task reminder, and project/milestone lead reminder in the Asia/Hong_Kong business day.
+- Verify quiet hours spanning midnight, pause/one-hour/tomorrow tray actions, and the summary after resuming notifications.
 - Close the main window: it hides to tray; use tray Open to restore/focus it.
 - Verify tray Open companion and Quit. Quit must end the process and reminders.
 - Open companion twice; it must reuse one window. Close companion; it must hide.
-- Verify Today and Calendar tabs, empty/error/retry state, task completion, and main-window refresh.
+- Verify Today and Calendar tabs, persisted last view, empty/error/retry state, task completion, and main-window refresh.
 - Verify recurrence changes refresh both windows without duplicate occurrence display.
 - Launch the exe a second time and verify it focuses the existing instance.
-- Test monitor disconnect/reconnect and 125%, 150%, and 200% scaling.
+- Test monitor disconnect/reconnect, persisted/recovered companion geometry, always-on-top setting, and 125%, 150%, and 200% scaling.
 
 Capture three screenshots: native notification, tray menu, and companion Today/Calendar views.
 
