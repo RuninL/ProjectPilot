@@ -84,3 +84,34 @@ export function dueDateCandidate(
     title,
   };
 }
+
+export function meetingCandidate(
+  id: string,
+  title: string,
+  date: string,
+  startTime: string | null,
+  minutesBefore: number,
+): ReminderCandidate | null {
+  if (startTime === null || minutesBefore < 0) return null;
+  const [hour, minute] = startTime.split(':').map(Number) as [number, number];
+  const total = hour * 60 + minute - minutesBefore;
+  const scheduledDate = total < 0 ? addDays(date, -1) : date;
+  const normalized = ((total % 1440) + 1440) % 1440;
+  return {
+    entityType: 'meeting',
+    entityId: id,
+    kind: `meeting-${String(minutesBefore)}m`,
+    scheduledAt: `${scheduledDate}T${String(Math.floor(normalized / 60)).padStart(2, '0')}:${String(normalized % 60).padStart(2, '0')}:00+08:00`,
+    title,
+  };
+}
+
+export function dailySummaryCandidate(date = todayHK()): ReminderCandidate {
+  return {
+    entityType: 'summary',
+    entityId: date,
+    kind: 'daily-summary',
+    scheduledAt: `${date}T08:30:00+08:00`,
+    title: 'Daily ProjectPilot summary',
+  };
+}

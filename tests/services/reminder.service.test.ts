@@ -5,6 +5,7 @@ import {
   groupByMinute,
   isPaused,
   isQuietHour,
+  meetingCandidate,
   overdueSummaryCandidate,
   reminderIdentity,
 } from '@/services/reminder.service';
@@ -49,5 +50,12 @@ describe('reminder service', () => {
     expect(dedupeCandidates([candidate, candidate], new Set())).toHaveLength(1);
     expect(groupByMinute([candidate, { ...candidate, entityId: 'rule-2' }])[0]).toHaveLength(2);
     expect(isPaused('2026-08-01T10:00:00+08:00', '2026-08-01T09:00:00+08:00')).toBe(true);
+  });
+
+  it('keeps date-only meetings out of timed reminders and handles midnight offsets', () => {
+    expect(meetingCandidate('m', 'Date only', '2026-08-01', null, 15)).toBeNull();
+    expect(meetingCandidate('m', 'Early', '2026-08-01', '00:05', 15)?.scheduledAt).toContain(
+      '2026-07-31T23:50',
+    );
   });
 });
