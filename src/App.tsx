@@ -17,6 +17,8 @@ import {
   loadReminderSettings,
   saveReminderSettings,
 } from '@/features/settings/services/reminderSettings.service';
+import { createReminderCoordinator } from '@/services/reminderCoordinator';
+import { scanAndNotifyReminders } from '@/services/reminderRuntime.service';
 
 /**
  * Initialize the database (runs migration 0001 + the foreign-keys assertion)
@@ -103,6 +105,15 @@ export function App() {
       unlisten?.();
     };
   }, []);
+
+  useEffect(() => {
+    if (!dbReady || getCurrentWebviewWindow().label !== 'main') return;
+    const coordinator = createReminderCoordinator({ scan: () => scanAndNotifyReminders() });
+    coordinator.start();
+    return () => {
+      coordinator.stop();
+    };
+  }, [dbReady]);
 
   if (error !== null) {
     return <ErrorState title="数据库初始化失败" message={error} />;
