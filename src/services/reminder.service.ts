@@ -9,6 +9,32 @@ export interface ReminderCandidate {
   title: string;
 }
 
+export function dedupeCandidates(
+  candidates: readonly ReminderCandidate[],
+  delivered: ReadonlySet<string>,
+): ReminderCandidate[] {
+  const seen = new Set<string>();
+  return candidates.filter((candidate) => {
+    const identity = reminderIdentity(candidate);
+    if (seen.has(identity) || delivered.has(identity)) return false;
+    seen.add(identity);
+    return true;
+  });
+}
+
+export function groupByMinute(candidates: readonly ReminderCandidate[]): ReminderCandidate[][] {
+  const groups = new Map<string, ReminderCandidate[]>();
+  for (const candidate of candidates) {
+    const minute = candidate.scheduledAt.slice(0, 16);
+    groups.set(minute, [...(groups.get(minute) ?? []), candidate]);
+  }
+  return [...groups.values()];
+}
+
+export function isPaused(pausedUntil: string | null, now: string): boolean {
+  return pausedUntil !== null && pausedUntil > now;
+}
+
 /** Stable across scans and materialization: an occurrence uses its rule/date identity, not its row id. */
 export function reminderIdentity(candidate: ReminderCandidate): string {
   return [
