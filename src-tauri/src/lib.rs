@@ -2,6 +2,7 @@ mod atomic;
 mod backup;
 #[cfg(test)]
 mod backup_tests;
+mod desktop;
 mod error;
 mod migrations;
 mod project_links;
@@ -16,6 +17,7 @@ pub fn run() {
             }
         }))
         .plugin(tauri_plugin_opener::init())
+        .plugin(tauri_plugin_notification::init())
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_fs::init())
         .plugin(
@@ -23,6 +25,7 @@ pub fn run() {
                 .add_migrations("sqlite:projectpilot.db", migrations::migrations())
                 .build(),
         )
+        .setup(|app| desktop::setup_desktop(app.handle()))
         .invoke_handler(tauri::generate_handler![
             atomic::execute_batch,
             backup::get_db_path,
