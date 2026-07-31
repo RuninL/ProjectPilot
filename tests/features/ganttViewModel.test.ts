@@ -366,6 +366,13 @@ describe('buildGanttViewModel — performance', () => {
       predecessor_id: `n${String(index)}`,
       successor_id: `n${String(index + 1)}`,
     }));
+    const milestones: GanttMilestone[] = Array.from({ length: 100 }, (_, index) => ({
+      id: `m${String(index)}`,
+      name: `里程碑 ${String(index)}`,
+      date: `2026-09-${String((index % 28) + 1).padStart(2, '0')}`,
+      status: 'upcoming',
+      linked_task_id: index % 2 === 0 ? `n${String(index)}` : null,
+    }));
 
     const started = performance.now();
     const model = buildGanttViewModel({
@@ -373,14 +380,15 @@ describe('buildGanttViewModel — performance', () => {
       dependencies,
       conflicts: [],
       blockedRisks: [],
+      milestones,
       scale: 'month',
       today: TODAY,
     });
     const elapsed = performance.now() - started;
 
-    expect(model.rows).toHaveLength(count);
+    expect(model.rows).toHaveLength(count + milestones.length);
     expect(model.links).toHaveLength(count - 1);
-    expect(model.height).toBe(count * GANTT_ROW_HEIGHT);
+    expect(model.height).toBe((count + milestones.length) * GANTT_ROW_HEIGHT);
     // Generous ceiling; the measured run is far below it.
     expect(elapsed).toBeLessThan(1500);
   });
