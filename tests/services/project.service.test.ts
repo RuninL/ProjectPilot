@@ -37,6 +37,7 @@ beforeEach(() => {
   service = createProjectService({
     projects: createProjectRepository(db.executor),
     tasks: createTaskRepository(db.executor),
+    runBatch: (statements) => Promise.resolve(db.runBatch(statements)),
   });
 });
 
@@ -124,6 +125,85 @@ describe('archive and restore', () => {
     await service.archiveProject(project.id);
 
     expect((await service.getProject(project.id)).archived_at).toBe(first);
+  });
+
+  it('archives every live task with source project, keeping manual archives distinct', async () => {
+    const tasks = createTaskRepository(db.executor);
+    const project = await service.createProject(input());
+    await tasks.insert(makeTask({ id: 'parent', project_id: project.id }));
+    await tasks.insert(
+      makeTask({ id: 'child', project_id: project.id, parent_task_id: 'parent' }),
+    );
+    await tasks.insert(
+      makeTask({
+        id: 'manual',
+        project_id: project.id,
+        archived_at: '2026-01-01T00:00:00.000Z',
+        archived_source: 'manual',
+      }),
+    );
+
+    await service.archiveProject(project.id);
+
+    const parent = await tasks.findById('parent');
+    const child = await tasks.findById('child');
+    const manual = await tasks.findById('manual');
+    expect(parent?.archived_at).not.toBeNull();
+    expect(parent?.archived_source).toBe('project');
+    expect(child?.archived_source).toBe('project');
+    expect(manual?.archived_at).toBe('2026-01-01T00:00:00.000Z');
+    expect(manual?.archived_source).toBe('manual');
+    expect(await service.countProjectArchivedTasks(project.id)).toBe(2);
+  });
+
+  it('restore without tasks keeps auto-archived tasks archived', async () => {
+    const tasks = createTaskRepository(db.executor);
+    const project = await service.createProject(input());
+    await tasks.insert(makeTask({ id: 't1', project_id: project.id }));
+    await service.archiveProject(project.id);
+
+    await service.restoreProject(project.id);
+
+    expect((await service.getProject(project.id)).archived_at).toBeNull();
+    const task = await tasks.findById('t1');
+    expect(task?.archived_at).not.toBeNull();
+    expect(task?.archived_source).toBe('project');
+  });
+
+  it('restore with tasks only restores project-archived tasks', async () => {
+    const tasks = createTaskRepository(db.executor);
+    const project = await service.createProject(input());
+    await tasks.insert(makeTask({ id: 'auto', project_id: project.id }));
+    await tasks.insert(
+      makeTask({
+        id: 'manual',
+        project_id: project.id,
+        archived_at: '2026-01-01T00:00:00.000Z',
+        archived_source: 'manual',
+      }),
+    );
+    await service.archiveProject(project.id);
+    // The user explicitly restored one task afterwards; that decision holds.
+    await tasks.update(
+      'auto',
+      { archived_at: null, archived_source: null },
+      '2026-02-01T00:00:00.000Z',
+    );
+    await tasks.insert(
+      makeTask({ id: 'auto2', project_id: project.id }),
+    );
+    await db.executor.execute(
+      `UPDATE tasks SET archived_at = '2026-02-02T00:00:00.000Z', archived_source = 'project'
+        WHERE id = 'auto2'`,
+    );
+
+    await service.restoreProject(project.id, true);
+
+    expect((await tasks.findById('auto'))?.archived_at).toBeNull();
+    expect((await tasks.findById('auto2'))?.archived_at).toBeNull();
+    expect((await tasks.findById('auto2'))?.archived_source).toBeNull();
+    expect((await tasks.findById('manual'))?.archived_at).toBe('2026-01-01T00:00:00.000Z');
+    expect((await tasks.findById('manual'))?.archived_source).toBe('manual');
   });
 });
 

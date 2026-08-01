@@ -144,6 +144,11 @@ export function createProjectRepository(db: SqlExecutor) {
       return runUpdate(db, buildUpdate('projects', UPDATABLE, patch, id, now));
     },
 
+    /** Same update, as a statement for an atomic archive/restore cascade. */
+    buildUpdateStatement(id: string, patch: Partial<Project>, now: string): BatchStatement | null {
+      return buildUpdate('projects', UPDATABLE, patch, id, now);
+    },
+
     async deleteById(id: string): Promise<number> {
       const result = await db.execute('DELETE FROM projects WHERE id = ?', [id]);
       return result.rowsAffected;

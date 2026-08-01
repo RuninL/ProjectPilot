@@ -167,6 +167,32 @@ export function createTaskService(deps: TaskServiceDeps) {
       return deps.tasks.countChildren(id);
     },
 
+    /** Manual archive; distinct from the automatic project-archive cascade. */
+    async archiveTask(id: string): Promise<void> {
+      const task = await requireTask(id);
+      if (task.archived_at !== null) {
+        return;
+      }
+      const now = nowIso();
+      await deps.tasks.update(id, { archived_at: now, archived_source: 'manual' }, now);
+    },
+
+    /**
+     * Explicit user restore. Clearing archived_source means a later
+     * "restore project and tasks" can never override this user decision.
+     */
+    async restoreTask(id: string): Promise<void> {
+      const task = await requireTask(id);
+      if (task.archived_at === null) {
+        return;
+      }
+      const project = await deps.projects.findById(task.project_id);
+      if (project !== null && project.archived_at !== null) {
+        throw new AppError('conflict', '所属项目已归档，请先恢复该项目');
+      }
+      await deps.tasks.update(id, { archived_at: null, archived_source: null }, nowIso());
+    },
+
     /**
      * Deleting a parent is refused rather than silently cascading, so a whole
      * sub-tree can never disappear behind one click. The schema's ON DELETE

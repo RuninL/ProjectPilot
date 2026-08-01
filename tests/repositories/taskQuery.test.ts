@@ -157,3 +157,44 @@ describe('counts', () => {
     expect(await tasks.countChildren('late')).toBe(0);
   });
 });
+
+describe('scope views', () => {
+  it('active scope excludes archived tasks and tasks of archived projects', async () => {
+    const projects = createProjectRepository(db.executor);
+    const tasks = createTaskRepository(db.executor);
+    await projects.insert(
+      makeProject({ id: 'p3', name: '已归档项目', archived_at: '2026-07-06T00:00:00Z' }),
+    );
+    await tasks.insert(makeTask({ id: 'inArchivedProject', project_id: 'p3' }));
+
+    const visible = await ids({ scope: 'active' });
+    expect(visible).not.toContain('archived');
+    expect(visible).not.toContain('inArchivedProject');
+    expect(visible).toContain('early');
+  });
+
+  it('archived scope returns manual and project-archived tasks', async () => {
+    const tasks = createTaskRepository(db.executor);
+    await tasks.insert(
+      makeTask({
+        id: 'autoArchived',
+        project_id: 'p1',
+        archived_at: '2026-07-07T00:00:00Z',
+        archived_source: 'project',
+      }),
+    );
+
+    const visible = await ids({ scope: 'archived' });
+    expect(visible).toContain('archived');
+    expect(visible).toContain('autoArchived');
+    expect(visible).not.toContain('early');
+  });
+
+  it('all scope returns every task', async () => {
+    const visible = await ids({ scope: 'all' });
+    expect(visible).toContain('archived');
+    expect(visible).toContain('early');
+    expect(visible).toContain('late');
+    expect(visible).toContain('undated');
+  });
+});
