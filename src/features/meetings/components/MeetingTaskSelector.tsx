@@ -37,6 +37,28 @@ function taskLabel(task: TaskWithProject): string {
   return `${task.title} · ${task.project_name} · ${STATUS_LABELS[task.status]}${due}`;
 }
 
+export function filterMeetingTaskCandidates(
+  tasks: readonly TaskWithProject[],
+  selectedTaskIds: readonly string[],
+  scope: TaskScope,
+  search: string,
+): TaskWithProject[] {
+  const selected = new Set(selectedTaskIds);
+  const query = search.trim().toLocaleLowerCase('zh-CN');
+  return tasks
+    .filter((task) => {
+      if (selected.has(task.id)) return false;
+      if (scope === 'active' && !isActive(task)) return false;
+      if (scope === 'archived' && isActive(task)) return false;
+      return (
+        query === '' ||
+        task.title.toLocaleLowerCase('zh-CN').includes(query) ||
+        task.project_name.toLocaleLowerCase('zh-CN').includes(query)
+      );
+    })
+    .slice(0, 100);
+}
+
 export function MeetingTaskSelector({
   meetingId,
   selectedTaskIds,
@@ -82,20 +104,7 @@ export function MeetingTaskSelector({
     [selectedTaskIds, tasksById],
   );
   const candidates = useMemo(() => {
-    const selected = new Set(selectedTaskIds);
-    const query = deferredSearch.trim().toLocaleLowerCase('zh-CN');
-    return tasks
-      .filter((task) => {
-        if (selected.has(task.id)) return false;
-        if (scope === 'active' && !isActive(task)) return false;
-        if (scope === 'archived' && isActive(task)) return false;
-        return (
-          query === '' ||
-          task.title.toLocaleLowerCase('zh-CN').includes(query) ||
-          task.project_name.toLocaleLowerCase('zh-CN').includes(query)
-        );
-      })
-      .slice(0, 100);
+    return filterMeetingTaskCandidates(tasks, selectedTaskIds, scope, deferredSearch);
   }, [deferredSearch, scope, selectedTaskIds, tasks]);
 
   const changeLink = (taskId: string, add: boolean): void => {

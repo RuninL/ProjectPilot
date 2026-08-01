@@ -128,10 +128,8 @@ export function MeetingsPage() {
     let active = true;
     void getRecurrenceService()
       .then(async (service) => {
-        const entries = await Promise.all(
-          rules.map(async (rule) => [rule.id, await service.listExceptions(rule.id)] as const),
-        );
-        if (active) setExceptionsByRule(new Map(entries));
+        const exceptions = await service.listExceptionsByRuleIds(rules.map((rule) => rule.id));
+        if (active) setExceptionsByRule(exceptions);
       })
       .catch(() => {
         if (active) setExceptionsByRule(new Map());

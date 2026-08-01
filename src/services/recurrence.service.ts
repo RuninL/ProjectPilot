@@ -215,6 +215,12 @@ export function createRecurrenceService(deps: RecurrenceServiceDeps) {
       return deps.recurrence.findExceptions(ruleId);
     },
 
+    async listExceptionsByRuleIds(
+      ruleIds: readonly string[],
+    ): Promise<Map<string, RecurrenceException[]>> {
+      return deps.recurrence.findExceptionsByRuleIds([...new Set(ruleIds)]);
+    },
+
     async listRules(projectId?: string): Promise<RecurrenceRule[]> {
       return projectId === undefined
         ? deps.recurrence.findAll()

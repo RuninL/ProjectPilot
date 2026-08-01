@@ -121,6 +121,7 @@ export function useDragReorder(
       }
       if (event.cancelable) event.preventDefault();
       const rowId = findRowId(event);
+      if (rowId === drag.dropTargetId) return;
       drag.dropTargetId = rowId;
       setDropTargetId(rowId);
     };

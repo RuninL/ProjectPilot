@@ -122,60 +122,66 @@ const INSERTS = {
 export function createDataTransferRepository(db: SqlExecutor) {
   return {
     async readSnapshot(): Promise<DatabaseSnapshot> {
-      const projects = parseRows(projectRowSchema, await db.select('SELECT * FROM projects'));
-      const meetings = parseRows(meetingRowSchema, await db.select('SELECT * FROM meetings'));
-      const tasks = parseRows(taskRowSchema, await db.select('SELECT * FROM tasks'));
-      const taskDependencies = parseRows(
-        taskDependencyRowSchema,
-        await db.select('SELECT * FROM task_dependencies'),
-      );
-      const recurrenceRules = parseRows(
-        recurrenceRuleRowSchema,
-        await db.select('SELECT * FROM recurrence_rules'),
-      );
-      const recurrenceExceptions = parseRows(
-        recurrenceExceptionRowSchema,
-        await db.select('SELECT * FROM recurrence_exceptions'),
-      );
-      const milestones = parseRows(milestoneRowSchema, await db.select('SELECT * FROM milestones'));
-      const actionItems = parseRows(
-        actionItemRowSchema,
-        await db.select('SELECT * FROM action_items'),
-      );
-      const projectLinks = parseRows(
-        projectLinkRowSchema,
-        await db.select('SELECT * FROM project_links'),
-      );
-      const risks = parseRows(riskRowSchema, await db.select('SELECT * FROM risks'));
-      const appSettings = parseRows(
-        appSettingRowSchema,
-        await db.select('SELECT * FROM app_settings'),
-      );
-      const people = parseRows(personRowSchema, await db.select('SELECT * FROM people'));
+      const [
+        projectRows,
+        meetingRows,
+        taskRows,
+        dependencyRows,
+        recurrenceRuleRows,
+        recurrenceExceptionRows,
+        milestoneRows,
+        actionItemRows,
+        projectLinkRows,
+        riskRows,
+        appSettingRows,
+        peopleRows,
+        projectParticipantRows,
+        taskParticipantRows,
+        taskMeetingRows,
+        namedListOrderRows,
+        taskProgressRows,
+        taskChecklistRows,
+      ] = await Promise.all([
+        db.select('SELECT * FROM projects'),
+        db.select('SELECT * FROM meetings'),
+        db.select('SELECT * FROM tasks'),
+        db.select('SELECT * FROM task_dependencies'),
+        db.select('SELECT * FROM recurrence_rules'),
+        db.select('SELECT * FROM recurrence_exceptions'),
+        db.select('SELECT * FROM milestones'),
+        db.select('SELECT * FROM action_items'),
+        db.select('SELECT * FROM project_links'),
+        db.select('SELECT * FROM risks'),
+        db.select('SELECT * FROM app_settings'),
+        db.select('SELECT * FROM people'),
+        db.select('SELECT * FROM project_participants'),
+        db.select('SELECT * FROM task_participants'),
+        db.select('SELECT * FROM task_meetings'),
+        db.select('SELECT * FROM named_list_orders'),
+        db.select('SELECT * FROM task_progress_updates'),
+        db.select('SELECT * FROM task_checklist_items'),
+      ]);
+      const projects = parseRows(projectRowSchema, projectRows);
+      const meetings = parseRows(meetingRowSchema, meetingRows);
+      const tasks = parseRows(taskRowSchema, taskRows);
+      const taskDependencies = parseRows(taskDependencyRowSchema, dependencyRows);
+      const recurrenceRules = parseRows(recurrenceRuleRowSchema, recurrenceRuleRows);
+      const recurrenceExceptions = parseRows(recurrenceExceptionRowSchema, recurrenceExceptionRows);
+      const milestones = parseRows(milestoneRowSchema, milestoneRows);
+      const actionItems = parseRows(actionItemRowSchema, actionItemRows);
+      const projectLinks = parseRows(projectLinkRowSchema, projectLinkRows);
+      const risks = parseRows(riskRowSchema, riskRows);
+      const appSettings = parseRows(appSettingRowSchema, appSettingRows);
+      const people = parseRows(personRowSchema, peopleRows);
       const projectParticipants = parseRows(
         projectParticipantRowSchema,
-        await db.select('SELECT * FROM project_participants'),
+        projectParticipantRows,
       );
-      const taskParticipants = parseRows(
-        taskParticipantRowSchema,
-        await db.select('SELECT * FROM task_participants'),
-      );
-      const taskMeetings = parseRows(
-        taskMeetingRowSchema,
-        await db.select('SELECT * FROM task_meetings'),
-      );
-      const namedListOrders = parseRows(
-        namedListOrderRowSchema,
-        await db.select('SELECT * FROM named_list_orders'),
-      );
-      const taskProgressUpdates = parseRows(
-        taskProgressUpdateRowSchema,
-        await db.select('SELECT * FROM task_progress_updates'),
-      );
-      const taskChecklistItems = parseRows(
-        taskChecklistItemRowSchema,
-        await db.select('SELECT * FROM task_checklist_items'),
-      );
+      const taskParticipants = parseRows(taskParticipantRowSchema, taskParticipantRows);
+      const taskMeetings = parseRows(taskMeetingRowSchema, taskMeetingRows);
+      const namedListOrders = parseRows(namedListOrderRowSchema, namedListOrderRows);
+      const taskProgressUpdates = parseRows(taskProgressUpdateRowSchema, taskProgressRows);
+      const taskChecklistItems = parseRows(taskChecklistItemRowSchema, taskChecklistRows);
       return {
         projects,
         meetings,

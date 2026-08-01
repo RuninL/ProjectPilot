@@ -1,10 +1,20 @@
 import { invoke } from '@tauri-apps/api/core';
 import { toAppError } from './errors';
+import { recordPerformanceEvent } from './performanceDiagnostics';
 
 /** A parameterized statement for the Rust atomic batch command (positional `?1..?n`). */
 export interface BatchStatement {
   sql: string;
   params?: unknown[];
+}
+
+async function measuredInvoke<T>(command: string, args?: Record<string, unknown>): Promise<T> {
+  const started = performance.now();
+  try {
+    return await invoke<T>(command, args);
+  } finally {
+    recordPerformanceEvent('ipc', command, performance.now() - started);
+  }
 }
 
 /**
@@ -13,7 +23,7 @@ export interface BatchStatement {
  */
 export async function executeBatch(statements: BatchStatement[]): Promise<number> {
   try {
-    return await invoke<number>('execute_batch', { statements });
+    return await measuredInvoke<number>('execute_batch', { statements });
   } catch (error) {
     throw toAppError(error);
   }
@@ -22,7 +32,7 @@ export async function executeBatch(statements: BatchStatement[]): Promise<number
 /** Absolute path of the SQLite database file (for the settings page). */
 export async function getDbPath(): Promise<string> {
   try {
-    return await invoke<string>('get_db_path');
+    return await measuredInvoke<string>('get_db_path');
   } catch (error) {
     throw toAppError(error);
   }
@@ -31,7 +41,7 @@ export async function getDbPath(): Promise<string> {
 /** Open the app data directory in the OS file manager. */
 export async function openDataDir(): Promise<void> {
   try {
-    await invoke('open_data_dir');
+    await measuredInvoke('open_data_dir');
   } catch (error) {
     throw toAppError(error);
   }
@@ -40,7 +50,7 @@ export async function openDataDir(): Promise<void> {
 /** Copy the live database to `destPath`. */
 export async function backupDatabase(destPath: string): Promise<string> {
   try {
-    return await invoke<string>('backup_database', { destPath });
+    return await measuredInvoke<string>('backup_database', { destPath });
   } catch (error) {
     throw toAppError(error);
   }
@@ -49,7 +59,7 @@ export async function backupDatabase(destPath: string): Promise<string> {
 /** Restore the database from `srcPath` (auto pre-backup performed Rust-side). */
 export async function restoreDatabase(srcPath: string): Promise<string> {
   try {
-    return await invoke<string>('restore_database', { srcPath });
+    return await measuredInvoke<string>('restore_database', { srcPath });
   } catch (error) {
     throw toAppError(error);
   }
@@ -58,7 +68,7 @@ export async function restoreDatabase(srcPath: string): Promise<string> {
 /** Check whether a Windows-local file or directory exists without reading it. */
 export async function localPathExists(path: string): Promise<boolean> {
   try {
-    return await invoke<boolean>('local_path_exists', { path });
+    return await measuredInvoke<boolean>('local_path_exists', { path });
   } catch (error) {
     throw toAppError(error);
   }
@@ -67,7 +77,7 @@ export async function localPathExists(path: string): Promise<boolean> {
 /** Open an existing Windows-local path with the system default application. */
 export async function openLocalPath(path: string): Promise<void> {
   try {
-    await invoke('open_local_path', { path });
+    await measuredInvoke('open_local_path', { path });
   } catch (error) {
     throw toAppError(error);
   }

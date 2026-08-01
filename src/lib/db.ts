@@ -1,5 +1,6 @@
 import Database from '@tauri-apps/plugin-sql';
 import { AppError } from './errors';
+import { recordPerformanceEvent } from './performanceDiagnostics';
 
 /** Result of a write statement (mirrors tauri-plugin-sql's QueryResult). */
 export interface QueryResult {
@@ -20,6 +21,35 @@ export interface SqlExecutor {
 const DB_URL = 'sqlite:projectpilot.db';
 
 let instance: SqlExecutor | null = null;
+
+function queryLabel(query: string): string {
+  return query.replace(/\s+/g, ' ').trim().slice(0, 160);
+}
+
+function instrumentSqlExecutor(db: SqlExecutor): SqlExecutor {
+  return {
+    async select<T>(query: string, bindValues?: unknown[]): Promise<T> {
+      const started = performance.now();
+      try {
+        return await db.select<T>(query, bindValues);
+      } finally {
+        recordPerformanceEvent('sqlite', `select:${queryLabel(query)}`, performance.now() - started);
+      }
+    },
+    async execute(query: string, bindValues?: unknown[]): Promise<QueryResult> {
+      const started = performance.now();
+      try {
+        return await db.execute(query, bindValues);
+      } finally {
+        recordPerformanceEvent(
+          'sqlite',
+          `execute:${queryLabel(query)}`,
+          performance.now() - started,
+        );
+      }
+    },
+  };
+}
 
 interface ForeignKeysRow {
   foreign_keys: number;
@@ -54,7 +84,7 @@ export async function getDb(): Promise<SqlExecutor> {
   }
   const db = await Database.load(DB_URL);
   await assertForeignKeys(db);
-  instance = db;
+  instance = import.meta.env.DEV ? instrumentSqlExecutor(db) : db;
   return db;
 }
 
