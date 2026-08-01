@@ -31,6 +31,21 @@ function localDateTime(iso: string): string {
   return local.toISOString().slice(0, 16);
 }
 
+export function sortProgressSegments(updates: readonly TaskProgressUpdate[]): TaskProgressUpdate[] {
+  return [...updates]
+    .filter((update) => update.contribution_percent > 0)
+    .sort(
+      (left, right) =>
+        left.occurred_at.localeCompare(right.occurred_at) ||
+        left.created_at.localeCompare(right.created_at) ||
+        left.id.localeCompare(right.id),
+    );
+}
+
+export function progressUpdateElementId(id: string): string {
+  return `task-progress-update-${id}`;
+}
+
 export function TaskProgressSection({ taskId, onChanged }: Props) {
   const [updates, setUpdates] = useState<TaskProgressUpdate[]>([]);
   const [editing, setEditing] = useState<TaskProgressUpdate | null>(null);
@@ -65,6 +80,7 @@ export function TaskProgressSection({ taskId, onChanged }: Props) {
   };
 
   const total = updates.reduce((sum, update) => sum + update.contribution_percent, 0);
+  const progressSegments = sortProgressSegments(updates);
 
   return (
     <section className="space-y-4">
@@ -83,22 +99,26 @@ export function TaskProgressSection({ taskId, onChanged }: Props) {
         className="flex h-8 w-full overflow-hidden rounded-md border bg-muted"
         aria-label={`任务进度 ${String(total)}%`}
       >
-        {updates
-          .filter((update) => update.contribution_percent > 0)
-          .map((update, index) => (
-            <div
-              key={update.id}
-              className={
-                index % 2 === 0 ? 'bg-primary text-primary-foreground' : 'bg-blue-500 text-white'
-              }
-              style={{ width: `${String(update.contribution_percent)}%` }}
-              title={`${update.title} ${String(update.contribution_percent)}%`}
-            >
-              <span className="block truncate px-2 text-center text-xs leading-8">
-                {update.title} {String(update.contribution_percent)}%
-              </span>
-            </div>
-          ))}
+        {progressSegments.map((update, index) => (
+          <button
+            type="button"
+            key={update.id}
+            className={
+              index % 2 === 0 ? 'bg-primary text-primary-foreground' : 'bg-blue-500 text-white'
+            }
+            style={{ width: `${String(update.contribution_percent)}%` }}
+            title={`${update.title} ${String(update.contribution_percent)}%`}
+            onClick={() => {
+              const row = document.getElementById(progressUpdateElementId(update.id));
+              row?.focus();
+              row?.scrollIntoView({ block: 'center' });
+            }}
+          >
+            <span className="block truncate px-2 text-center text-xs leading-8">
+              {update.title} {String(update.contribution_percent)}%
+            </span>
+          </button>
+        ))}
         {total < 100 && (
           <div
             className="truncate px-2 text-center text-xs leading-8 text-muted-foreground"
@@ -118,6 +138,8 @@ export function TaskProgressSection({ taskId, onChanged }: Props) {
           {savedOrder.displayedItems.map((update) => (
             <li
               key={update.id}
+              id={progressUpdateElementId(update.id)}
+              tabIndex={-1}
               {...dragReorder.dropProps(update.id)}
               className={`rounded-md border p-3 ${
                 dragReorder.dropTargetId === update.id ? 'border-primary ring-1 ring-primary' : ''
