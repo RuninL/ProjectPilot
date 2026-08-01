@@ -1,20 +1,14 @@
 import { nowIso } from '@/lib/date';
 import { AppError } from '@/lib/errors';
 import { newId } from '@/lib/uuid';
-import {
-  getRepositories,
-  type TaskProgressRepository,
-  type TaskRepository,
-} from '@/repositories';
+import { getRepositories, type TaskProgressRepository, type TaskRepository } from '@/repositories';
 import type { TaskProgressUpdate } from '@/types';
-import {
-  taskProgressUpdateInputSchema,
-  type TaskProgressUpdateInput,
-} from './schemas';
+import { taskProgressUpdateInputSchema, type TaskProgressUpdateInput } from './schemas';
 
 export interface TaskProgressServiceDeps {
   progress: TaskProgressRepository;
   tasks: TaskRepository;
+  runBatch: (statements: BatchStatement[]) => Promise<number>;
 }
 
 export function createTaskProgressService(deps: TaskProgressServiceDeps) {
@@ -50,10 +44,7 @@ export function createTaskProgressService(deps: TaskProgressServiceDeps) {
       return deps.progress.findByTask(taskId);
     },
 
-    async create(
-      taskId: string,
-      input: TaskProgressUpdateInput,
-    ): Promise<TaskProgressUpdate> {
+    async create(taskId: string, input: TaskProgressUpdateInput): Promise<TaskProgressUpdate> {
       await requireTask(taskId);
       const parsed = taskProgressUpdateInputSchema.parse(input);
       await validateTotal(taskId, parsed.contribution_percent);
@@ -87,6 +78,39 @@ export function createTaskProgressService(deps: TaskProgressServiceDeps) {
       if (existing.task_id !== taskId) throw new AppError('not_found', '任务进展不属于当前任务');
       await deps.progress.deleteById(id);
     },
+
+    async completeTask(taskId: string, addRemainingProgress: boolean): Promise<void> {
+      const task = await deps.tasks.findById(taskId);
+      if (task === null) throw new AppError('not_found', '任务不存在或已被删除');
+      const total = await deps.progress.sumByTask(taskId);
+      const now = nowIso();
+      const statements: BatchStatement[] = [];
+      if (addRemainingProgress && total < 100) {
+        statements.push(
+          deps.progress.buildInsert({
+            id: newId(),
+            task_id: taskId,
+            title: '任务完成',
+            description: '',
+            occurred_at: now,
+            contribution_percent: 100 - total,
+            created_at: now,
+            updated_at: now,
+          }),
+        );
+      }
+      const taskUpdate = deps.tasks.buildUpdateStatement(
+        taskId,
+        {
+          status: 'done',
+          progress: addRemainingProgress ? 100 : total,
+          completed_at: task.completed_at ?? now,
+        },
+        now,
+      );
+      if (taskUpdate !== null) statements.push(taskUpdate);
+      await deps.runBatch(statements);
+    },
   };
 }
 
@@ -97,5 +121,7 @@ export async function getTaskProgressService(): Promise<TaskProgressService> {
   return createTaskProgressService({
     progress: repositories.taskProgress,
     tasks: repositories.tasks,
+    runBatch: executeBatch,
   });
 }
+import { executeBatch, type BatchStatement } from '@/lib/commands';

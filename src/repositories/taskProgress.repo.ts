@@ -1,4 +1,5 @@
 import { taskProgressUpdateRowSchema } from '@/db/schemas';
+import type { BatchStatement } from '@/lib/commands';
 import type { SqlExecutor } from '@/lib/db';
 import type { TaskProgressUpdate } from '@/types';
 import { buildUpdate, parseOptional, parseRows, runUpdate } from './_shared';
@@ -38,11 +39,16 @@ export function createTaskProgressRepository(db: SqlExecutor) {
     },
 
     async insert(update: TaskProgressUpdate): Promise<void> {
-      await db.execute(
-        `INSERT INTO task_progress_updates
+      const statement = this.buildInsert(update);
+      await db.execute(statement.sql, statement.params);
+    },
+
+    buildInsert(update: TaskProgressUpdate): BatchStatement {
+      return {
+        sql: `INSERT INTO task_progress_updates
           (id, task_id, title, description, occurred_at, contribution_percent, created_at, updated_at)
          VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-        [
+        params: [
           update.id,
           update.task_id,
           update.title,
@@ -52,19 +58,16 @@ export function createTaskProgressRepository(db: SqlExecutor) {
           update.created_at,
           update.updated_at,
         ],
-      );
+      };
     },
 
-    async update(
-      id: string,
-      patch: Partial<TaskProgressUpdate>,
-      now: string,
-    ): Promise<number> {
+    async update(id: string, patch: Partial<TaskProgressUpdate>, now: string): Promise<number> {
       return runUpdate(db, buildUpdate('task_progress_updates', UPDATABLE, patch, id, now));
     },
 
     async deleteById(id: string): Promise<number> {
-      return (await db.execute('DELETE FROM task_progress_updates WHERE id = ?', [id])).rowsAffected;
+      return (await db.execute('DELETE FROM task_progress_updates WHERE id = ?', [id]))
+        .rowsAffected;
     },
   };
 }

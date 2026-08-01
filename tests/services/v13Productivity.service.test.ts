@@ -6,10 +6,7 @@ import {
   createTaskProgressRepository,
   createTaskRepository,
 } from '@/repositories';
-import {
-  applySavedOrder,
-  createNamedListOrderService,
-} from '@/services/namedListOrder.service';
+import { applySavedOrder, createNamedListOrderService } from '@/services/namedListOrder.service';
 import { createTaskChecklistService } from '@/services/taskChecklist.service';
 import { createTaskProgressService } from '@/services/taskProgress.service';
 import { makeProject, makeTask } from '../helpers/fixtures';
@@ -75,6 +72,7 @@ describe('v1.3 productivity services', () => {
     const service = createTaskProgressService({
       progress: createTaskProgressRepository(db.executor),
       tasks,
+      runBatch: (statements) => Promise.resolve(db.runBatch(statements)),
     });
 
     const first = await service.create('t', {
@@ -107,6 +105,13 @@ describe('v1.3 productivity services', () => {
     expect((await tasks.findById('t'))?.progress).toBe(50);
     await service.delete('t', first.id);
     expect((await tasks.findById('t'))?.progress).toBe(30);
+    await service.completeTask('t', true);
+    expect(await tasks.findById('t')).toMatchObject({ progress: 100, status: 'done' });
+    expect(await service.list('t')).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ title: '任务完成', contribution_percent: 70 }),
+      ]),
+    );
   });
 
   it('creates, completes, reopens, reorders and deletes checklist items', async () => {

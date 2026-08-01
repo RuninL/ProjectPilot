@@ -16,13 +16,14 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { toAppError } from '@/lib/errors';
 import { projectLinkInputSchema, type ProjectLinkInput } from '@/services/schemas';
-import type { LinkType, Project, ProjectLink } from '@/types';
+import type { LinkType, Project, ProjectLink, Task } from '@/types';
 
 interface ProjectLinkFormValues {
   label: string;
   link_type: LinkType;
   target: string;
   description: string;
+  task_id: string;
 }
 
 function toFormValues(link: ProjectLink | null): ProjectLinkFormValues {
@@ -31,6 +32,7 @@ function toFormValues(link: ProjectLink | null): ProjectLinkFormValues {
     link_type: link?.link_type ?? 'url',
     target: link?.target ?? '',
     description: link?.description ?? '',
+    task_id: link?.task_id ?? '',
   };
 }
 
@@ -40,6 +42,9 @@ interface ProjectLinkFormProps {
   projects?: readonly Project[];
   projectId?: string;
   onProjectIdChange?: (projectId: string) => void;
+  tasks?: readonly Task[];
+  taskId?: string;
+  lockTask?: boolean;
   onSubmit: (input: ProjectLinkInput) => Promise<void>;
   onClose: () => void;
 }
@@ -50,6 +55,9 @@ export function ProjectLinkForm({
   projects,
   projectId,
   onProjectIdChange,
+  tasks,
+  taskId,
+  lockTask = false,
   onSubmit,
   onClose,
 }: ProjectLinkFormProps) {
@@ -87,9 +95,9 @@ export function ProjectLinkForm({
 
   useEffect(() => {
     if (open) {
-      reset(toFormValues(link));
+      reset({ ...toFormValues(link), task_id: link?.task_id ?? taskId ?? '' });
     }
-  }, [link, open, reset]);
+  }, [link, open, reset, taskId]);
 
   const submit = handleSubmit(async (values) => {
     try {
@@ -136,6 +144,27 @@ export function ProjectLinkForm({
                   </option>
                 ))}
               </select>
+            </div>
+          )}
+          {tasks !== undefined && (
+            <div className="grid gap-1.5">
+              <Label htmlFor="project-link-task">关联任务（可选）</Label>
+              <select
+                id="project-link-task"
+                className="h-10 rounded-md border border-input bg-background px-3 text-sm"
+                disabled={lockTask}
+                {...register('task_id')}
+              >
+                <option value="">仅关联项目</option>
+                {tasks.map((task) => (
+                  <option key={task.id} value={task.id}>
+                    {task.parent_task_id === null ? task.title : `↳ ${task.title}`}
+                  </option>
+                ))}
+              </select>
+              {errors.task_id && (
+                <p className="text-sm text-destructive">{errors.task_id.message}</p>
+              )}
             </div>
           )}
           <div className="grid gap-1.5">
