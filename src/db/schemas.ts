@@ -309,6 +309,12 @@ export const taskParticipantRowSchema = z.object({
   assigned_at: timestamp,
 });
 
+export const taskMeetingRowSchema = z.object({
+  task_id: z.string(),
+  meeting_id: z.string(),
+  linked_at: timestamp,
+});
+
 export const projectParticipantPersonRowSchema = projectParticipantRowSchema.extend({
   person_name: z.string(),
 });

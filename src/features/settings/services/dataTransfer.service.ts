@@ -49,6 +49,7 @@ const ENTITY_KEYS = [
   'people',
   'projectParticipants',
   'taskParticipants',
+  'taskMeetings',
   'namedListOrders',
   'taskProgressUpdates',
   'taskChecklistItems',
@@ -160,6 +161,7 @@ function selectImportRows(
   const people = new Set([...current.people, ...selected.people].map((row) => row.id));
   const projects = new Set([...current.projects, ...selected.projects].map((row) => row.id));
   const tasks = new Set([...current.tasks, ...selected.tasks].map((row) => row.id));
+  const meetings = new Set([...current.meetings, ...selected.meetings].map((row) => row.id));
   const currentDefaultContexts = new Set(
     current.namedListOrders
       .filter((row) => row.is_default === 1)
@@ -177,6 +179,9 @@ function selectImportRows(
     ),
     taskParticipants: selected.taskParticipants.filter(
       (row) => tasks.has(row.task_id) && people.has(row.person_id),
+    ),
+    taskMeetings: selected.taskMeetings.filter(
+      (row) => tasks.has(row.task_id) && meetings.has(row.meeting_id),
     ),
   };
 }
@@ -205,6 +210,7 @@ function countSnapshot(snapshot: DatabaseSnapshot): EntityCounts {
     people: snapshot.people.length,
     projectParticipants: snapshot.projectParticipants.length,
     taskParticipants: snapshot.taskParticipants.length,
+    taskMeetings: snapshot.taskMeetings.length,
     namedListOrders: snapshot.namedListOrders.length,
     taskProgressUpdates: snapshot.taskProgressUpdates.length,
     taskChecklistItems: snapshot.taskChecklistItems.length,
@@ -227,6 +233,7 @@ function emptyCounts(): EntityCounts {
     people: 0,
     projectParticipants: 0,
     taskParticipants: 0,
+    taskMeetings: 0,
     namedListOrders: 0,
     taskProgressUpdates: 0,
     taskChecklistItems: 0,
@@ -288,6 +295,11 @@ function withoutConflicts(incoming: ExportData, current: DatabaseSnapshot): Data
       incoming.taskParticipants,
       current.taskParticipants,
       (row) => `${row.task_id}\u0000${row.person_id}`,
+    ),
+    taskMeetings: excludeIds(
+      incoming.taskMeetings,
+      current.taskMeetings,
+      (row) => `${row.task_id}\u0000${row.meeting_id}`,
     ),
     namedListOrders: excludeIds(incoming.namedListOrders, current.namedListOrders, (row) => row.id),
     taskProgressUpdates: excludeIds(
@@ -361,6 +373,9 @@ function withoutSampleData(snapshot: DatabaseSnapshot): DatabaseSnapshot {
       projectIds.has(row.project_id),
     ),
     taskParticipants: snapshot.taskParticipants.filter((row) => taskIds.has(row.task_id)),
+    taskMeetings: snapshot.taskMeetings.filter(
+      (row) => taskIds.has(row.task_id) && meetingIds.has(row.meeting_id),
+    ),
     namedListOrders: snapshot.namedListOrders,
     taskProgressUpdates: snapshot.taskProgressUpdates.filter((row) => taskIds.has(row.task_id)),
     taskChecklistItems: snapshot.taskChecklistItems.filter((row) => taskIds.has(row.task_id)),
@@ -392,6 +407,7 @@ function mergeSnapshots(current: DatabaseSnapshot, incoming: DatabaseSnapshot): 
     people: [...current.people, ...incoming.people],
     projectParticipants: [...current.projectParticipants, ...incoming.projectParticipants],
     taskParticipants: [...current.taskParticipants, ...incoming.taskParticipants],
+    taskMeetings: [...current.taskMeetings, ...incoming.taskMeetings],
     namedListOrders: [...current.namedListOrders, ...incoming.namedListOrders],
     taskProgressUpdates: [...current.taskProgressUpdates, ...incoming.taskProgressUpdates],
     taskChecklistItems: [...current.taskChecklistItems, ...incoming.taskChecklistItems],
@@ -525,6 +541,10 @@ function validateSnapshot(snapshot: DatabaseSnapshot): void {
   for (const item of snapshot.taskChecklistItems) {
     assertReference(item.task_id, taskIds, `任务待办 ${item.id} 的任务`);
   }
+  for (const link of snapshot.taskMeetings) {
+    assertReference(link.task_id, taskIds, '任务会议关联的任务');
+    assertReference(link.meeting_id, meetingIds, '任务会议关联的会议');
+  }
   for (const risk of snapshot.risks) {
     assertReference(risk.project_id, projectIds, `风险 ${risk.id} 的项目`);
     if (risk.level !== calculateRiskLevel(risk.likelihood, risk.impact)) {
@@ -611,6 +631,10 @@ function assertUniqueKeys(snapshot: DatabaseSnapshot): void {
   assertUnique(
     snapshot.taskParticipants.map((row) => `${row.task_id}\u0000${row.person_id}`),
     '任务参与关系',
+  );
+  assertUnique(
+    snapshot.taskMeetings.map((row) => `${row.task_id}\u0000${row.meeting_id}`),
+    '任务会议关联',
   );
   assertUnique(
     snapshot.taskDependencies.map((row) => `${row.predecessor_id}\u0000${row.successor_id}`),

@@ -464,6 +464,7 @@ export function createCompleteSnapshot(): DatabaseSnapshot {
       { task_id: 'task-root', person_id: 'person-member', assigned_at: NOW },
       { task_id: 'task-sample', person_id: 'person-owner', assigned_at: NOW },
     ],
+    taskMeetings: [{ task_id: 'task-root', meeting_id: 'meeting-project', linked_at: NOW }],
     namedListOrders: [
       {
         id: 'order-projects',

@@ -5,6 +5,8 @@ export interface ProgressSegmentColor {
   readonly foreground: string;
 }
 
+const DEFAULT_SEGMENT_COLOR: ProgressSegmentColor = { background: '#2563eb', foreground: '#ffffff' };
+
 /**
  * Fixed hex palette for the segmented progress bar. Deliberately independent
  * of the CSS theme variables (`--primary` changes per theme and can collide
@@ -12,7 +14,7 @@ export interface ProgressSegmentColor {
  * distinct under every theme.
  */
 export const PROGRESS_SEGMENT_COLORS: readonly ProgressSegmentColor[] = [
-  { background: '#2563eb', foreground: '#ffffff' },
+  DEFAULT_SEGMENT_COLOR,
   { background: '#059669', foreground: '#ffffff' },
   { background: '#d97706', foreground: '#ffffff' },
   { background: '#7c3aed', foreground: '#ffffff' },
@@ -24,7 +26,7 @@ export function progressSegmentColor(index: number): ProgressSegmentColor {
   const paletteIndex =
     ((index % PROGRESS_SEGMENT_COLORS.length) + PROGRESS_SEGMENT_COLORS.length) %
     PROGRESS_SEGMENT_COLORS.length;
-  return PROGRESS_SEGMENT_COLORS[paletteIndex];
+  return PROGRESS_SEGMENT_COLORS[paletteIndex] ?? DEFAULT_SEGMENT_COLOR;
 }
 
 export function sortProgressSegments(updates: readonly TaskProgressUpdate[]): TaskProgressUpdate[] {

@@ -13,6 +13,7 @@ import {
   riskRowSchema,
   taskDependencyRowSchema,
   taskChecklistItemRowSchema,
+  taskMeetingRowSchema,
   taskProgressUpdateRowSchema,
   taskParticipantRowSchema,
   taskRowSchema,
@@ -35,6 +36,7 @@ import type {
   Task,
   TaskChecklistItem,
   TaskDependency,
+  TaskMeeting,
   TaskParticipant,
   TaskProgressUpdate,
 } from '@/types';
@@ -55,6 +57,7 @@ export interface DatabaseSnapshot {
   people: Person[];
   projectParticipants: ProjectParticipant[];
   taskParticipants: TaskParticipant[];
+  taskMeetings: TaskMeeting[];
   namedListOrders: NamedListOrder[];
   taskProgressUpdates: TaskProgressUpdate[];
   taskChecklistItems: TaskChecklistItem[];
@@ -103,6 +106,8 @@ const INSERTS = {
     (project_id, person_id, role, joined_at) VALUES (?, ?, ?, ?)`,
   taskParticipant: `INSERT INTO task_participants
     (task_id, person_id, assigned_at) VALUES (?, ?, ?)`,
+  taskMeeting: `INSERT INTO task_meetings
+    (task_id, meeting_id, linked_at) VALUES (?, ?, ?)`,
   namedListOrder: `INSERT INTO named_list_orders
     (id, context, context_id, name, ordered_ids_json, is_default, created_at, updated_at)
     VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
@@ -155,6 +160,10 @@ export function createDataTransferRepository(db: SqlExecutor) {
         taskParticipantRowSchema,
         await db.select('SELECT * FROM task_participants'),
       );
+      const taskMeetings = parseRows(
+        taskMeetingRowSchema,
+        await db.select('SELECT * FROM task_meetings'),
+      );
       const namedListOrders = parseRows(
         namedListOrderRowSchema,
         await db.select('SELECT * FROM named_list_orders'),
@@ -182,6 +191,7 @@ export function createDataTransferRepository(db: SqlExecutor) {
         people,
         projectParticipants,
         taskParticipants,
+        taskMeetings,
         namedListOrders,
         taskProgressUpdates,
         taskChecklistItems,
@@ -192,6 +202,7 @@ export function createDataTransferRepository(db: SqlExecutor) {
       return [
         { sql: 'DELETE FROM task_checklist_items' },
         { sql: 'DELETE FROM task_progress_updates' },
+        { sql: 'DELETE FROM task_meetings' },
         { sql: 'DELETE FROM task_participants' },
         { sql: 'DELETE FROM project_participants' },
         { sql: 'DELETE FROM task_dependencies' },
@@ -228,6 +239,7 @@ export function createDataTransferRepository(db: SqlExecutor) {
         ...snapshot.risks.map(riskStatement),
         ...snapshot.projectParticipants.map(projectParticipantStatement),
         ...snapshot.taskParticipants.map(taskParticipantStatement),
+        ...snapshot.taskMeetings.map(taskMeetingStatement),
         ...snapshot.taskProgressUpdates.map(taskProgressUpdateStatement),
         ...snapshot.taskChecklistItems.map(taskChecklistItemStatement),
         ...snapshot.namedListOrders.map(namedListOrderStatement),
@@ -469,6 +481,13 @@ function taskParticipantStatement(row: TaskParticipant): BatchStatement {
   return {
     sql: INSERTS.taskParticipant,
     params: [row.task_id, row.person_id, row.assigned_at],
+  };
+}
+
+function taskMeetingStatement(row: TaskMeeting): BatchStatement {
+  return {
+    sql: INSERTS.taskMeeting,
+    params: [row.task_id, row.meeting_id, row.linked_at],
   };
 }
 

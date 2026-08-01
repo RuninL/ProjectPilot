@@ -30,6 +30,7 @@ const ZERO_COUNTS: EntityCounts = {
   namedListOrders: 0,
   taskProgressUpdates: 0,
   taskChecklistItems: 0,
+  taskMeetings: 0,
 };
 
 function countSnapshot(snapshot: DatabaseSnapshot): EntityCounts {
@@ -51,6 +52,7 @@ function countSnapshot(snapshot: DatabaseSnapshot): EntityCounts {
     namedListOrders: snapshot.namedListOrders.length,
     taskProgressUpdates: snapshot.taskProgressUpdates.length,
     taskChecklistItems: snapshot.taskChecklistItems.length,
+    taskMeetings: snapshot.taskMeetings.length,
   };
 }
 
@@ -78,6 +80,11 @@ function sortedSnapshot(snapshot: DatabaseSnapshot): DatabaseSnapshot {
     taskParticipants: [...snapshot.taskParticipants].sort((left, right) =>
       `${left.task_id}\u0000${left.person_id}`.localeCompare(
         `${right.task_id}\u0000${right.person_id}`,
+      ),
+    ),
+    taskMeetings: [...snapshot.taskMeetings].sort((left, right) =>
+      `${left.task_id}\u0000${left.meeting_id}`.localeCompare(
+        `${right.task_id}\u0000${right.meeting_id}`,
       ),
     ),
     namedListOrders: byId(snapshot.namedListOrders),
@@ -173,6 +180,11 @@ function prefixedSnapshot(prefix: string): DatabaseSnapshot {
       ...row,
       task_id: taskId(row.task_id),
       person_id: personId(row.person_id),
+    })),
+    taskMeetings: snapshot.taskMeetings.map((row) => ({
+      ...row,
+      task_id: taskId(row.task_id),
+      meeting_id: meetingId(row.meeting_id),
     })),
     namedListOrders: snapshot.namedListOrders.map((row) => ({
       ...row,
@@ -343,6 +355,7 @@ describe('数据交换真实 SQLite 集成', () => {
         people: [...existing.people, ...added.people],
         projectParticipants: [...existing.projectParticipants, ...added.projectParticipants],
         taskParticipants: [...existing.taskParticipants, ...added.taskParticipants],
+        taskMeetings: [...existing.taskMeetings, ...added.taskMeetings],
         namedListOrders: [...existing.namedListOrders, ...added.namedListOrders],
         taskProgressUpdates: [...existing.taskProgressUpdates, ...added.taskProgressUpdates],
         taskChecklistItems: [...existing.taskChecklistItems, ...added.taskChecklistItems],
@@ -364,6 +377,7 @@ describe('数据交换真实 SQLite 集成', () => {
       expect(clearSql).toEqual([
         'DELETE FROM task_checklist_items',
         'DELETE FROM task_progress_updates',
+        'DELETE FROM task_meetings',
         'DELETE FROM task_participants',
         'DELETE FROM project_participants',
         'DELETE FROM task_dependencies',
@@ -411,7 +425,12 @@ describe('数据交换真实 SQLite 集成', () => {
       const firstTaskParticipant = sql.findIndex((statement) =>
         statement.includes('INSERT INTO task_participants'),
       );
+      const firstTaskMeeting = sql.findIndex((statement) =>
+        statement.includes('INSERT INTO task_meetings'),
+      );
       expect(Math.max(...taskIndexes)).toBeLessThan(firstTaskParticipant);
+      expect(Math.max(...taskIndexes)).toBeLessThan(firstTaskMeeting);
+      expect(firstMeeting).toBeLessThan(firstTaskMeeting);
       expect(lastProject).toBeLessThan(firstProjectParticipant);
       expect(inserts[firstMeeting]?.params?.[0]).toBe('meeting-project');
       expect(taskIndexes.map((index) => inserts[index]?.params?.[0])).toEqual([

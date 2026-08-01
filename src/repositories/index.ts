@@ -14,6 +14,7 @@ import { createSampleDataRepository } from './sample.repo';
 import { createTaskRepository } from './task.repo';
 import { createTaskDependencyRepository } from './taskDependency.repo';
 import { createTaskChecklistRepository } from './taskChecklist.repo';
+import { createTaskMeetingRepository } from './taskMeeting.repo';
 import { createTaskProgressRepository } from './taskProgress.repo';
 
 export * from './project.repo';
@@ -32,6 +33,7 @@ export * from './recurrence.repo';
 export * from './namedListOrder.repo';
 export * from './taskProgress.repo';
 export * from './taskChecklist.repo';
+export * from './taskMeeting.repo';
 
 /** Build every repository bound to the live SQLite singleton. */
 export async function getRepositories() {
@@ -53,6 +55,7 @@ export async function getRepositories() {
     namedListOrders: createNamedListOrderRepository(db),
     taskProgress: createTaskProgressRepository(db),
     taskChecklist: createTaskChecklistRepository(db),
+    taskMeetings: createTaskMeetingRepository(db),
   };
 }
 

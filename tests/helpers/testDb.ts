@@ -22,6 +22,7 @@ const MIGRATION_FILES = [
   '0012_v13_productivity.sql',
   '0013_relax_meeting_urls.sql',
   '0014_sort_sections_task_archive.sql',
+  '0015_task_meetings.sql',
 ] as const;
 
 /**

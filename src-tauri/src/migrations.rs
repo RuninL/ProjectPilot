@@ -88,5 +88,11 @@ pub fn migrations() -> Vec<Migration> {
             sql: include_str!("../migrations/0014_sort_sections_task_archive.sql"),
             kind: MigrationKind::Up,
         },
+        Migration {
+            version: 15,
+            description: "task to meeting association links",
+            sql: include_str!("../migrations/0015_task_meetings.sql"),
+            kind: MigrationKind::Up,
+        },
     ]
 }

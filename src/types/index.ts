@@ -33,6 +33,7 @@ import type {
   riskWithProjectRowSchema,
   taskDependencyRowSchema,
   taskChecklistItemRowSchema,
+  taskMeetingRowSchema,
   taskProgressUpdateRowSchema,
   taskParticipantRowSchema,
   taskParticipantPersonRowSchema,
@@ -65,6 +66,7 @@ export type PersonWithCounts = z.infer<typeof personWithCountsRowSchema>;
 export type ProjectParticipant = z.infer<typeof projectParticipantRowSchema>;
 export type ProjectParticipantPerson = z.infer<typeof projectParticipantPersonRowSchema>;
 export type TaskParticipant = z.infer<typeof taskParticipantRowSchema>;
+export type TaskMeeting = z.infer<typeof taskMeetingRowSchema>;
 export type TaskParticipantPerson = z.infer<typeof taskParticipantPersonRowSchema>;
 export type PersonProjectParticipation = z.infer<typeof personProjectParticipationRowSchema>;
 export type PersonTaskParticipation = z.infer<typeof personTaskParticipationRowSchema>;
