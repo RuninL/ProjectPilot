@@ -94,6 +94,7 @@ describe('CSV 导出完整覆盖', () => {
       }));
       snapshot.taskDependencies = [];
       snapshot.taskParticipants = [];
+      snapshot.taskMeetings = [];
       snapshot.actionItems = snapshot.actionItems.map((item) => ({
         ...item,
         converted_task_id: null,

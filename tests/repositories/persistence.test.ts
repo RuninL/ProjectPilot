@@ -47,6 +47,7 @@ describe('migration 0001 schema', () => {
       'risks',
       'task_checklist_items',
       'task_dependencies',
+      'task_meetings',
       'task_participants',
       'task_progress_updates',
       'tasks',

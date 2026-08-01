@@ -5,7 +5,10 @@ export interface ProgressSegmentColor {
   readonly foreground: string;
 }
 
-const DEFAULT_SEGMENT_COLOR: ProgressSegmentColor = { background: '#2563eb', foreground: '#ffffff' };
+const DEFAULT_SEGMENT_COLOR: ProgressSegmentColor = {
+  background: '#2563eb',
+  foreground: '#ffffff',
+};
 
 /**
  * Fixed hex palette for the segmented progress bar. Deliberately independent

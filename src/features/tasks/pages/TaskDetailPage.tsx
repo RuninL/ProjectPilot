@@ -21,6 +21,7 @@ import { getDependencyService } from '@/services/dependency.service';
 import { getTaskProgressService } from '@/services/taskProgress.service';
 import type { Person, Project, Task, TaskDependency } from '@/types';
 import { TaskChecklistSection } from '../components/TaskChecklistSection';
+import { TaskMeetingSection } from '../components/TaskMeetingSection';
 import { TaskProgressSection } from '../components/TaskProgressSection';
 import { TaskResourcesSection } from '../components/TaskResourcesSection';
 
@@ -261,6 +262,7 @@ export function TaskDetailPage() {
           <RelationList title="子任务" tasks={children} />
           <RelationList title="依赖任务" tasks={predecessors} />
           <RelationList title="被依赖任务" tasks={successors} />
+          <TaskMeetingSection taskId={task.id} />
         </TabsContent>
       </Tabs>
     </div>
