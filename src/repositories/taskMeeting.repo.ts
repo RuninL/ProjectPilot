@@ -51,11 +51,7 @@ export function createTaskMeetingRepository(db: SqlExecutor) {
     },
 
     async insert(link: TaskMeeting): Promise<boolean> {
-      const result = await db.execute(INSERT_SQL, [
-        link.task_id,
-        link.meeting_id,
-        link.linked_at,
-      ]);
+      const result = await db.execute(INSERT_SQL, [link.task_id, link.meeting_id, link.linked_at]);
       return result.rowsAffected > 0;
     },
 

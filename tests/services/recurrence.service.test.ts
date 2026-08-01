@@ -167,9 +167,9 @@ describe('expandRule', () => {
       expect((await service.getMeetingSeriesAnchor(created.id)).topic).toBe('更新后的系列');
 
       await service.deleteRule(created.id);
-      expect(
-        requireDb().raw.prepare('SELECT COUNT(*) AS count FROM task_meetings').get(),
-      ).toEqual({ count: 0 });
+      expect(requireDb().raw.prepare('SELECT COUNT(*) AS count FROM task_meetings').get()).toEqual({
+        count: 0,
+      });
     });
 
     it('skips only the selected occurrence without changing the rest of the series', async () => {

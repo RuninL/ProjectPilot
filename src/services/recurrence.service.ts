@@ -247,10 +247,7 @@ export function createRecurrenceService(deps: RecurrenceServiceDeps) {
       const nextRule = buildRule(parsed, id, now);
       const ruleUpdate = deps.recurrence.buildUpdateStatement(id, nextRule, now);
       if (ruleUpdate === null) throw new AppError('db', '周期规则没有可更新字段');
-      const statements: BatchStatement[] = [
-        ruleUpdate,
-        deps.recurrence.buildDeleteExceptions(id),
-      ];
+      const statements: BatchStatement[] = [ruleUpdate, deps.recurrence.buildDeleteExceptions(id)];
       const anchor = await deps.meetings.findSeriesAnchor(id);
       if (nextRule.kind === 'meeting') {
         const nextAnchor = buildMeetingAnchor(

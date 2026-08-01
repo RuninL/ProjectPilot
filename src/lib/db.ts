@@ -33,7 +33,11 @@ function instrumentSqlExecutor(db: SqlExecutor): SqlExecutor {
       try {
         return await db.select<T>(query, bindValues);
       } finally {
-        recordPerformanceEvent('sqlite', `select:${queryLabel(query)}`, performance.now() - started);
+        recordPerformanceEvent(
+          'sqlite',
+          `select:${queryLabel(query)}`,
+          performance.now() - started,
+        );
       }
     },
     async execute(query: string, bindValues?: unknown[]): Promise<QueryResult> {

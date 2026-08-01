@@ -173,10 +173,7 @@ export function createDataTransferRepository(db: SqlExecutor) {
       const risks = parseRows(riskRowSchema, riskRows);
       const appSettings = parseRows(appSettingRowSchema, appSettingRows);
       const people = parseRows(personRowSchema, peopleRows);
-      const projectParticipants = parseRows(
-        projectParticipantRowSchema,
-        projectParticipantRows,
-      );
+      const projectParticipants = parseRows(projectParticipantRowSchema, projectParticipantRows);
       const taskParticipants = parseRows(taskParticipantRowSchema, taskParticipantRows);
       const taskMeetings = parseRows(taskMeetingRowSchema, taskMeetingRows);
       const namedListOrders = parseRows(namedListOrderRowSchema, namedListOrderRows);

@@ -114,9 +114,9 @@ describe('task-meeting performance benchmark', () => {
       samples.push(performance.now() - started);
     }
     console.info(`candidate search: size=${String(size)} median=${median(samples).toFixed(3)}ms`);
-    expect(
-      filterMeetingTaskCandidates(candidates, ['t-1', 't-2'], 'active', ''),
-    ).toHaveLength(Math.min(100, size - Math.min(2, size)));
+    expect(filterMeetingTaskCandidates(candidates, ['t-1', 't-2'], 'active', '')).toHaveLength(
+      Math.min(100, size - Math.min(2, size)),
+    );
   });
 
   it('starts all snapshot reads without serial IPC waits', async () => {
