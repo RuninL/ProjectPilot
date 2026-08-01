@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { isValidDateStr } from '@/lib/date';
+import { isDangerousWebAddress, isStorableWebAddress } from '@/lib/webAddress';
 import {
   actionItemStatusEnum,
   linkTypeEnum,
@@ -59,12 +60,12 @@ const optionalTime = z
   .nullable()
   .transform((value) => value ?? null);
 
-const optionalHttpsUrl = z
+const optionalWebAddress = z
   .string()
   .trim()
   .refine(
-    (value) => value === '' || /^https:\/\/[^/\s]+(?:[/?#][^\s]*)?$/i.test(value),
-    '会议链接必须是 HTTPS 地址',
+    (value) => value === '' || isStorableWebAddress(value),
+    '请输入有效网址；无需填写 http:// 或 https://，危险协议不受支持',
   )
   .transform((value) => (value === '' ? null : value))
   .nullable()
@@ -196,7 +197,7 @@ export const meetingInputSchema = z.object({
   notes: z.string().trim().max(8000, '会议纪要不能超过 8000 个字符').default(''),
   decisions: z.string().trim().max(4000, '决议不能超过 4000 个字符').default(''),
   risks: z.string().trim().max(4000, '风险不能超过 4000 个字符').default(''),
-  meeting_url: optionalHttpsUrl,
+  meeting_url: optionalWebAddress,
 });
 
 export const actionItemInputSchema = z.object({
@@ -252,7 +253,7 @@ export const recurrenceRuleInputSchema = z
       .default(null),
     default_priority: taskPriorityEnum.nullable().default(null),
     note: z.string().trim().max(2000, '备注不能超过 2000 个字符').default(''),
-    meeting_url: optionalHttpsUrl,
+    meeting_url: optionalWebAddress,
     is_active: z.union([z.literal(0), z.literal(1)]).default(1),
   })
   .refine((value) => value.end_date >= value.start_date, {
@@ -282,15 +283,6 @@ export const riskInputSchema = z.object({
   due_date: optionalDate,
 });
 
-function isAbsoluteUrl(value: string): boolean {
-  try {
-    const parsed = new URL(value);
-    return parsed.protocol !== '' && parsed.href !== '';
-  } catch {
-    return false;
-  }
-}
-
 export function isAbsoluteWindowsPath(value: string): boolean {
   const path = value.trim();
   // Accept drive-rooted paths and UNC shares; reject relative/non-Windows paths and NUL injection.
@@ -308,11 +300,14 @@ export const projectLinkInputSchema = z
     task_id: optionalId.optional(),
   })
   .superRefine((value, context) => {
-    if (value.link_type === 'url' && !isAbsoluteUrl(value.target)) {
+    if (
+      value.link_type === 'url' &&
+      (!isStorableWebAddress(value.target) || isDangerousWebAddress(value.target))
+    ) {
       context.addIssue({
         code: z.ZodIssueCode.custom,
         path: ['target'],
-        message: '请输入包含协议的合法绝对 URL',
+        message: '请输入有效网址；无需填写 http:// 或 https://，危险协议不受支持',
       });
     }
     if (value.link_type === 'file_path' && !isAbsoluteWindowsPath(value.target)) {

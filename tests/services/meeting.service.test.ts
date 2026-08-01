@@ -86,19 +86,18 @@ describe('createMeeting', () => {
   });
 
   describe('openMeetingUrl', () => {
-    it('opens only a stored HTTPS meeting URL', async () => {
+    it('preserves and resolves a stored schemeless meeting URL only when opening', async () => {
       const meeting = await service.createMeeting(
-        input({ meeting_url: ' https://meet.example/a ' }),
+        input({ meeting_url: ' meet.example/a?room=1#join ' }),
       );
+      expect(meeting.meeting_url).toBe('meet.example/a?room=1#join');
       await service.openMeetingUrl(meeting.id);
-      expect(openUrl).toHaveBeenCalledWith('https://meet.example/a');
+      expect(openUrl).toHaveBeenCalledWith('https://meet.example/a?room=1#join');
     });
 
-    it('rejects meetings without an HTTPS URL', async () => {
+    it('rejects meetings without a safe URL', async () => {
       const meeting = await service.createMeeting(input());
-      await expect(service.openMeetingUrl(meeting.id)).rejects.toThrow(
-        '会议没有可打开的 HTTPS 链接',
-      );
+      await expect(service.openMeetingUrl(meeting.id)).rejects.toThrow('会议没有可安全打开的链接');
     });
   });
 

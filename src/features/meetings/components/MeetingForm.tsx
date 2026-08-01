@@ -190,16 +190,19 @@ export function MeetingForm({
           </div>
 
           <div className="grid gap-1.5">
-            <Label htmlFor="meeting-url">在线会议链接（可选，仅 HTTPS）</Label>
+            <Label htmlFor="meeting-url">在线会议链接（可选）</Label>
             <Input
               id="meeting-url"
-              type="url"
-              placeholder="https://"
+              type="text"
+              placeholder="例如：www.example.com 或 https://example.com"
               {...register('meeting_url')}
             />
             {errors.meeting_url && (
               <p className="text-sm text-destructive">{errors.meeting_url.message}</p>
             )}
+            <p className="text-xs text-muted-foreground">
+              可直接输入网址，无需填写 http:// 或 https://
+            </p>
           </div>
 
           <div className="grid gap-1.5">

@@ -76,16 +76,18 @@ describe('project link service CRUD and isolation', () => {
     expect(await service.listProjectLinks('p1')).toEqual([updated]);
   });
 
-  it('rejects blank names, blank targets, protocol-less URLs, and relative paths', async () => {
+  it('rejects blank names, blank targets, and relative paths while preserving schemeless URLs', async () => {
     await expect(service.createProjectLink('p1', input({ label: ' ' }))).rejects.toThrow(
       '资料名称不能为空',
     );
     await expect(service.createProjectLink('p1', input({ target: ' ' }))).rejects.toThrow(
       '目标地址或路径不能为空',
     );
-    await expect(service.createProjectLink('p1', input({ target: 'example.com' }))).rejects.toThrow(
-      '请输入包含协议的合法绝对 URL',
+    const schemeless = await service.createProjectLink(
+      'p1',
+      input({ target: ' example.com/path?query=1#result ' }),
     );
+    expect(schemeless.target).toBe('example.com/path?query=1#result');
     await expect(
       service.createProjectLink('p1', input({ link_type: 'file_path', target: 'docs\\plan.pdf' })),
     ).rejects.toThrow('请输入 Windows 绝对路径');
@@ -124,28 +126,47 @@ describe('project link service CRUD and isolation', () => {
 describe('project link safe opening', () => {
   it.each([
     'javascript:alert(1)',
+    'JaVaScRiPt:alert(1)',
+    'java\nscript:alert(1)',
     'data:text/plain,hello',
     'file:///C:/secret.txt',
-    'ftp://example.com/file',
-    'mailto:test@example.com',
-  ])('rejects non-http protocol %s without calling an opener', async (target) => {
-    const link = await service.createProjectLink('p1', input({ target }));
-
-    await expect(service.openProjectLink('p1', link.id)).rejects.toThrow(
-      '仅支持 http/https 链接打开',
+    'vbscript:test',
+    'shell:test',
+    'powershell:test',
+    'cmd:test',
+  ])('rejects dangerous protocol %s before storage', async (target) => {
+    await expect(service.createProjectLink('p1', input({ target }))).rejects.toThrow(
+      '危险协议不受支持',
     );
     expect(openUrl).not.toHaveBeenCalled();
     expect(openPath).not.toHaveBeenCalled();
   });
 
-  it.each(['http://example.com', 'https://example.com'])(
-    'opens allow-listed URL %s with the official opener dependency',
+  it.each(['ftp://example.com/file', 'mailto:test@example.com'])(
+    'does not execute unsupported protocol %s',
     async (target) => {
+      const link = await service.createProjectLink('p1', input({ target }));
+      await expect(service.openProjectLink('p1', link.id)).rejects.toThrow('暂不支持该链接类型');
+      expect(openUrl).not.toHaveBeenCalled();
+    },
+  );
+
+  it.each([
+    ['http://example.com', 'http://example.com'],
+    ['https://example.com', 'https://example.com'],
+    ['www.example.com/path', 'https://www.example.com/path'],
+    ['localhost:3000', 'http://localhost:3000'],
+    ['127.0.0.1:5173', 'http://127.0.0.1:5173'],
+    ['192.168.1.20:8080/dashboard', 'http://192.168.1.20:8080/dashboard'],
+  ])(
+    'opens allow-listed URL %s with the official opener dependency',
+    async (target, opened) => {
       const link = await service.createProjectLink('p1', input({ target }));
 
       await service.openProjectLink('p1', link.id);
 
-      expect(openUrl).toHaveBeenCalledWith(target);
+      expect(openUrl).toHaveBeenCalledWith(opened);
+      expect(link.target).toBe(target);
     },
   );
 

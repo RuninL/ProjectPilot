@@ -9,6 +9,7 @@ import {
 import type { Task, TaskDependency } from '@/types';
 import { buildDependencyGraph, hasCycle } from '@/services/dependencyGraph';
 import { calculateRiskLevel } from '@/services/riskLevel';
+import { isStorableWebAddress } from '@/lib/webAddress';
 import {
   DATA_SCHEMA_VERSION,
   projectPilotExportSchema,
@@ -408,6 +409,9 @@ function validateSnapshot(snapshot: DatabaseSnapshot): void {
 
   for (const meeting of snapshot.meetings) {
     assertNullableReference(meeting.project_id, projectIds, `会议 ${meeting.id} 的项目`);
+    if (meeting.meeting_url !== null && !isStorableWebAddress(meeting.meeting_url)) {
+      throw validationError(`会议 ${meeting.id} 的链接不安全或无效`);
+    }
   }
   for (const task of snapshot.tasks) {
     assertReference(task.project_id, projectIds, `任务 ${task.id} 的项目`);
@@ -437,6 +441,9 @@ function validateSnapshot(snapshot: DatabaseSnapshot): void {
   for (const rule of snapshot.recurrenceRules) {
     if (rule.project_id !== null) {
       assertReference(rule.project_id, projectIds, `周期规则 ${rule.id} 的项目`);
+    }
+    if (rule.meeting_url !== null && !isStorableWebAddress(rule.meeting_url)) {
+      throw validationError(`周期规则 ${rule.id} 的会议链接不安全或无效`);
     }
   }
   for (const exception of snapshot.recurrenceExceptions) {
@@ -498,6 +505,9 @@ function validateSnapshot(snapshot: DatabaseSnapshot): void {
     assertNullableReference(link.task_id ?? null, taskIds, `项目链接 ${link.id} 的关联任务`);
     if (link.task_id != null && tasks.get(link.task_id)?.project_id !== link.project_id) {
       throw validationError(`项目链接 ${link.id} 的关联任务不属于同一项目`);
+    }
+    if (link.link_type === 'url' && !isStorableWebAddress(link.target)) {
+      throw validationError(`项目链接 ${link.id} 的网址不安全或无效`);
     }
   }
   const progressTotals = new Map<string, number>();

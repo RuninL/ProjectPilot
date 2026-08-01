@@ -2,6 +2,7 @@ import { openUrl } from '@tauri-apps/plugin-opener';
 import { nowIso } from '@/lib/date';
 import { AppError, toAppError } from '@/lib/errors';
 import { newId } from '@/lib/uuid';
+import { resolveWebAddressForOpen } from '@/lib/webAddress';
 import type {
   ActionItemRepository,
   AppSettingRepository,
@@ -66,11 +67,15 @@ export function createMeetingService(deps: MeetingServiceDeps) {
   }
 
   async function openValidatedUrl(url: string | null): Promise<void> {
-    if (url === null || !/^https:\/\/[^/\s]+(?:[/?#][^\s]*)?$/i.test(url)) {
-      throw new AppError('validation', '会议没有可打开的 HTTPS 链接');
+    const resolved = resolveWebAddressForOpen(url ?? '');
+    if (!resolved.ok) {
+      throw new AppError(
+        'validation',
+        resolved.reason === 'unsupported' ? '暂不支持该链接类型' : '会议没有可安全打开的链接',
+      );
     }
     try {
-      await deps.openUrl(url);
+      await deps.openUrl(resolved.value);
     } catch (caught) {
       const error = toAppError(caught);
       throw new AppError(error.kind, `无法打开会议链接：${error.message}`, { cause: caught });

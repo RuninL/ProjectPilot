@@ -76,7 +76,9 @@ export function ProjectLinkForm({
   const linkType = watch('link_type');
   const targetLabel = linkType === 'url' ? 'URL 地址' : '本地文件或目录路径';
   const targetPlaceholder =
-    linkType === 'url' ? 'https://example.com/document' : 'C:\\项目资料\\方案.pdf';
+    linkType === 'url'
+      ? '例如：www.example.com 或 https://example.com'
+      : 'C:\\项目资料\\方案.pdf';
 
   const browseLocalPath = async (directory: boolean) => {
     try {
@@ -219,7 +221,7 @@ export function ProjectLinkForm({
             )}
             <p className="text-xs text-muted-foreground">
               {linkType === 'url'
-                ? '只有 http/https 链接可直接打开，其他协议仅可复制。'
+                ? '可直接输入网址，无需填写 http:// 或 https://；不支持的协议仅可复制。'
                 : '可点击「浏览」直接选择本机文件或目录，也可手动输入绝对路径；打开前会先检查文件或目录是否存在。'}
             </p>
             {errors.target && <p className="text-sm text-destructive">{errors.target.message}</p>}

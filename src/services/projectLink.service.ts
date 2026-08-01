@@ -3,6 +3,7 @@ import { localPathExists, openLocalPath } from '@/lib/commands';
 import { nowIso } from '@/lib/date';
 import { AppError, toAppError } from '@/lib/errors';
 import { newId } from '@/lib/uuid';
+import { resolveWebAddressForOpen } from '@/lib/webAddress';
 import {
   getRepositories,
   type ProjectLinkQuery,
@@ -26,12 +27,7 @@ export interface ProjectLinkServiceDeps extends ProjectLinkOpenDeps {
 }
 
 export function isOpenableHttpUrl(value: string): boolean {
-  try {
-    const protocol = new URL(value).protocol.toLowerCase();
-    return protocol === 'http:' || protocol === 'https:';
-  } catch {
-    return false;
-  }
+  return resolveWebAddressForOpen(value).ok;
 }
 
 export function createProjectLinkService(deps: ProjectLinkServiceDeps) {
@@ -109,10 +105,14 @@ export function createProjectLinkService(deps: ProjectLinkServiceDeps) {
       const link = await requireOwnedLink(projectId, id);
       try {
         if (link.link_type === 'url') {
-          if (!isOpenableHttpUrl(link.target)) {
-            throw new AppError('validation', '仅支持 http/https 链接打开');
+          const resolved = resolveWebAddressForOpen(link.target);
+          if (!resolved.ok) {
+            throw new AppError(
+              'validation',
+              resolved.reason === 'unsupported' ? '暂不支持该链接类型' : '该链接不安全或无效',
+            );
           }
-          await deps.openUrl(link.target);
+          await deps.openUrl(resolved.value);
           return;
         }
         if (!isAbsoluteWindowsPath(link.target)) {
