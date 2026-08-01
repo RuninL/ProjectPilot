@@ -47,6 +47,66 @@ function useRealDb(): TestDb {
 }
 
 describe('MeetingsPage', () => {
+  it('drags only from the handle, moves across multiple rows, and saves the occurrence order', async () => {
+    const user = userEvent.setup();
+    const current = useRealDb();
+    const repos = await getRepositories();
+    for (const [id, topic, date] of [
+      ['m1', '第一场', '2099-07-14'],
+      ['m2', '第二场', '2099-07-15'],
+      ['m3', '第三场', '2099-07-16'],
+    ] as const) {
+      await repos.meetings.insert(makeMeeting({ id, project_id: null, topic, date }));
+    }
+
+    renderPage();
+    await screen.findByRole('link', { name: '第一场' });
+    await user.click(screen.getByRole('button', { name: '全部' }));
+    await user.selectOptions(screen.getByLabelText('自定义排序'), 'custom');
+
+    const values = new Map<string, string>();
+    const dataTransfer = {
+      dropEffect: 'none',
+      effectAllowed: 'uninitialized',
+      setData: (type: string, value: string) => values.set(type, value),
+      getData: (type: string) => values.get(type) ?? '',
+    };
+    const handle = screen.getByLabelText('拖动排序 第一场');
+    const target = screen.getByRole('link', { name: '第三场' }).closest('li');
+    if (target === null) throw new Error('第三场会议行应存在');
+    expect(handle).toHaveAttribute('draggable', 'true');
+    expect(screen.getByRole('link', { name: '第一场' }).closest('li')).not.toHaveAttribute(
+      'draggable',
+    );
+
+    fireEvent.dragStart(handle, { dataTransfer });
+    fireEvent.dragOver(target, { dataTransfer });
+    expect(target).toHaveClass('ring-primary');
+    fireEvent.drop(target, { dataTransfer });
+
+    expect(
+      screen
+        .getAllByRole('link')
+        .map((link) => link.textContent)
+        .filter((text) => text !== '打开'),
+    ).toEqual(['第二场', '第三场', '第一场']);
+
+    await user.click(screen.getByRole('button', { name: '保存当前排序' }));
+    await user.type(screen.getByLabelText('排序名称'), '会议排序2');
+    await user.click(screen.getByRole('button', { name: '保存' }));
+    await waitFor(() => {
+      expect(
+        current.raw
+          .prepare(
+            `SELECT ordered_ids_json FROM named_list_orders
+             WHERE context = 'meetings' AND name = '会议排序2'`,
+          )
+          .pluck()
+          .get(),
+      ).toBe('["meeting:m2","meeting:m3","meeting:m1"]');
+    });
+  });
+
   it('shows the loading state while the first read is in flight', async () => {
     setDbForTesting({
       select: () => new Promise(() => undefined),

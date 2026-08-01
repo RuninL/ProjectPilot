@@ -3,6 +3,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { SavedOrderControls } from '@/features/sorting/SavedOrderControls';
 import { ReorderHandle } from '@/features/sorting/ReorderHandle';
+import { useDragReorder } from '@/features/sorting/useDragReorder';
 import { useSavedListOrder } from '@/features/sorting/useSavedListOrder';
 import { ProjectLinkForm } from '@/features/links/components/ProjectLinkForm';
 import { toAppError } from '@/lib/errors';
@@ -20,6 +21,7 @@ export function TaskResourcesSection({ task, projectTasks }: Props) {
   const [editing, setEditing] = useState<ProjectLink | null>(null);
   const [error, setError] = useState<string | null>(null);
   const savedOrder = useSavedListOrder('task_resources', task.id, links);
+  const dragReorder = useDragReorder(savedOrder.moveTo, savedOrder.mode === 'dynamic');
   const load = useCallback(async () => {
     const service = await getProjectLinkService();
     setLinks(
@@ -54,7 +56,13 @@ export function TaskResourcesSection({ task, projectTasks }: Props) {
       ) : (
         <ul className="space-y-2">
           {savedOrder.displayedItems.map((link) => (
-            <li key={link.id} className="flex items-center justify-between rounded-md border p-3">
+            <li
+              key={link.id}
+              {...dragReorder.dropProps(link.id)}
+              className={`flex items-center justify-between rounded-md border p-3 ${
+                dragReorder.dropTargetId === link.id ? 'border-primary ring-1 ring-primary' : ''
+              }`}
+            >
               <div>
                 <p className="font-medium">{link.label}</p>
                 <p className="text-xs text-muted-foreground">{link.target}</p>
@@ -70,6 +78,7 @@ export function TaskResourcesSection({ task, projectTasks }: Props) {
                     onMoveDown={() => {
                       savedOrder.move(link.id, 1);
                     }}
+                    dragHandleProps={dragReorder.handleProps(link.id)}
                   />
                 )}
                 <Button

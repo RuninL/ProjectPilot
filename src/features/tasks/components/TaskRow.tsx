@@ -32,10 +32,9 @@ interface TaskRowProps {
   onDelete: (task: TaskWithProject) => void;
   participantNames?: readonly string[];
   reorderHandle?: ReactNode;
-  draggable?: boolean;
-  onDragStart?: DragEventHandler<HTMLLIElement>;
   onDragOver?: DragEventHandler<HTMLLIElement>;
   onDrop?: DragEventHandler<HTMLLIElement>;
+  isDropTarget?: boolean;
 }
 
 /** One task row: selection, identity, status/priority, due date and actions. */
@@ -49,10 +48,9 @@ export function TaskRow({
   onDelete,
   participantNames = [],
   reorderHandle,
-  draggable = false,
-  onDragStart,
   onDragOver,
   onDrop,
+  isDropTarget = false,
 }: TaskRowProps) {
   const overdue = isOverdue(task.due_date, task.status);
 
@@ -61,9 +59,8 @@ export function TaskRow({
       className={cn(
         'flex items-center gap-3 rounded-lg border bg-card px-4 py-3',
         nested && 'ml-8',
+        isDropTarget && 'border-primary ring-1 ring-primary',
       )}
-      draggable={draggable}
-      onDragStart={onDragStart}
       onDragOver={onDragOver}
       onDrop={onDrop}
     >

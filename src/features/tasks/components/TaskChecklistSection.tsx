@@ -4,6 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { ReorderHandle } from '@/features/sorting/ReorderHandle';
 import { SavedOrderControls } from '@/features/sorting/SavedOrderControls';
+import { useDragReorder } from '@/features/sorting/useDragReorder';
 import { useSavedListOrder } from '@/features/sorting/useSavedListOrder';
 import { toAppError } from '@/lib/errors';
 import { getTaskChecklistService } from '@/services/taskChecklist.service';
@@ -16,6 +17,7 @@ export function TaskChecklistSection({ taskId }: { taskId: string }) {
   const [editingContent, setEditingContent] = useState('');
   const [error, setError] = useState<string | null>(null);
   const savedOrder = useSavedListOrder('task_checklist', taskId, items);
+  const dragReorder = useDragReorder(savedOrder.moveTo, savedOrder.mode === 'dynamic');
   const load = useCallback(async () => {
     setItems(await (await getTaskChecklistService()).list(taskId));
   }, [taskId]);
@@ -65,7 +67,13 @@ export function TaskChecklistSection({ taskId }: { taskId: string }) {
       ) : (
         <ul className="space-y-2">
           {savedOrder.displayedItems.map((item) => (
-            <li key={item.id} className="flex items-center gap-2 rounded-md border p-2">
+            <li
+              key={item.id}
+              {...dragReorder.dropProps(item.id)}
+              className={`flex items-center gap-2 rounded-md border p-2 ${
+                dragReorder.dropTargetId === item.id ? 'border-primary ring-1 ring-primary' : ''
+              }`}
+            >
               {savedOrder.mode !== 'dynamic' && (
                 <ReorderHandle
                   label={item.content}
@@ -76,6 +84,7 @@ export function TaskChecklistSection({ taskId }: { taskId: string }) {
                   onMoveDown={() => {
                     savedOrder.move(item.id, 1);
                   }}
+                  dragHandleProps={dragReorder.handleProps(item.id)}
                 />
               )}
               <input

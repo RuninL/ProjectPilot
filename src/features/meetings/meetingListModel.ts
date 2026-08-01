@@ -52,7 +52,10 @@ export function buildMeetingOccurrences(
       ),
   );
   const stored: MeetingOccurrence[] = meetings.map((meeting) => ({
-    id: meeting.id,
+    id:
+      meeting.source_rule_id === null || meeting.source_occurrence_date === null
+        ? `meeting:${meeting.id}`
+        : `occurrence:${meeting.source_rule_id}:${meeting.source_occurrence_date}`,
     project_id: meeting.project_id,
     topic: meeting.topic,
     date: meeting.date,
@@ -74,7 +77,7 @@ export function buildMeetingOccurrences(
     return occurrences
       .filter((occurrence) => !materializedKeys.has(`${rule.id}\u0000${occurrence.occurrenceDate}`))
       .map((occurrence): MeetingOccurrence => ({
-        id: `expected:${rule.id}:${occurrence.occurrenceDate}`,
+        id: `occurrence:${rule.id}:${occurrence.occurrenceDate}`,
         project_id: rule.project_id,
         topic: rule.title,
         date: occurrence.date,

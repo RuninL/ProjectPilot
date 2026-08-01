@@ -9,11 +9,35 @@ import type { NamedListOrderContext } from '@/types';
 type OrderMode = 'dynamic' | 'custom' | `saved:${string}`;
 
 function reconcileIds(items: readonly { id: string }[], orderedIds: readonly string[]): string[] {
-  const available = new Set(items.map((item) => item.id));
+  const seen = new Set<string>();
   return [
-    ...orderedIds.filter((id) => available.has(id)),
-    ...items.map((item) => item.id).filter((id) => !orderedIds.includes(id)),
+    ...orderedIds.filter((id) => {
+      if (seen.has(id)) return false;
+      seen.add(id);
+      return true;
+    }),
+    ...items
+      .map((item) => item.id)
+      .filter((id) => {
+        if (seen.has(id)) return false;
+        seen.add(id);
+        return true;
+      }),
   ];
+}
+
+export function moveIdToTarget(
+  orderedIds: readonly string[],
+  sourceId: string,
+  targetId: string,
+): string[] {
+  const next = [...orderedIds];
+  const source = next.indexOf(sourceId);
+  const target = next.indexOf(targetId);
+  if (source < 0 || target < 0 || source === target) return next;
+  next.splice(source, 1);
+  next.splice(target, 0, sourceId);
+  return next;
 }
 
 export function useSavedListOrder<T extends { id: string }>(
@@ -70,6 +94,22 @@ export function useSavedListOrder<T extends { id: string }>(
   const selectedOrder = mode.startsWith('saved:')
     ? orders.find((order) => `saved:${order.id}` === mode)
     : undefined;
+  const persistSelectedOrder = (next: string[]) => {
+    if (selectedOrder === undefined) return;
+    void getNamedListOrderService()
+      .then((service) =>
+        service.update(selectedOrder.id, {
+          context,
+          context_id: contextId,
+          name: selectedOrder.name,
+          ordered_ids: next,
+          is_default: selectedOrder.is_default === 1,
+        }),
+      )
+      .catch(() => {
+        setError('无法保存排序');
+      });
+  };
 
   return {
     orders,
@@ -94,22 +134,20 @@ export function useSavedListOrder<T extends { id: string }>(
       }
     },
     move: (id: string, offset: -1 | 1) => {
-      setOrderedIds((current) => {
-        const next = reconcileIds(items, current);
-        const index = next.indexOf(id);
-        const target = index + offset;
-        if (index < 0 || target < 0 || target >= next.length) return next;
-        [next[index], next[target]] = [next[target] ?? id, next[index] ?? id];
-        return next;
-      });
+      const current = reconcileIds(items, orderedIds);
+      const index = current.indexOf(id);
+      const target = index + offset;
+      if (index < 0 || target < 0 || target >= current.length) return;
+      const next = moveIdToTarget(current, id, current[target] ?? id);
+      setOrderedIds(next);
+      persistSelectedOrder(next);
     },
-    moveBefore: (sourceId: string, targetId: string) => {
-      setOrderedIds((current) => {
-        const next = reconcileIds(items, current).filter((id) => id !== sourceId);
-        const target = next.indexOf(targetId);
-        next.splice(target < 0 ? next.length : target, 0, sourceId);
-        return next;
-      });
+    moveTo: (sourceId: string, targetId: string) => {
+      const current = reconcileIds(items, orderedIds);
+      const next = moveIdToTarget(current, sourceId, targetId);
+      if (next.every((id, index) => id === current[index])) return;
+      setOrderedIds(next);
+      persistSelectedOrder(next);
     },
     save: async (name: string, isDefault: boolean) => {
       const service = await getNamedListOrderService();

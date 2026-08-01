@@ -14,6 +14,7 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { ReorderHandle } from '@/features/sorting/ReorderHandle';
 import { SavedOrderControls } from '@/features/sorting/SavedOrderControls';
+import { useDragReorder } from '@/features/sorting/useDragReorder';
 import { useSavedListOrder } from '@/features/sorting/useSavedListOrder';
 import { toAppError } from '@/lib/errors';
 import { getTaskProgressService } from '@/services/taskProgress.service';
@@ -41,6 +42,7 @@ export function TaskProgressSection({ taskId, onChanged }: Props) {
   const [percent, setPercent] = useState('0');
   const [error, setError] = useState<string | null>(null);
   const savedOrder = useSavedListOrder('task_progress', taskId, updates);
+  const dragReorder = useDragReorder(savedOrder.moveTo, savedOrder.mode === 'dynamic');
 
   const load = useCallback(async () => {
     const service = await getTaskProgressService();
@@ -114,7 +116,13 @@ export function TaskProgressSection({ taskId, onChanged }: Props) {
       ) : (
         <ol className="space-y-3">
           {savedOrder.displayedItems.map((update) => (
-            <li key={update.id} className="rounded-md border p-3">
+            <li
+              key={update.id}
+              {...dragReorder.dropProps(update.id)}
+              className={`rounded-md border p-3 ${
+                dragReorder.dropTargetId === update.id ? 'border-primary ring-1 ring-primary' : ''
+              }`}
+            >
               <div className="flex items-start justify-between gap-3">
                 <div>
                   <p className="font-medium">
@@ -138,6 +146,7 @@ export function TaskProgressSection({ taskId, onChanged }: Props) {
                       onMoveDown={() => {
                         savedOrder.move(update.id, 1);
                       }}
+                      dragHandleProps={dragReorder.handleProps(update.id)}
                     />
                   )}
                   <Button

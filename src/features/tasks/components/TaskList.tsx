@@ -2,6 +2,7 @@ import { Fragment } from 'react';
 import type { TaskWithProject } from '@/types';
 import { TaskRow } from './TaskRow';
 import { ReorderHandle } from '@/features/sorting/ReorderHandle';
+import { useDragReorder } from '@/features/sorting/useDragReorder';
 
 interface TaskListProps {
   tasks: readonly TaskWithProject[];
@@ -14,7 +15,7 @@ interface TaskListProps {
   reorderEnabled?: boolean;
   reorderDisabled?: boolean;
   onMove?: (id: string, offset: -1 | 1) => void;
-  onMoveBefore?: (sourceId: string, targetId: string) => void;
+  onMoveTo?: (sourceId: string, targetId: string) => void;
 }
 
 /**
@@ -33,23 +34,14 @@ export function TaskList({
   reorderEnabled = false,
   reorderDisabled = false,
   onMove = () => undefined,
-  onMoveBefore = () => undefined,
+  onMoveTo = () => undefined,
 }: TaskListProps) {
-  let draggedId: string | null = null;
+  const dragReorder = useDragReorder(onMoveTo, !reorderEnabled || reorderDisabled);
   const reorderProps = (task: TaskWithProject) =>
     reorderEnabled
       ? {
-          draggable: !reorderDisabled,
-          onDragStart: () => {
-            draggedId = task.id;
-          },
-          onDragOver: (event: React.DragEvent<HTMLLIElement>) => {
-            event.preventDefault();
-          },
-          onDrop: () => {
-            if (draggedId !== null && draggedId !== task.id) onMoveBefore(draggedId, task.id);
-            draggedId = null;
-          },
+          ...dragReorder.dropProps(task.id),
+          isDropTarget: dragReorder.dropTargetId === task.id,
           reorderHandle: (
             <ReorderHandle
               label={task.title}
@@ -60,6 +52,7 @@ export function TaskList({
               onMoveDown={() => {
                 onMove(task.id, 1);
               }}
+              dragHandleProps={dragReorder.handleProps(task.id)}
             />
           ),
         }

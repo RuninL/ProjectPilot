@@ -234,7 +234,7 @@ export function TaskWorkspace({ projectId, canCreate, createHint }: TaskWorkspac
           reorderEnabled={savedOrder.mode !== 'dynamic'}
           reorderDisabled={reorderDisabled}
           onMove={savedOrder.move}
-          onMoveBefore={savedOrder.moveBefore}
+          onMoveTo={savedOrder.moveTo}
         />
       )}
 

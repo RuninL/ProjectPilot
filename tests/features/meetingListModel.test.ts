@@ -54,6 +54,10 @@ it('merges expected and materialized occurrences without duplicates', () => {
     '2026-08-10',
   );
   expect(occurrences.map((item) => item.date)).toEqual(['2026-08-01', '2026-08-09']);
+  expect(occurrences.map((item) => item.id)).toEqual([
+    'occurrence:rule:2026-08-01',
+    'occurrence:rule:2026-08-08',
+  ]);
   expect(occurrences[1]?.meeting_url).toBe('https://meet.example.com/series');
 });
 

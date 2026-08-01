@@ -409,7 +409,7 @@ function validateSnapshot(snapshot: DatabaseSnapshot): void {
 
   for (const meeting of snapshot.meetings) {
     assertNullableReference(meeting.project_id, projectIds, `会议 ${meeting.id} 的项目`);
-    if (meeting.meeting_url !== null && !isStorableWebAddress(meeting.meeting_url)) {
+    if (meeting.meeting_url != null && !isStorableWebAddress(meeting.meeting_url)) {
       throw validationError(`会议 ${meeting.id} 的链接不安全或无效`);
     }
   }
@@ -442,7 +442,7 @@ function validateSnapshot(snapshot: DatabaseSnapshot): void {
     if (rule.project_id !== null) {
       assertReference(rule.project_id, projectIds, `周期规则 ${rule.id} 的项目`);
     }
-    if (rule.meeting_url !== null && !isStorableWebAddress(rule.meeting_url)) {
+    if (rule.meeting_url != null && !isStorableWebAddress(rule.meeting_url)) {
       throw validationError(`周期规则 ${rule.id} 的会议链接不安全或无效`);
     }
   }

@@ -1,4 +1,5 @@
 import { ArrowDown, ArrowUp, GripVertical } from 'lucide-react';
+import type { DragEventHandler } from 'react';
 import { Button } from '@/components/ui/button';
 
 interface ReorderHandleProps {
@@ -6,12 +7,29 @@ interface ReorderHandleProps {
   disabled: boolean;
   onMoveUp: () => void;
   onMoveDown: () => void;
+  dragHandleProps?: {
+    draggable: boolean;
+    onDragStart: DragEventHandler<HTMLElement>;
+    onDragEnd: DragEventHandler<HTMLElement>;
+  };
 }
 
-export function ReorderHandle({ label, disabled, onMoveUp, onMoveDown }: ReorderHandleProps) {
+export function ReorderHandle({
+  label,
+  disabled,
+  onMoveUp,
+  onMoveDown,
+  dragHandleProps,
+}: ReorderHandleProps) {
   return (
     <div className="flex items-center gap-1" aria-label={`${label} 排序操作`}>
-      <GripVertical className="h-4 w-4 text-muted-foreground" aria-hidden />
+      <span
+        className="cursor-grab touch-none text-muted-foreground active:cursor-grabbing"
+        aria-label={`拖动排序 ${label}`}
+        {...dragHandleProps}
+      >
+        <GripVertical className="h-4 w-4" aria-hidden />
+      </span>
       <Button
         type="button"
         variant="ghost"

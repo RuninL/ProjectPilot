@@ -12,6 +12,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { formatDisplay } from '@/lib/date';
+import { cn } from '@/lib/cn';
 import { PROJECT_STATUS_LABELS } from '@/lib/labels';
 import { formatProgress, type ProjectProgress } from '@/services/projectProgress';
 import type { Project } from '@/types';
@@ -25,10 +26,9 @@ interface ProjectListItemProps {
   onDelete: (project: Project) => void;
   participantNames?: readonly string[];
   reorderHandle?: ReactNode;
-  draggable?: boolean;
-  onDragStart?: DragEventHandler<HTMLLIElement>;
   onDragOver?: DragEventHandler<HTMLLIElement>;
   onDrop?: DragEventHandler<HTMLLIElement>;
+  isDropTarget?: boolean;
 }
 
 /** One row of the project list: identity, dates, completion rate and actions. */
@@ -41,19 +41,19 @@ export function ProjectListItem({
   onDelete,
   participantNames = [],
   reorderHandle,
-  draggable = false,
-  onDragStart,
   onDragOver,
   onDrop,
+  isDropTarget = false,
 }: ProjectListItemProps) {
   const archived = project.archived_at !== null;
   const rate = progress ?? { total: 0, done: 0, percent: 0 };
 
   return (
     <li
-      className="flex items-center gap-4 rounded-lg border bg-card p-4"
-      draggable={draggable}
-      onDragStart={onDragStart}
+      className={cn(
+        'flex items-center gap-4 rounded-lg border bg-card p-4',
+        isDropTarget && 'border-primary ring-1 ring-primary',
+      )}
       onDragOver={onDragOver}
       onDrop={onDrop}
     >

@@ -12,6 +12,7 @@ import { Input } from '@/components/ui/input';
 import { PageHeader } from '@/components/common/PageHeader';
 import { ReorderHandle } from '@/features/sorting/ReorderHandle';
 import { SavedOrderControls } from '@/features/sorting/SavedOrderControls';
+import { useDragReorder } from '@/features/sorting/useDragReorder';
 import { useSavedListOrder } from '@/features/sorting/useSavedListOrder';
 import {
   Dialog,
@@ -101,7 +102,6 @@ export function MeetingsPage() {
   const [linkFilter, setLinkFilter] = useState<'all' | 'with' | 'without'>('all');
   const [range, setRange] = useState<MeetingRange>('future');
   const [timeSort, setTimeSort] = useState<MeetingTimeSort>('time_asc');
-  const [draggedId, setDraggedId] = useState<string | null>(null);
   const [searchParams] = useSearchParams();
 
   useEffect(() => {
@@ -180,6 +180,10 @@ export function MeetingsPage() {
     linkFilter !== 'all' ||
     range !== 'all';
   const reorderReason = reorderDisabled ? '清除搜索或筛选后可调整自定义顺序' : null;
+  const dragReorder = useDragReorder(
+    savedOrder.moveTo,
+    savedOrder.mode === 'dynamic' || reorderDisabled,
+  );
   const rulesById = useMemo(() => new Map(rules.map((rule) => [rule.id, rule])), [rules]);
 
   const projectName = useMemo(() => {
@@ -459,20 +463,12 @@ export function MeetingsPage() {
             return (
               <li
                 key={occurrence.id}
-                draggable={manual && !reorderDisabled}
-                onDragStart={() => {
-                  setDraggedId(occurrence.id);
-                }}
-                onDragOver={(event) => {
-                  if (manual && !reorderDisabled) event.preventDefault();
-                }}
-                onDrop={() => {
-                  if (draggedId !== null && draggedId !== occurrence.id) {
-                    savedOrder.moveBefore(draggedId, occurrence.id);
-                  }
-                  setDraggedId(null);
-                }}
-                className="flex flex-wrap items-center justify-between gap-3 p-4"
+                {...dragReorder.dropProps(occurrence.id)}
+                className={`flex flex-wrap items-center justify-between gap-3 p-4 ${
+                  dragReorder.dropTargetId === occurrence.id
+                    ? 'border-primary ring-1 ring-inset ring-primary'
+                    : ''
+                }`}
               >
                 <div className="min-w-0">
                   <div className="flex flex-wrap items-center gap-2">
@@ -516,6 +512,7 @@ export function MeetingsPage() {
                       onMoveDown={() => {
                         savedOrder.move(occurrence.id, 1);
                       }}
+                      dragHandleProps={dragReorder.handleProps(occurrence.id)}
                     />
                   )}
                   {meeting !== null && (

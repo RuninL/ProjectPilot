@@ -15,6 +15,7 @@ import { ProjectForm } from '../components/ProjectForm';
 import { ProjectListItem } from '../components/ProjectListItem';
 import { ReorderHandle } from '@/features/sorting/ReorderHandle';
 import { SavedOrderControls } from '@/features/sorting/SavedOrderControls';
+import { useDragReorder } from '@/features/sorting/useDragReorder';
 import { useSavedListOrder } from '@/features/sorting/useSavedListOrder';
 
 /** Project list: search, filter, sort, create/edit, archive/restore, permanent delete. */
@@ -44,13 +45,16 @@ export function ProjectListPage() {
     Readonly<Record<string, readonly string[]>>
   >({});
   const savedOrder = useSavedListOrder('projects', '', projects);
-  const [draggedId, setDraggedId] = useState<string | null>(null);
   const reorderDisabled =
     filters.search.trim() !== '' ||
     filters.status !== null ||
     filters.participantIds.length > 0 ||
     filters.scope !== 'active';
   const reorderReason = reorderDisabled ? '清除搜索或筛选后可调整自定义顺序' : null;
+  const dragReorder = useDragReorder(
+    savedOrder.moveTo,
+    savedOrder.mode === 'dynamic' || reorderDisabled,
+  );
 
   useEffect(() => {
     void loadProjects();
@@ -183,19 +187,8 @@ export function ProjectListPage() {
               }}
               onDelete={setDeleteTarget}
               participantNames={participantsByProject[project.id] ?? []}
-              draggable={savedOrder.mode !== 'dynamic' && !reorderDisabled}
-              onDragStart={() => {
-                setDraggedId(project.id);
-              }}
-              onDragOver={(event) => {
-                event.preventDefault();
-              }}
-              onDrop={() => {
-                if (draggedId !== null && draggedId !== project.id) {
-                  savedOrder.moveBefore(draggedId, project.id);
-                }
-                setDraggedId(null);
-              }}
+              {...dragReorder.dropProps(project.id)}
+              isDropTarget={dragReorder.dropTargetId === project.id}
               reorderHandle={
                 savedOrder.mode === 'dynamic' ? undefined : (
                   <ReorderHandle
@@ -207,6 +200,7 @@ export function ProjectListPage() {
                     onMoveDown={() => {
                       savedOrder.move(project.id, 1);
                     }}
+                    dragHandleProps={dragReorder.handleProps(project.id)}
                   />
                 )
               }
