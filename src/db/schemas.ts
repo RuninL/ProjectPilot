@@ -103,6 +103,8 @@ export const taskRowSchema = z.object({
   // Added by migration 0002. Audit timestamps, not business dates.
   completed_at: z.string().nullable(),
   archived_at: z.string().nullable(),
+  // Added by migration 0014: why the task is archived ('manual' | 'project').
+  archived_source: z.enum(['manual', 'project']).nullable().default(null),
   source_meeting_id: z.string().nullable(),
   source_rule_id: z.string().nullable().default(null),
   source_occurrence_date: dateString.nullable().default(null),

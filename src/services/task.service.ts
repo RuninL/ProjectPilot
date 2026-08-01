@@ -120,6 +120,7 @@ export function createTaskService(deps: TaskServiceDeps) {
         actual_hours: parsed.actual_hours,
         completed_at: rules.completed_at,
         archived_at: null,
+        archived_source: null,
         source_meeting_id: null,
         source_rule_id: null,
         source_occurrence_date: null,

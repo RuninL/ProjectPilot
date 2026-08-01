@@ -75,6 +75,7 @@ async function loadMonthData(
       actual_hours: null,
       completed_at: null,
       archived_at: null,
+      archived_source: null,
       source_meeting_id: null,
       source_rule_id: rule.id,
       source_occurrence_date: occurrence.occurrenceDate,

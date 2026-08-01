@@ -70,9 +70,9 @@ const INSERTS = {
      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
   task: `INSERT INTO tasks
     (id, project_id, parent_task_id, title, description, status, priority, start_date, due_date,
-     progress, estimated_hours, actual_hours, completed_at, archived_at, source_meeting_id,
-     source_rule_id, source_occurrence_date, is_sample, created_at, updated_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+     progress, estimated_hours, actual_hours, completed_at, archived_at, archived_source,
+     source_meeting_id, source_rule_id, source_occurrence_date, is_sample, created_at, updated_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
   dependency: `INSERT INTO task_dependencies
     (id, predecessor_id, successor_id, dep_type, lag_days, created_at, updated_at)
     VALUES (?, ?, ?, ?, ?, ?, ?)`,
@@ -298,6 +298,7 @@ function taskStatement(row: Task): BatchStatement {
       row.actual_hours,
       row.completed_at,
       row.archived_at,
+      row.archived_source,
       row.source_meeting_id,
       row.source_rule_id,
       row.source_occurrence_date,

@@ -6,7 +6,11 @@ import {
   createTaskProgressRepository,
   createTaskRepository,
 } from '@/repositories';
-import { applySavedOrder, createNamedListOrderService } from '@/services/namedListOrder.service';
+import {
+  applySavedOrder,
+  createNamedListOrderService,
+  getSectionIds,
+} from '@/services/namedListOrder.service';
 import { createTaskChecklistService } from '@/services/taskChecklist.service';
 import { createTaskProgressService } from '@/services/taskProgress.service';
 import { makeProject, makeTask } from '../helpers/fixtures';
@@ -62,6 +66,47 @@ describe('v1.3 productivity services', () => {
     ]);
     await service.delete(created.id);
     expect(await service.list('projects')).toEqual([]);
+  });
+
+  it('stores multi-section orders under one name and keeps legacy arrays readable', async () => {
+    const repository = createNamedListOrderRepository(db.executor);
+    const service = createNamedListOrderService({
+      orders: repository,
+      runBatch: (statements) => Promise.resolve(db.runBatch(statements)),
+    });
+    const created = await service.create({
+      context: 'projects',
+      context_id: '',
+      name: '项目排序1',
+      sections: { active: ['p2', 'p1'], archived: ['p3'], all: ['p2', 'p3', 'p1'] },
+      is_default: false,
+    });
+    expect(created.sections['active']).toEqual(['p2', 'p1']);
+    expect(created.sections['archived']).toEqual(['p3']);
+    expect(created.sections['all']).toEqual(['p2', 'p3', 'p1']);
+
+    // Updating one section must not drop the others.
+    const updated = await service.update(created.id, {
+      context: 'projects',
+      context_id: '',
+      name: '项目排序1',
+      sections: { ...created.sections, archived: ['p3', 'p4'] },
+      is_default: false,
+    });
+    expect(updated.sections['all']).toEqual(['p2', 'p3', 'p1']);
+    expect(updated.sections['archived']).toEqual(['p3', 'p4']);
+
+    // Legacy single-array payloads land in the '' section and act as fallback.
+    const legacy = await service.create({
+      context: 'tasks',
+      context_id: '',
+      name: '任务排序1',
+      ordered_ids: ['t2', 't1'],
+      is_default: false,
+    });
+    expect(legacy.sections['']).toEqual(['t2', 't1']);
+    expect(getSectionIds(legacy.sections, 'active')).toEqual(['t2', 't1']);
+    expect(getSectionIds(updated.sections, 'active')).toEqual(['p2', 'p1']);
   });
 
   it('recalculates task progress and rejects totals above 100%', async () => {

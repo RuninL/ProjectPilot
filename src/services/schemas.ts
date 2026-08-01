@@ -319,15 +319,29 @@ export const projectLinkInputSchema = z
     }
   });
 
-export const namedListOrderInputSchema = z.object({
-  context: namedListOrderContextEnum,
-  context_id: z.string().trim().max(160).default(''),
-  name: z.string().trim().min(1, '排序名称不能为空').max(120, '排序名称不能超过 120 个字符'),
-  ordered_ids: z.array(z.string().min(1)).max(10000),
-  is_default: z.boolean().default(false),
-});
-
 export const orderedIdsSchema = z.array(z.string().min(1)).max(10000);
+
+/**
+ * One named order can carry several sub-orders keyed by section (for example
+ * projects: active / archived / all). The legacy single-list payload maps to
+ * the '' section.
+ */
+export const orderSectionsSchema = z.record(z.string().max(80), orderedIdsSchema);
+
+export const namedListOrderInputSchema = z
+  .object({
+    context: namedListOrderContextEnum,
+    context_id: z.string().trim().max(160).default(''),
+    name: z.string().trim().min(1, '排序名称不能为空').max(120, '排序名称不能超过 120 个字符'),
+    /** Legacy single-section payload; normalized to `sections['']`. */
+    ordered_ids: orderedIdsSchema.optional(),
+    sections: orderSectionsSchema.optional(),
+    is_default: z.boolean().default(false),
+  })
+  .refine((value) => value.ordered_ids !== undefined || value.sections !== undefined, {
+    message: '保存的排序缺少顺序内容',
+    path: ['sections'],
+  });
 
 export const taskProgressUpdateInputSchema = z.object({
   title: z.string().trim().min(1, '进展标题不能为空').max(160, '进展标题不能超过 160 个字符'),

@@ -9,9 +9,19 @@ import {
   type NamedListOrderRepository,
 } from '@/repositories';
 import type { NamedListOrder, NamedListOrderContext } from '@/types';
-import { namedListOrderInputSchema, orderedIdsSchema, type NamedListOrderInput } from './schemas';
+import {
+  namedListOrderInputSchema,
+  orderSectionsSchema,
+  orderedIdsSchema,
+  type NamedListOrderInput,
+} from './schemas';
+
+export type OrderSections = Record<string, string[]>;
 
 export interface SavedListOrder extends Omit<NamedListOrder, 'ordered_ids_json'> {
+  /** Sub-orders keyed by section; the legacy single list lives in section ''. */
+  sections: OrderSections;
+  /** Legacy single-section view, kept for single-list contexts. */
   ordered_ids: string[];
 }
 
@@ -36,11 +46,40 @@ function parseOrder(row: NamedListOrder): SavedListOrder {
   } catch {
     raw = [];
   }
-  const parsed = orderedIdsSchema.safeParse(raw);
+  let sections: OrderSections = {};
+  const legacy = orderedIdsSchema.safeParse(raw);
+  if (legacy.success) {
+    sections = { '': legacy.data };
+  } else if (typeof raw === 'object' && raw !== null && 'sections' in raw) {
+    const parsed = orderSectionsSchema.safeParse((raw as { sections: unknown }).sections);
+    if (parsed.success) sections = parsed.data;
+  }
   return {
     ...row,
-    ordered_ids: parsed.success ? parsed.data : [],
+    sections,
+    ordered_ids: sections[''] ?? [],
   };
+}
+
+/** Resolve a section's ids, falling back to the legacy '' section. */
+export function getSectionIds(sections: Readonly<OrderSections>, section: string): string[] {
+  return sections[section] ?? sections[''] ?? [];
+}
+
+/**
+ * Serialize sections. A payload that only uses the legacy '' section keeps the
+ * plain-array format so older exports/backups stay round-trippable.
+ */
+function serializeSections(sections: Readonly<OrderSections>): string {
+  const keys = Object.keys(sections);
+  if (keys.every((key) => key === '')) {
+    return JSON.stringify(sections[''] ?? []);
+  }
+  return JSON.stringify({ v: 2, sections });
+}
+
+function normalizeInputSections(parsed: NamedListOrderInput): OrderSections {
+  return parsed.sections ?? { '': parsed.ordered_ids ?? [] };
 }
 
 function validateContextId(context: NamedListOrderContext, contextId: string): void {
@@ -118,7 +157,7 @@ export function createNamedListOrderService(deps: NamedListOrderServiceDeps) {
         context: parsed.context,
         context_id: parsed.context_id,
         name: parsed.name,
-        ordered_ids_json: JSON.stringify(parsed.ordered_ids),
+        ordered_ids_json: serializeSections(normalizeInputSections(parsed)),
         is_default: parsed.is_default ? 1 : 0,
         created_at: now,
         updated_at: now,
@@ -144,7 +183,7 @@ export function createNamedListOrderService(deps: NamedListOrderServiceDeps) {
       const now = nowIso();
       const fields = {
         name: parsed.name,
-        ordered_ids_json: JSON.stringify(parsed.ordered_ids),
+        ordered_ids_json: serializeSections(normalizeInputSections(parsed)),
         is_default: parsed.is_default ? (1 as const) : (0 as const),
       };
       const statements = parsed.is_default

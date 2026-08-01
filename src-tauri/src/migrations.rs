@@ -82,5 +82,11 @@ pub fn migrations() -> Vec<Migration> {
             sql: include_str!("../migrations/0013_relax_meeting_urls.sql"),
             kind: MigrationKind::Up,
         },
+        Migration {
+            version: 14,
+            description: "sectioned named orders and task archive provenance",
+            sql: include_str!("../migrations/0014_sort_sections_task_archive.sql"),
+            kind: MigrationKind::Up,
+        },
     ]
 }

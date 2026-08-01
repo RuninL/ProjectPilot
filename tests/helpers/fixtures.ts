@@ -47,6 +47,7 @@ export function makeTask(overrides: Partial<Task> = {}): Task {
     actual_hours: null,
     completed_at: null,
     archived_at: null,
+    archived_source: null,
     source_meeting_id: null,
     source_rule_id: null,
     source_occurrence_date: null,

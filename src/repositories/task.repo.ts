@@ -26,6 +26,7 @@ const UPDATABLE = [
   'actual_hours',
   'completed_at',
   'archived_at',
+  'archived_source',
   'source_meeting_id',
   'source_rule_id',
   'source_occurrence_date',
@@ -33,11 +34,11 @@ const UPDATABLE = [
 
 const INSERT_COLUMNS = `(id, project_id, parent_task_id, title, description, status, priority,
      start_date, due_date, progress, estimated_hours, actual_hours,
-     completed_at, archived_at, source_meeting_id, source_rule_id, source_occurrence_date,
-     is_sample, created_at, updated_at)`;
+     completed_at, archived_at, archived_source, source_meeting_id, source_rule_id,
+     source_occurrence_date, is_sample, created_at, updated_at)`;
 
 const INSERT_SQL = `INSERT INTO tasks ${INSERT_COLUMNS}
-   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`;
+   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`;
 
 /**
  * Same insert, but it inserts nothing unless the source action item is still
@@ -48,7 +49,7 @@ const INSERT_SQL = `INSERT INTO tasks ${INSERT_COLUMNS}
  * after the fact could not achieve this — by then the batch has committed.
  */
 const CONVERSION_INSERT_SQL = `INSERT INTO tasks ${INSERT_COLUMNS}
-   SELECT ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
+   SELECT ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
     WHERE EXISTS (SELECT 1 FROM action_items WHERE id = ? AND converted_at IS NULL)`;
 
 function insertParams(task: Task): unknown[] {
@@ -67,6 +68,7 @@ function insertParams(task: Task): unknown[] {
     task.actual_hours,
     task.completed_at,
     task.archived_at,
+    task.archived_source,
     task.source_meeting_id,
     task.source_rule_id,
     task.source_occurrence_date,
@@ -78,6 +80,14 @@ function insertParams(task: Task): unknown[] {
 
 export type TaskSort = 'due_date' | 'priority' | 'created_at' | 'title';
 
+/**
+ * Three task views:
+ *  - active:   not archived AND the owning project is not archived;
+ *  - archived: archived (manually or by a project archive);
+ *  - all:      every task.
+ */
+export type TaskScope = 'active' | 'archived' | 'all';
+
 export interface TaskQuery {
   projectIds?: readonly string[];
   statuses?: readonly TaskStatus[];
@@ -87,6 +97,8 @@ export interface TaskQuery {
   dueTo?: string;
   /** Archived tasks are hidden everywhere unless explicitly requested. */
   includeArchived?: boolean;
+  /** Overrides `includeArchived` when present. */
+  scope?: TaskScope;
   sort?: TaskSort;
   participantIds?: readonly string[];
 }
@@ -104,10 +116,21 @@ const TASK_ORDER_BY: Record<TaskSort, string> = {
 
 function taskConditions(query: TaskQuery): SqlFragment[] {
   const search = query.search?.trim() ?? '';
+  const scopeCondition = (): SqlFragment => {
+    if (query.scope === 'active') {
+      // Excludes archived tasks AND live tasks whose project is archived.
+      return { sql: 't.archived_at IS NULL AND p.archived_at IS NULL', params: [] };
+    }
+    if (query.scope === 'archived') {
+      return { sql: 't.archived_at IS NOT NULL', params: [] };
+    }
+    if (query.scope === 'all' || query.includeArchived === true) {
+      return { sql: '', params: [] };
+    }
+    return { sql: 't.archived_at IS NULL', params: [] };
+  };
   return [
-    query.includeArchived === true
-      ? { sql: '', params: [] }
-      : { sql: 't.archived_at IS NULL', params: [] },
+    scopeCondition(),
     inClause('t.project_id', query.projectIds ?? []),
     inClause('t.status', query.statuses ?? []),
     inClause('t.priority', query.priorities ?? []),
@@ -288,6 +311,40 @@ export function createTaskRepository(db: SqlExecutor) {
     /** Same update, as a statement so a bulk edit is one transaction. */
     buildUpdateStatement(id: string, patch: Partial<Task>, now: string): BatchStatement | null {
       return buildUpdate('tasks', UPDATABLE, patch, id, now);
+    },
+
+    /** Archive every live task of a project — the cascade of a project archive. */
+    buildArchiveProjectTasks(projectId: string, now: string): BatchStatement {
+      return {
+        sql: `UPDATE tasks
+                 SET archived_at = ?, archived_source = 'project', updated_at = ?
+               WHERE project_id = ? AND archived_at IS NULL`,
+        params: [now, now, projectId],
+      };
+    },
+
+    /**
+     * Restore only the tasks a project archive auto-archived. Manually
+     * archived tasks (before or after the project archive) keep
+     * archived_source = 'manual' and are deliberately left untouched.
+     */
+    buildRestoreProjectArchivedTasks(projectId: string, now: string): BatchStatement {
+      return {
+        sql: `UPDATE tasks
+                 SET archived_at = NULL, archived_source = NULL, updated_at = ?
+               WHERE project_id = ? AND archived_at IS NOT NULL AND archived_source = 'project'`,
+        params: [now, projectId],
+      };
+    },
+
+    /** How many tasks a "restore project and tasks" choice would restore. */
+    async countProjectArchivedTasks(projectId: string): Promise<number> {
+      const rows = await db.select(
+        `SELECT COUNT(*) AS n FROM tasks
+          WHERE project_id = ? AND archived_at IS NOT NULL AND archived_source = 'project'`,
+        [projectId],
+      );
+      return readCount(rows);
     },
 
     async deleteById(id: string): Promise<number> {

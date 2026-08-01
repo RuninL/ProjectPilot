@@ -9,17 +9,14 @@ import {
 } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import type { SavedListOrderController } from './useSavedListOrder';
+import type { SavedOrderBaseController } from './useSavedListOrder';
 
-interface SavedOrderControlsProps<T extends { id: string }> {
-  controller: SavedListOrderController<T>;
+interface SavedOrderControlsProps {
+  controller: SavedOrderBaseController;
   disabledReason: string | null;
 }
 
-export function SavedOrderControls<T extends { id: string }>({
-  controller,
-  disabledReason,
-}: SavedOrderControlsProps<T>) {
+export function SavedOrderControls({ controller, disabledReason }: SavedOrderControlsProps) {
   const [dialog, setDialog] = useState<'save' | 'rename' | null>(null);
   const [name, setName] = useState('');
   const [isDefault, setIsDefault] = useState(false);
