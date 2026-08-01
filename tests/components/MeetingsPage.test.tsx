@@ -111,11 +111,7 @@ describe('MeetingsPage', () => {
         sections: Record<string, string[]>;
       };
       expect(parsed.v).toBe(2);
-      expect(parsed.sections['standalone.all']).toEqual([
-        'meeting:m2',
-        'meeting:m3',
-        'meeting:m1',
-      ]);
+      expect(parsed.sections['standalone.all']).toEqual(['meeting:m2', 'meeting:m3', 'meeting:m1']);
       expect(parsed.sections['recurringSeries']).toEqual([]);
     });
   });

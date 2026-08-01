@@ -42,9 +42,9 @@ describe('moveVisibleIdToTarget', () => {
   });
 
   it('matches a plain move when every item is visible', () => {
-    expect(
-      moveVisibleIdToTarget(['A', 'B', 'C'], ['A', 'B', 'C'], 'A', 'C'),
-    ).toEqual(moveIdToTarget(['A', 'B', 'C'], 'A', 'C'));
+    expect(moveVisibleIdToTarget(['A', 'B', 'C'], ['A', 'B', 'C'], 'A', 'C')).toEqual(
+      moveIdToTarget(['A', 'B', 'C'], 'A', 'C'),
+    );
   });
 
   it('ignores drops on hidden or unknown targets', () => {

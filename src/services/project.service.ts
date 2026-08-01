@@ -99,9 +99,7 @@ export function createProjectService(deps: ProjectServiceDeps) {
         return;
       }
       const now = nowIso();
-      const statements: BatchStatement[] = [
-        deps.tasks.buildArchiveProjectTasks(id, now),
-      ];
+      const statements: BatchStatement[] = [deps.tasks.buildArchiveProjectTasks(id, now)];
       const projectStatement = deps.projects.buildUpdateStatement(
         id,
         { archived_at: now, status: 'archived' },
@@ -173,5 +171,9 @@ export type ProjectService = ReturnType<typeof createProjectService>;
 
 export async function getProjectService(): Promise<ProjectService> {
   const repos = await getRepositories();
-  return createProjectService({ projects: repos.projects, tasks: repos.tasks, runBatch: executeBatch });
+  return createProjectService({
+    projects: repos.projects,
+    tasks: repos.tasks,
+    runBatch: executeBatch,
+  });
 }

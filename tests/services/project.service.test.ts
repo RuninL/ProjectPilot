@@ -131,9 +131,7 @@ describe('archive and restore', () => {
     const tasks = createTaskRepository(db.executor);
     const project = await service.createProject(input());
     await tasks.insert(makeTask({ id: 'parent', project_id: project.id }));
-    await tasks.insert(
-      makeTask({ id: 'child', project_id: project.id, parent_task_id: 'parent' }),
-    );
+    await tasks.insert(makeTask({ id: 'child', project_id: project.id, parent_task_id: 'parent' }));
     await tasks.insert(
       makeTask({
         id: 'manual',
@@ -189,9 +187,7 @@ describe('archive and restore', () => {
       { archived_at: null, archived_source: null },
       '2026-02-01T00:00:00.000Z',
     );
-    await tasks.insert(
-      makeTask({ id: 'auto2', project_id: project.id }),
-    );
+    await tasks.insert(makeTask({ id: 'auto2', project_id: project.id }));
     await db.executor.execute(
       `UPDATE tasks SET archived_at = '2026-02-02T00:00:00.000Z', archived_source = 'project'
         WHERE id = 'auto2'`,

@@ -254,7 +254,9 @@ describe('ProjectListPage', () => {
     await user.click(screen.getByRole('button', { name: '已归档项目 的操作' }));
     await user.click(await screen.findByRole('menuitem', { name: '恢复项目' }));
 
-    expect(await screen.findByText('是否同时恢复因该项目归档而自动归档的任务？')).toBeInTheDocument();
+    expect(
+      await screen.findByText('是否同时恢复因该项目归档而自动归档的任务？'),
+    ).toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: '仅恢复项目' }));
 
     await waitFor(async () => {

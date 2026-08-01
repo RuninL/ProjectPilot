@@ -51,7 +51,7 @@ function parseOrder(row: NamedListOrder): SavedListOrder {
   if (legacy.success) {
     sections = { '': legacy.data };
   } else if (typeof raw === 'object' && raw !== null && 'sections' in raw) {
-    const parsed = orderSectionsSchema.safeParse((raw as { sections: unknown }).sections);
+    const parsed = orderSectionsSchema.safeParse(raw.sections);
     if (parsed.success) sections = parsed.data;
   }
   return {

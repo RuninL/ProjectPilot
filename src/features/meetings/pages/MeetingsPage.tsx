@@ -450,7 +450,9 @@ export function MeetingsPage() {
       {filteredOccurrences.length === 0 ? (
         <EmptyState
           title={
-            meetings.length === 0 && rules.length === 0 ? '还没有会议记录' : '没有符合条件的独立会议'
+            meetings.length === 0 && rules.length === 0
+              ? '还没有会议记录'
+              : '没有符合条件的独立会议'
           }
           description={
             meetings.length === 0 && rules.length === 0
