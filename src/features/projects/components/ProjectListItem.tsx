@@ -1,5 +1,6 @@
 import { ArchiveRestore, Archive, MoreHorizontal, Pencil, Trash2 } from 'lucide-react';
 import { Link } from 'react-router-dom';
+import type { DragEventHandler, ReactNode } from 'react';
 import { SampleBadge } from '@/components/common/SampleBadge';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -23,6 +24,11 @@ interface ProjectListItemProps {
   onRestore: (project: Project) => void;
   onDelete: (project: Project) => void;
   participantNames?: readonly string[];
+  reorderHandle?: ReactNode;
+  draggable?: boolean;
+  onDragStart?: DragEventHandler<HTMLLIElement>;
+  onDragOver?: DragEventHandler<HTMLLIElement>;
+  onDrop?: DragEventHandler<HTMLLIElement>;
 }
 
 /** One row of the project list: identity, dates, completion rate and actions. */
@@ -34,12 +40,24 @@ export function ProjectListItem({
   onRestore,
   onDelete,
   participantNames = [],
+  reorderHandle,
+  draggable = false,
+  onDragStart,
+  onDragOver,
+  onDrop,
 }: ProjectListItemProps) {
   const archived = project.archived_at !== null;
   const rate = progress ?? { total: 0, done: 0, percent: 0 };
 
   return (
-    <li className="flex items-center gap-4 rounded-lg border bg-card p-4">
+    <li
+      className="flex items-center gap-4 rounded-lg border bg-card p-4"
+      draggable={draggable}
+      onDragStart={onDragStart}
+      onDragOver={onDragOver}
+      onDrop={onDrop}
+    >
+      {reorderHandle}
       <span
         className="h-10 w-1.5 shrink-0 rounded-full"
         style={{ backgroundColor: project.color }}

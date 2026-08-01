@@ -13,6 +13,9 @@ import { DeleteProjectDialog } from '../components/DeleteProjectDialog';
 import { ProjectFilters } from '../components/ProjectFilters';
 import { ProjectForm } from '../components/ProjectForm';
 import { ProjectListItem } from '../components/ProjectListItem';
+import { ReorderHandle } from '@/features/sorting/ReorderHandle';
+import { SavedOrderControls } from '@/features/sorting/SavedOrderControls';
+import { useSavedListOrder } from '@/features/sorting/useSavedListOrder';
 
 /** Project list: search, filter, sort, create/edit, archive/restore, permanent delete. */
 export function ProjectListPage() {
@@ -40,6 +43,14 @@ export function ProjectListPage() {
   const [participantsByProject, setParticipantsByProject] = useState<
     Readonly<Record<string, readonly string[]>>
   >({});
+  const savedOrder = useSavedListOrder('projects', '', projects);
+  const [draggedId, setDraggedId] = useState<string | null>(null);
+  const reorderDisabled =
+    filters.search.trim() !== '' ||
+    filters.status !== null ||
+    filters.participantIds.length > 0 ||
+    filters.scope !== 'active';
+  const reorderReason = reorderDisabled ? '清除搜索或筛选后可调整自定义顺序' : null;
 
   useEffect(() => {
     void loadProjects();
@@ -131,6 +142,9 @@ export function ProjectListPage() {
             setFilters({ participantIds });
           }}
         />
+        <div className="mt-3">
+          <SavedOrderControls controller={savedOrder} disabledReason={reorderReason} />
+        </div>
       </div>
 
       {actionError !== null && (
@@ -157,7 +171,7 @@ export function ProjectListPage() {
         />
       ) : (
         <ul className="flex flex-col gap-3">
-          {projects.map((project) => (
+          {savedOrder.displayedItems.map((project) => (
             <ProjectListItem
               key={project.id}
               project={project}
@@ -169,6 +183,25 @@ export function ProjectListPage() {
               }}
               onDelete={setDeleteTarget}
               participantNames={participantsByProject[project.id] ?? []}
+              draggable={savedOrder.mode !== 'dynamic' && !reorderDisabled}
+              onDragStart={() => setDraggedId(project.id)}
+              onDragOver={(event) => event.preventDefault()}
+              onDrop={() => {
+                if (draggedId !== null && draggedId !== project.id) {
+                  savedOrder.moveBefore(draggedId, project.id);
+                }
+                setDraggedId(null);
+              }}
+              reorderHandle={
+                savedOrder.mode === 'dynamic' ? undefined : (
+                  <ReorderHandle
+                    label={project.name}
+                    disabled={reorderDisabled}
+                    onMoveUp={() => savedOrder.move(project.id, -1)}
+                    onMoveDown={() => savedOrder.move(project.id, 1)}
+                  />
+                )
+              }
             />
           ))}
         </ul>

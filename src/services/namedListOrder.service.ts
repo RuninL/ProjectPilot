@@ -5,14 +5,11 @@ import { AppError } from '@/lib/errors';
 import { newId } from '@/lib/uuid';
 import {
   getRepositories,
+  type AppSettingRepository,
   type NamedListOrderRepository,
 } from '@/repositories';
 import type { NamedListOrder, NamedListOrderContext } from '@/types';
-import {
-  namedListOrderInputSchema,
-  orderedIdsSchema,
-  type NamedListOrderInput,
-} from './schemas';
+import { namedListOrderInputSchema, orderedIdsSchema, type NamedListOrderInput } from './schemas';
 
 export interface SavedListOrder extends Omit<NamedListOrder, 'ordered_ids_json'> {
   ordered_ids: string[];
@@ -20,6 +17,7 @@ export interface SavedListOrder extends Omit<NamedListOrder, 'ordered_ids_json'>
 
 export interface NamedListOrderServiceDeps {
   orders: NamedListOrderRepository;
+  appSettings?: AppSettingRepository;
   runBatch: (statements: BatchStatement[]) => Promise<number>;
 }
 
@@ -70,6 +68,8 @@ export function applySavedOrder<T extends { id: string }>(
 }
 
 export function createNamedListOrderService(deps: NamedListOrderServiceDeps) {
+  const preferenceKey = (context: NamedListOrderContext, contextId: string) =>
+    `list_order:${context}:${contextId}`;
   async function requireOrder(id: string): Promise<NamedListOrder> {
     const order = await deps.orders.findById(id);
     if (order === null) throw new AppError('not_found', '保存的排序不存在或已被删除');
@@ -91,6 +91,18 @@ export function createNamedListOrderService(deps: NamedListOrderServiceDeps) {
   }
 
   return {
+    async getLastMode(context: NamedListOrderContext, contextId = ''): Promise<string | null> {
+      return (await deps.appSettings?.get(preferenceKey(context, contextId)))?.value ?? null;
+    },
+
+    async setLastMode(
+      context: NamedListOrderContext,
+      contextId: string,
+      mode: string,
+    ): Promise<void> {
+      await deps.appSettings?.set(preferenceKey(context, contextId), mode, nowIso());
+    },
+
     async list(context: NamedListOrderContext, contextId = ''): Promise<SavedListOrder[]> {
       validateContextId(context, contextId);
       return (await deps.orders.findByContext(context, contextId)).map(parseOrder);
@@ -158,6 +170,7 @@ export async function getNamedListOrderService(): Promise<NamedListOrderService>
   const repositories = await getRepositories();
   return createNamedListOrderService({
     orders: repositories.namedListOrders,
+    appSettings: repositories.appSettings,
     runBatch: executeBatch,
   });
 }

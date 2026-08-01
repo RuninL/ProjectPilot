@@ -1,5 +1,6 @@
 import { MoreHorizontal, Pencil, Trash2 } from 'lucide-react';
 import { Link } from 'react-router-dom';
+import type { DragEventHandler, ReactNode } from 'react';
 import { SampleBadge } from '@/components/common/SampleBadge';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -30,6 +31,11 @@ interface TaskRowProps {
   onEdit: (task: TaskWithProject) => void;
   onDelete: (task: TaskWithProject) => void;
   participantNames?: readonly string[];
+  reorderHandle?: ReactNode;
+  draggable?: boolean;
+  onDragStart?: DragEventHandler<HTMLLIElement>;
+  onDragOver?: DragEventHandler<HTMLLIElement>;
+  onDrop?: DragEventHandler<HTMLLIElement>;
 }
 
 /** One task row: selection, identity, status/priority, due date and actions. */
@@ -42,6 +48,11 @@ export function TaskRow({
   onEdit,
   onDelete,
   participantNames = [],
+  reorderHandle,
+  draggable = false,
+  onDragStart,
+  onDragOver,
+  onDrop,
 }: TaskRowProps) {
   const overdue = isOverdue(task.due_date, task.status);
 
@@ -51,7 +62,12 @@ export function TaskRow({
         'flex items-center gap-3 rounded-lg border bg-card px-4 py-3',
         nested && 'ml-8',
       )}
+      draggable={draggable}
+      onDragStart={onDragStart}
+      onDragOver={onDragOver}
+      onDrop={onDrop}
     >
+      {reorderHandle}
       <Checkbox
         checked={selected}
         aria-label={`选择任务 ${task.title}`}

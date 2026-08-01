@@ -15,6 +15,8 @@ import { DeleteTaskDialog } from './DeleteTaskDialog';
 import { TaskFilters } from './TaskFilters';
 import { TaskForm } from './TaskForm';
 import { TaskList } from './TaskList';
+import { SavedOrderControls } from '@/features/sorting/SavedOrderControls';
+import { useSavedListOrder } from '@/features/sorting/useSavedListOrder';
 
 interface TaskWorkspaceProps {
   /** When set, the list is scoped to that project and the project filter is hidden. */
@@ -74,6 +76,20 @@ export function TaskWorkspace({ projectId, canCreate, createHint }: TaskWorkspac
   const [participantsByTask, setParticipantsByTask] = useState<
     Readonly<Record<string, readonly string[]>>
   >({});
+  const savedOrder = useSavedListOrder(
+    projectId === null ? 'tasks' : 'project_tasks',
+    projectId ?? '',
+    tasks,
+  );
+  const reorderDisabled =
+    search.trim() !== '' ||
+    statuses.length > 0 ||
+    priorities.length > 0 ||
+    participantIds.length > 0 ||
+    dueFrom !== null ||
+    dueTo !== null ||
+    (projectId === null && projectIds.length > 0);
+  const reorderReason = reorderDisabled ? '清除搜索或筛选后可调整自定义顺序' : null;
 
   const query = useMemo(
     () =>
@@ -168,6 +184,9 @@ export function TaskWorkspace({ projectId, canCreate, createHint }: TaskWorkspac
           onParticipantIdsChange={setParticipantIds}
           onReset={resetFilters}
         />
+        <div className="mt-3">
+          <SavedOrderControls controller={savedOrder} disabledReason={reorderReason} />
+        </div>
       </div>
 
       <BulkEditBar
@@ -197,7 +216,7 @@ export function TaskWorkspace({ projectId, canCreate, createHint }: TaskWorkspac
         />
       ) : (
         <TaskList
-          tasks={tasks}
+          tasks={savedOrder.displayedItems}
           selectedIds={visibleSelectedIds}
           showProject={projectId === null}
           onToggleSelect={toggleSelected}
@@ -212,6 +231,10 @@ export function TaskWorkspace({ projectId, canCreate, createHint }: TaskWorkspac
           }}
           onDelete={setDeleteTarget}
           participantsByTask={participantsByTask}
+          reorderEnabled={savedOrder.mode !== 'dynamic'}
+          reorderDisabled={reorderDisabled}
+          onMove={savedOrder.move}
+          onMoveBefore={savedOrder.moveBefore}
         />
       )}
 
