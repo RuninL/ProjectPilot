@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
+  PROGRESS_SEGMENT_COLORS,
+  progressSegmentColor,
   progressUpdateElementId,
   sortProgressSegments,
 } from '@/features/tasks/taskProgressSegments';
@@ -66,5 +68,20 @@ describe('task progress segments', () => {
     expect(sortProgressSegments([zero, visible])).toEqual([visible]);
     expect(visible.contribution_percent).toBe(25);
     expect(progressUpdateElementId(visible.id)).toBe('task-progress-update-visible');
+  });
+
+  it('assigns fixed theme-independent colors that differ between adjacent segments', () => {
+    const backgrounds = PROGRESS_SEGMENT_COLORS.map((color) => color.background);
+    expect(new Set(backgrounds).size).toBe(backgrounds.length);
+    for (const color of PROGRESS_SEGMENT_COLORS) {
+      expect(color.background).toMatch(/^#[0-9a-f]{6}$/);
+      expect(color.foreground).toMatch(/^#[0-9a-f]{6}$/);
+    }
+    for (let index = 0; index < 24; index += 1) {
+      expect(progressSegmentColor(index).background).not.toBe(
+        progressSegmentColor(index + 1).background,
+      );
+    }
+    expect(progressSegmentColor(PROGRESS_SEGMENT_COLORS.length)).toEqual(progressSegmentColor(0));
   });
 });

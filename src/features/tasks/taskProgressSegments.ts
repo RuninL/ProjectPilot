@@ -1,5 +1,32 @@
 import type { TaskProgressUpdate } from '@/types';
 
+export interface ProgressSegmentColor {
+  readonly background: string;
+  readonly foreground: string;
+}
+
+/**
+ * Fixed hex palette for the segmented progress bar. Deliberately independent
+ * of the CSS theme variables (`--primary` changes per theme and can collide
+ * with a hardcoded Tailwind blue), so adjacent segments stay visually
+ * distinct under every theme.
+ */
+export const PROGRESS_SEGMENT_COLORS: readonly ProgressSegmentColor[] = [
+  { background: '#2563eb', foreground: '#ffffff' },
+  { background: '#059669', foreground: '#ffffff' },
+  { background: '#d97706', foreground: '#ffffff' },
+  { background: '#7c3aed', foreground: '#ffffff' },
+  { background: '#dc2626', foreground: '#ffffff' },
+  { background: '#0891b2', foreground: '#ffffff' },
+];
+
+export function progressSegmentColor(index: number): ProgressSegmentColor {
+  const paletteIndex =
+    ((index % PROGRESS_SEGMENT_COLORS.length) + PROGRESS_SEGMENT_COLORS.length) %
+    PROGRESS_SEGMENT_COLORS.length;
+  return PROGRESS_SEGMENT_COLORS[paletteIndex];
+}
+
 export function sortProgressSegments(updates: readonly TaskProgressUpdate[]): TaskProgressUpdate[] {
   return [...updates]
     .filter((update) => update.contribution_percent > 0)

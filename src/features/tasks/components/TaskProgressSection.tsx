@@ -19,7 +19,11 @@ import { useSavedListOrder } from '@/features/sorting/useSavedListOrder';
 import { toAppError } from '@/lib/errors';
 import { getTaskProgressService } from '@/services/taskProgress.service';
 import type { TaskProgressUpdate } from '@/types';
-import { progressUpdateElementId, sortProgressSegments } from '../taskProgressSegments';
+import {
+  progressUpdateElementId,
+  progressSegmentColor,
+  sortProgressSegments,
+} from '../taskProgressSegments';
 
 interface Props {
   taskId: string;
@@ -85,26 +89,30 @@ export function TaskProgressSection({ taskId, onChanged }: Props) {
         className="flex h-8 w-full overflow-hidden rounded-md border bg-muted"
         aria-label={`任务进度 ${String(total)}%`}
       >
-        {progressSegments.map((update, index) => (
-          <button
-            type="button"
-            key={update.id}
-            className={
-              index % 2 === 0 ? 'bg-primary text-primary-foreground' : 'bg-blue-500 text-white'
-            }
-            style={{ width: `${String(update.contribution_percent)}%` }}
-            title={`${update.title} ${String(update.contribution_percent)}%`}
-            onClick={() => {
-              const row = document.getElementById(progressUpdateElementId(update.id));
-              row?.focus();
-              row?.scrollIntoView({ block: 'center' });
-            }}
-          >
-            <span className="block truncate px-2 text-center text-xs leading-8">
-              {update.title} {String(update.contribution_percent)}%
-            </span>
-          </button>
-        ))}
+        {progressSegments.map((update, index) => {
+          const color = progressSegmentColor(index);
+          return (
+            <button
+              type="button"
+              key={update.id}
+              style={{
+                width: `${String(update.contribution_percent)}%`,
+                backgroundColor: color.background,
+                color: color.foreground,
+              }}
+              title={`${update.title} ${String(update.contribution_percent)}%`}
+              onClick={() => {
+                const row = document.getElementById(progressUpdateElementId(update.id));
+                row?.focus();
+                row?.scrollIntoView({ block: 'center' });
+              }}
+            >
+              <span className="block truncate px-2 text-center text-xs leading-8">
+                {update.title} {String(update.contribution_percent)}%
+              </span>
+            </button>
+          );
+        })}
         {total < 100 && (
           <div
             className="truncate px-2 text-center text-xs leading-8 text-muted-foreground"
