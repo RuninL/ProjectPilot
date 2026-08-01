@@ -1,7 +1,8 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import type { BatchStatement } from '@/lib/commands';
 import { MeetingSection } from '@/features/meetings/components/MeetingSection';
 import { setDbForTesting, type SqlExecutor } from '@/lib/db';
 import { getRepositories } from '@/repositories';
@@ -13,6 +14,15 @@ import { makeProject } from '../helpers/fixtures';
 import { createTestDb, type TestDb } from '../helpers/testDb';
 
 let db: TestDb | null = null;
+
+vi.mock('@tauri-apps/api/core', () => ({
+  invoke: (command: string, args?: { statements?: BatchStatement[] }) => {
+    if (command !== 'execute_batch' || db === null || args?.statements === undefined) {
+      return Promise.reject(new Error(`unexpected command: ${command}`));
+    }
+    return Promise.resolve(db.runBatch(args.statements));
+  },
+}));
 
 beforeEach(() => {
   useMeetingStore.getState().reset();

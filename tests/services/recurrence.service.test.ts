@@ -7,8 +7,11 @@ import {
 import type { RecurrenceRuleInput } from '@/services/schemas';
 import { createProjectRepository } from '@/repositories/project.repo';
 import { createRecurrenceRepository } from '@/repositories/recurrence.repo';
+import { createMeetingRepository } from '@/repositories/meeting.repo';
+import { createTaskMeetingRepository } from '@/repositories/taskMeeting.repo';
+import { createTaskRepository } from '@/repositories/task.repo';
 import type { RecurrenceRule } from '@/types';
-import { makeProject } from '../helpers/fixtures';
+import { makeProject, makeTask } from '../helpers/fixtures';
 import { createTestDb, type TestDb } from '../helpers/testDb';
 
 const rule = (overrides: Partial<RecurrenceRule> = {}): RecurrenceRule => ({
@@ -52,12 +55,20 @@ describe('expandRule', () => {
     return createRecurrenceService({
       recurrence: createRecurrenceRepository(db.executor),
       projects: createProjectRepository(db.executor),
+      meetings: createMeetingRepository(db.executor),
+      tasks: createTaskRepository(db.executor),
+      taskMeetings: createTaskMeetingRepository(db.executor),
+      runBatch: (statements) => Promise.resolve(requireDb().runBatch(statements)),
     });
   }
 
   async function seedProject(): Promise<void> {
     if (db === null) throw new Error('test database is unavailable');
     await createProjectRepository(db.executor).insert(makeProject({ id: 'p1' }));
+    await createTaskRepository(db.executor).insert(makeTask({ id: 't1', project_id: 'p1' }));
+    await createTaskRepository(db.executor).insert(
+      makeTask({ id: 't2', project_id: 'p1', title: '第二项任务' }),
+    );
   }
 
   const validInput = {
@@ -111,10 +122,54 @@ describe('expandRule', () => {
       expect(expanded.find((occurrence) => occurrence.date === '2027-01-08')?.occurrenceDate).toBe(
         '2027-01-06',
       );
-      expect(db?.raw.prepare('SELECT COUNT(*) AS count FROM meetings').get()).toEqual({ count: 0 });
+      expect(
+        db?.raw
+          .prepare(
+            'SELECT COUNT(*) AS count FROM meetings WHERE source_occurrence_date IS NOT NULL',
+          )
+          .get(),
+      ).toEqual({ count: 0 });
       await expect(
         service.rescheduleOccurrence(created.id, '2027-01-06', '2027-01-09'),
       ).rejects.toThrow('不能重复操作');
+    });
+
+    it('associates tasks with one stable series anchor without copying links to occurrences', async () => {
+      const service = createService();
+      await seedProject();
+      const created = await service.createRule({ ...validInput, kind: 'meeting' }, ['t1', 't2']);
+      const anchor = await service.getMeetingSeriesAnchor(created.id);
+
+      expect(anchor.source_rule_id).toBe(created.id);
+      expect(anchor.source_occurrence_date).toBeNull();
+      expect(
+        requireDb()
+          .raw.prepare('SELECT task_id FROM task_meetings WHERE meeting_id = ? ORDER BY task_id')
+          .all(anchor.id),
+      ).toEqual([{ task_id: 't1' }, { task_id: 't2' }]);
+      expect(
+        requireDb()
+          .raw.prepare(
+            `SELECT COUNT(*) AS count
+               FROM task_meetings tm
+               JOIN meetings m ON m.id = tm.meeting_id
+              WHERE m.source_occurrence_date IS NOT NULL`,
+          )
+          .get(),
+      ).toEqual({ count: 0 });
+
+      await service.updateRule(created.id, {
+        ...validInput,
+        kind: 'meeting',
+        title: '更新后的系列',
+      });
+      expect((await service.getMeetingSeriesAnchor(created.id)).id).toBe(anchor.id);
+      expect((await service.getMeetingSeriesAnchor(created.id)).topic).toBe('更新后的系列');
+
+      await service.deleteRule(created.id);
+      expect(requireDb().raw.prepare('SELECT COUNT(*) AS count FROM task_meetings').get()).toEqual({
+        count: 0,
+      });
     });
 
     it('skips only the selected occurrence without changing the rest of the series', async () => {

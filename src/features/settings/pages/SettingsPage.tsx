@@ -60,6 +60,10 @@ const COUNT_LABELS: Record<keyof EntityCounts, string> = {
   people: '人员',
   projectParticipants: '项目参与关系',
   taskParticipants: '任务参与关系',
+  taskMeetings: '任务会议关联',
+  namedListOrders: '保存排序',
+  taskProgressUpdates: '任务进展',
+  taskChecklistItems: '任务待办',
 };
 
 interface PendingImport {

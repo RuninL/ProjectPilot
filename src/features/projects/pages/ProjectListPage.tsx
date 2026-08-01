@@ -13,6 +13,11 @@ import { DeleteProjectDialog } from '../components/DeleteProjectDialog';
 import { ProjectFilters } from '../components/ProjectFilters';
 import { ProjectForm } from '../components/ProjectForm';
 import { ProjectListItem } from '../components/ProjectListItem';
+import { RestoreProjectDialog } from '../components/RestoreProjectDialog';
+import { ReorderHandle } from '@/features/sorting/ReorderHandle';
+import { SavedOrderControls } from '@/features/sorting/SavedOrderControls';
+import { useDragReorder } from '@/features/sorting/useDragReorder';
+import { useSectionedListOrder } from '@/features/sorting/useSavedListOrder';
 
 /** Project list: search, filter, sort, create/edit, archive/restore, permanent delete. */
 export function ProjectListPage() {
@@ -27,12 +32,14 @@ export function ProjectListPage() {
   const updateProject = useProjectStore((state) => state.updateProject);
   const archiveProject = useProjectStore((state) => state.archiveProject);
   const restoreProject = useProjectStore((state) => state.restoreProject);
+  const countProjectArchivedTasks = useProjectStore((state) => state.countProjectArchivedTasks);
   const countDeleteImpact = useProjectStore((state) => state.countDeleteImpact);
   const deleteProjectPermanently = useProjectStore((state) => state.deleteProjectPermanently);
 
   const [formOpen, setFormOpen] = useState(false);
   const [editing, setEditing] = useState<Project | null>(null);
   const [archiveTarget, setArchiveTarget] = useState<Project | null>(null);
+  const [restoreTarget, setRestoreTarget] = useState<Project | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<Project | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
   const [people, setPeople] = useState<readonly Person[]>([]);
@@ -40,6 +47,13 @@ export function ProjectListPage() {
   const [participantsByProject, setParticipantsByProject] = useState<
     Readonly<Record<string, readonly string[]>>
   >({});
+  // One named order carries three sub-orders (active / archived / all); the
+  // visible scope selects which sub-order the list reads and writes.
+  const savedOrder = useSectionedListOrder('projects', '', { [filters.scope]: projects });
+  const scopeSection = savedOrder.section(filters.scope);
+  // Search/filters no longer disable reordering: dragging while filtered only
+  // rearranges the visible rows inside the saved full order.
+  const dragReorder = useDragReorder(scopeSection.moveTo, savedOrder.mode === 'dynamic');
 
   useEffect(() => {
     void loadProjects();
@@ -131,6 +145,9 @@ export function ProjectListPage() {
             setFilters({ participantIds });
           }}
         />
+        <div className="mt-3">
+          <SavedOrderControls controller={savedOrder} disabledReason={null} />
+        </div>
       </div>
 
       {actionError !== null && (
@@ -157,18 +174,34 @@ export function ProjectListPage() {
         />
       ) : (
         <ul className="flex flex-col gap-3">
-          {projects.map((project) => (
+          {scopeSection.displayedItems.map((project) => (
             <ProjectListItem
               key={project.id}
               project={project}
               progress={progress[project.id]}
               onEdit={openEdit}
               onArchive={setArchiveTarget}
-              onRestore={(target) => {
-                void runAction(async () => restoreProject(target.id));
-              }}
+              onRestore={setRestoreTarget}
               onDelete={setDeleteTarget}
               participantNames={participantsByProject[project.id] ?? []}
+              dropTargetProps={dragReorder.dropProps(project.id)}
+              isDropTarget={dragReorder.dropTargetId === project.id}
+              isDragSource={dragReorder.activeId === project.id}
+              reorderHandle={
+                savedOrder.mode === 'dynamic' ? undefined : (
+                  <ReorderHandle
+                    label={project.name}
+                    disabled={false}
+                    onMoveUp={() => {
+                      scopeSection.move(project.id, -1);
+                    }}
+                    onMoveDown={() => {
+                      scopeSection.move(project.id, 1);
+                    }}
+                    dragHandleProps={dragReorder.handleProps(project.id)}
+                  />
+                )
+              }
             />
           ))}
         </ul>
@@ -202,7 +235,7 @@ export function ProjectListPage() {
         description={
           archiveTarget === null
             ? ''
-            : `归档「${archiveTarget.name}」后将无法在该项目下新建任务，已有数据保留，可随时恢复。`
+            : `归档「${archiveTarget.name}」后将无法在该项目下新建任务，该项目当前活动的任务将被自动归档；已有数据保留，可随时恢复。`
         }
         confirmLabel="归档"
         onCancel={() => {
@@ -214,6 +247,18 @@ export function ProjectListPage() {
           if (target !== null) {
             void runAction(async () => archiveProject(target.id));
           }
+        }}
+      />
+
+      <RestoreProjectDialog
+        project={restoreTarget}
+        loadAutoArchivedCount={countProjectArchivedTasks}
+        onCancel={() => {
+          setRestoreTarget(null);
+        }}
+        onConfirm={(target, restoreTasks) => {
+          setRestoreTarget(null);
+          void runAction(async () => restoreProject(target.id, restoreTasks));
         }}
       />
 

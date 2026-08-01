@@ -24,6 +24,7 @@ import { useProjectStore } from '@/stores/useProjectStore';
 import { useTaskStore } from '@/stores/useTaskStore';
 import type { Project, TaskWithProject } from '@/types';
 import { ProjectForm } from '../components/ProjectForm';
+import { RestoreProjectDialog } from '../components/RestoreProjectDialog';
 
 /** Capabilities that arrive in a later phase — listed, never clickable, never faked. */
 const LATER_PHASE_SECTIONS = [{ title: '关键路径与拖拽排期', description: '甘特图上的自动排程' }];
@@ -54,6 +55,7 @@ export function ProjectDetailPage() {
   const updateProject = useProjectStore((state) => state.updateProject);
   const archiveProject = useProjectStore((state) => state.archiveProject);
   const restoreProject = useProjectStore((state) => state.restoreProject);
+  const countProjectArchivedTasks = useProjectStore((state) => state.countProjectArchivedTasks);
   const listByProject = useTaskStore((state) => state.listByProject);
   const taskVersion = useTaskStore((state) => state.tasks);
   const analysis = useDependencyStore((state) => state.analysis);
@@ -69,6 +71,7 @@ export function ProjectDetailPage() {
   const [error, setError] = useState<string | null>(null);
   const [formOpen, setFormOpen] = useState(false);
   const [archiveOpen, setArchiveOpen] = useState(false);
+  const [restoreTarget, setRestoreTarget] = useState<Project | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -181,7 +184,7 @@ export function ProjectDetailPage() {
             <Button
               variant="outline"
               onClick={() => {
-                void restoreProject(project.id).then(load);
+                setRestoreTarget(project);
               }}
             >
               <ArchiveRestore className="h-4 w-4" aria-hidden />
@@ -345,7 +348,7 @@ export function ProjectDetailPage() {
       <ConfirmDialog
         open={archiveOpen}
         title="归档项目"
-        description={`归档「${project.name}」后将无法在该项目下新建任务，已有数据保留，可随时恢复。`}
+        description={`归档「${project.name}」后将无法在该项目下新建任务，该项目当前活动的任务将被自动归档；已有数据保留，可随时恢复。`}
         confirmLabel="归档"
         onCancel={() => {
           setArchiveOpen(false);
@@ -353,6 +356,18 @@ export function ProjectDetailPage() {
         onConfirm={() => {
           setArchiveOpen(false);
           void archiveProject(project.id).then(load);
+        }}
+      />
+
+      <RestoreProjectDialog
+        project={restoreTarget}
+        loadAutoArchivedCount={countProjectArchivedTasks}
+        onCancel={() => {
+          setRestoreTarget(null);
+        }}
+        onConfirm={(target, restoreTasks) => {
+          setRestoreTarget(null);
+          void restoreProject(target.id, restoreTasks).then(load);
         }}
       />
     </div>

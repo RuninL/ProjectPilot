@@ -4,7 +4,6 @@ mod backup;
 mod backup_tests;
 mod desktop;
 mod error;
-mod migration_repair;
 mod migrations;
 mod project_links;
 
@@ -33,8 +32,6 @@ pub fn run() {
             backup::open_data_dir,
             backup::backup_database,
             backup::restore_database,
-            migration_repair::reconcile_migration_checksum,
-            migration_repair::isolate_failed_migration_database,
             project_links::local_path_exists,
             project_links::open_local_path,
         ])

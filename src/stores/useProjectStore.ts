@@ -35,7 +35,9 @@ interface ProjectState {
   createProject: (input: ProjectInput) => Promise<Project>;
   updateProject: (id: string, input: ProjectInput) => Promise<Project>;
   archiveProject: (id: string) => Promise<void>;
-  restoreProject: (id: string) => Promise<void>;
+  restoreProject: (id: string, restoreTasks?: boolean) => Promise<void>;
+  /** Read-only: how many tasks a "restore project and tasks" would restore. */
+  countProjectArchivedTasks: (id: string) => Promise<number>;
   countDeleteImpact: (id: string) => Promise<DeleteImpact>;
   deleteProjectPermanently: (id: string) => Promise<void>;
 }
@@ -127,8 +129,13 @@ export const useProjectStore = create<ProjectState>((set, get) => {
       await mutate((service) => service.archiveProject(id));
     },
 
-    restoreProject: async (id) => {
-      await mutate((service) => service.restoreProject(id));
+    restoreProject: async (id, restoreTasks = false) => {
+      await mutate((service) => service.restoreProject(id, restoreTasks));
+    },
+
+    countProjectArchivedTasks: async (id) => {
+      const service = await getProjectService();
+      return service.countProjectArchivedTasks(id);
     },
 
     /** Read-only: the real task count shown in the delete confirmation. */

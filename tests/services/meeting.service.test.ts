@@ -1,8 +1,12 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { vi } from 'vitest';
 import {
   createActionItemRepository,
+  createAppSettingRepository,
   createMeetingRepository,
   createProjectRepository,
+  createTaskMeetingRepository,
+  createTaskRepository,
 } from '@/repositories';
 import {
   createMeetingService,
@@ -10,17 +14,23 @@ import {
   type MeetingService,
 } from '@/services/meeting.service';
 import type { MeetingInput } from '@/services/schemas';
-import { makeActionItem, makeProject } from '../helpers/fixtures';
+import { makeActionItem, makeProject, makeTask } from '../helpers/fixtures';
 import { createTestDb, type TestDb } from '../helpers/testDb';
 
 let db: TestDb;
 let service: MeetingService;
+const openUrl = vi.fn<(url: string) => Promise<void>>();
 
 function buildService(current: TestDb): MeetingService {
   return createMeetingService({
     meetings: createMeetingRepository(current.executor),
     actionItems: createActionItemRepository(current.executor),
     projects: createProjectRepository(current.executor),
+    tasks: createTaskRepository(current.executor),
+    taskMeetings: createTaskMeetingRepository(current.executor),
+    appSettings: createAppSettingRepository(current.executor),
+    openUrl,
+    runBatch: (statements) => Promise.resolve(current.runBatch(statements)),
   });
 }
 
@@ -41,13 +51,36 @@ function input(overrides: Partial<Record<keyof MeetingInput, unknown>> = {}): Me
 }
 
 beforeEach(async () => {
+  openUrl.mockReset();
+  openUrl.mockResolvedValue();
   db = createTestDb();
   service = buildService(db);
   await createProjectRepository(db.executor).insert(makeProject({ id: 'p1' }));
+  await createTaskRepository(db.executor).insert(makeTask({ id: 't1', project_id: 'p1' }));
+  await createTaskRepository(db.executor).insert(
+    makeTask({ id: 't2', project_id: 'p1', title: '第二项任务' }),
+  );
 });
 
 afterEach(() => {
   db.close();
+});
+
+it('persists and validates meeting list preferences', async () => {
+  expect(await service.getListPreferences()).toEqual({
+    range: 'future',
+    timeSort: 'time_asc',
+  });
+
+  await service.setListRange('past');
+  await service.setListTimeSort('time_desc');
+  expect(await buildService(db).getListPreferences()).toEqual({
+    range: 'past',
+    timeSort: 'time_desc',
+  });
+
+  await createAppSettingRepository(db.executor).set('meetings:list_range', 'invalid', 'now');
+  expect((await service.getListPreferences()).range).toBe('future');
 });
 
 describe('createMeeting', () => {
@@ -59,6 +92,37 @@ describe('createMeeting', () => {
     expect(meeting.start_time).toBeNull();
     expect(meeting.is_sample).toBe(0);
     expect(await service.getMeeting(meeting.id)).toStrictEqual(meeting);
+  });
+
+  it('creates a meeting and multiple task links in one batch', async () => {
+    const meeting = await service.createMeeting(input(), ['t1', 't2']);
+    const links = db.raw
+      .prepare('SELECT task_id FROM task_meetings WHERE meeting_id = ? ORDER BY task_id')
+      .all(meeting.id);
+    expect(links).toEqual([{ task_id: 't1' }, { task_id: 't2' }]);
+  });
+
+  it('does not create a meeting when a requested task link is invalid', async () => {
+    await expect(service.createMeeting(input(), ['missing'])).rejects.toThrow(
+      '关联任务不存在或已被删除',
+    );
+    expect(db.raw.prepare('SELECT COUNT(*) AS n FROM meetings').get()).toEqual({ n: 0 });
+  });
+
+  describe('openMeetingUrl', () => {
+    it('preserves and resolves a stored schemeless meeting URL only when opening', async () => {
+      const meeting = await service.createMeeting(
+        input({ meeting_url: ' meet.example/a?room=1#join ' }),
+      );
+      expect(meeting.meeting_url).toBe('meet.example/a?room=1#join');
+      await service.openMeetingUrl(meeting.id);
+      expect(openUrl).toHaveBeenCalledWith('https://meet.example/a?room=1#join');
+    });
+
+    it('rejects meetings without a safe URL', async () => {
+      const meeting = await service.createMeeting(input());
+      await expect(service.openMeetingUrl(meeting.id)).rejects.toThrow('会议没有可安全打开的链接');
+    });
   });
 
   it('persists a standalone meeting with no project', async () => {

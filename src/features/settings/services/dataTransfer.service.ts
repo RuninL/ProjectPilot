@@ -9,6 +9,7 @@ import {
 import type { Task, TaskDependency } from '@/types';
 import { buildDependencyGraph, hasCycle } from '@/services/dependencyGraph';
 import { calculateRiskLevel } from '@/services/riskLevel';
+import { isStorableWebAddress } from '@/lib/webAddress';
 import {
   DATA_SCHEMA_VERSION,
   projectPilotExportSchema,
@@ -48,6 +49,10 @@ const ENTITY_KEYS = [
   'people',
   'projectParticipants',
   'taskParticipants',
+  'taskMeetings',
+  'namedListOrders',
+  'taskProgressUpdates',
+  'taskChecklistItems',
 ] as const;
 
 export function createDataTransferService(deps: DataTransferServiceDeps) {
@@ -156,13 +161,27 @@ function selectImportRows(
   const people = new Set([...current.people, ...selected.people].map((row) => row.id));
   const projects = new Set([...current.projects, ...selected.projects].map((row) => row.id));
   const tasks = new Set([...current.tasks, ...selected.tasks].map((row) => row.id));
+  const meetings = new Set([...current.meetings, ...selected.meetings].map((row) => row.id));
+  const currentDefaultContexts = new Set(
+    current.namedListOrders
+      .filter((row) => row.is_default === 1)
+      .map((row) => `${row.context}\u0000${row.context_id}`),
+  );
   return {
     ...selected,
+    namedListOrders: selected.namedListOrders.map((row) =>
+      currentDefaultContexts.has(`${row.context}\u0000${row.context_id}`)
+        ? { ...row, is_default: 0 }
+        : row,
+    ),
     projectParticipants: selected.projectParticipants.filter(
       (row) => projects.has(row.project_id) && people.has(row.person_id),
     ),
     taskParticipants: selected.taskParticipants.filter(
       (row) => tasks.has(row.task_id) && people.has(row.person_id),
+    ),
+    taskMeetings: selected.taskMeetings.filter(
+      (row) => tasks.has(row.task_id) && meetings.has(row.meeting_id),
     ),
   };
 }
@@ -191,6 +210,10 @@ function countSnapshot(snapshot: DatabaseSnapshot): EntityCounts {
     people: snapshot.people.length,
     projectParticipants: snapshot.projectParticipants.length,
     taskParticipants: snapshot.taskParticipants.length,
+    taskMeetings: snapshot.taskMeetings.length,
+    namedListOrders: snapshot.namedListOrders.length,
+    taskProgressUpdates: snapshot.taskProgressUpdates.length,
+    taskChecklistItems: snapshot.taskChecklistItems.length,
   };
 }
 
@@ -210,6 +233,10 @@ function emptyCounts(): EntityCounts {
     people: 0,
     projectParticipants: 0,
     taskParticipants: 0,
+    taskMeetings: 0,
+    namedListOrders: 0,
+    taskProgressUpdates: 0,
+    taskChecklistItems: 0,
   };
 }
 
@@ -269,6 +296,22 @@ function withoutConflicts(incoming: ExportData, current: DatabaseSnapshot): Data
       current.taskParticipants,
       (row) => `${row.task_id}\u0000${row.person_id}`,
     ),
+    taskMeetings: excludeIds(
+      incoming.taskMeetings,
+      current.taskMeetings,
+      (row) => `${row.task_id}\u0000${row.meeting_id}`,
+    ),
+    namedListOrders: excludeIds(incoming.namedListOrders, current.namedListOrders, (row) => row.id),
+    taskProgressUpdates: excludeIds(
+      incoming.taskProgressUpdates,
+      current.taskProgressUpdates,
+      (row) => row.id,
+    ),
+    taskChecklistItems: excludeIds(
+      incoming.taskChecklistItems,
+      current.taskChecklistItems,
+      (row) => row.id,
+    ),
   };
 }
 
@@ -318,7 +361,10 @@ function withoutSampleData(snapshot: DatabaseSnapshot): DatabaseSnapshot {
         (row.converted_task_id === null || taskIds.has(row.converted_task_id)),
     ),
     projectLinks: snapshot.projectLinks.filter(
-      (row) => row.is_sample === 0 && projectIds.has(row.project_id),
+      (row) =>
+        row.is_sample === 0 &&
+        projectIds.has(row.project_id) &&
+        (row.task_id == null || taskIds.has(row.task_id)),
     ),
     risks: snapshot.risks.filter((row) => row.is_sample === 0 && projectIds.has(row.project_id)),
     appSettings: snapshot.appSettings,
@@ -327,6 +373,12 @@ function withoutSampleData(snapshot: DatabaseSnapshot): DatabaseSnapshot {
       projectIds.has(row.project_id),
     ),
     taskParticipants: snapshot.taskParticipants.filter((row) => taskIds.has(row.task_id)),
+    taskMeetings: snapshot.taskMeetings.filter(
+      (row) => taskIds.has(row.task_id) && meetingIds.has(row.meeting_id),
+    ),
+    namedListOrders: snapshot.namedListOrders,
+    taskProgressUpdates: snapshot.taskProgressUpdates.filter((row) => taskIds.has(row.task_id)),
+    taskChecklistItems: snapshot.taskChecklistItems.filter((row) => taskIds.has(row.task_id)),
   };
 }
 
@@ -355,6 +407,10 @@ function mergeSnapshots(current: DatabaseSnapshot, incoming: DatabaseSnapshot): 
     people: [...current.people, ...incoming.people],
     projectParticipants: [...current.projectParticipants, ...incoming.projectParticipants],
     taskParticipants: [...current.taskParticipants, ...incoming.taskParticipants],
+    taskMeetings: [...current.taskMeetings, ...incoming.taskMeetings],
+    namedListOrders: [...current.namedListOrders, ...incoming.namedListOrders],
+    taskProgressUpdates: [...current.taskProgressUpdates, ...incoming.taskProgressUpdates],
+    taskChecklistItems: [...current.taskChecklistItems, ...incoming.taskChecklistItems],
   };
 }
 
@@ -369,6 +425,9 @@ function validateSnapshot(snapshot: DatabaseSnapshot): void {
 
   for (const meeting of snapshot.meetings) {
     assertNullableReference(meeting.project_id, projectIds, `会议 ${meeting.id} 的项目`);
+    if (meeting.meeting_url != null && !isStorableWebAddress(meeting.meeting_url)) {
+      throw validationError(`会议 ${meeting.id} 的链接不安全或无效`);
+    }
   }
   for (const task of snapshot.tasks) {
     assertReference(task.project_id, projectIds, `任务 ${task.id} 的项目`);
@@ -398,6 +457,9 @@ function validateSnapshot(snapshot: DatabaseSnapshot): void {
   for (const rule of snapshot.recurrenceRules) {
     if (rule.project_id !== null) {
       assertReference(rule.project_id, projectIds, `周期规则 ${rule.id} 的项目`);
+    }
+    if (rule.meeting_url != null && !isStorableWebAddress(rule.meeting_url)) {
+      throw validationError(`周期规则 ${rule.id} 的会议链接不安全或无效`);
     }
   }
   for (const exception of snapshot.recurrenceExceptions) {
@@ -456,6 +518,32 @@ function validateSnapshot(snapshot: DatabaseSnapshot): void {
   }
   for (const link of snapshot.projectLinks) {
     assertReference(link.project_id, projectIds, `项目链接 ${link.id} 的项目`);
+    assertNullableReference(link.task_id ?? null, taskIds, `项目链接 ${link.id} 的关联任务`);
+    if (link.task_id != null && tasks.get(link.task_id)?.project_id !== link.project_id) {
+      throw validationError(`项目链接 ${link.id} 的关联任务不属于同一项目`);
+    }
+    if (link.link_type === 'url' && !isStorableWebAddress(link.target)) {
+      throw validationError(`项目链接 ${link.id} 的网址不安全或无效`);
+    }
+  }
+  const progressTotals = new Map<string, number>();
+  for (const update of snapshot.taskProgressUpdates) {
+    assertReference(update.task_id, taskIds, `任务进展 ${update.id} 的任务`);
+    const total = (progressTotals.get(update.task_id) ?? 0) + update.contribution_percent;
+    if (total > 100) throw validationError(`任务 ${update.task_id} 的进展合计超过 100%`);
+    progressTotals.set(update.task_id, total);
+  }
+  for (const [taskId, total] of progressTotals) {
+    if (tasks.get(taskId)?.progress !== total) {
+      throw validationError(`任务 ${taskId} 的当前进度与进展合计不一致`);
+    }
+  }
+  for (const item of snapshot.taskChecklistItems) {
+    assertReference(item.task_id, taskIds, `任务待办 ${item.id} 的任务`);
+  }
+  for (const link of snapshot.taskMeetings) {
+    assertReference(link.task_id, taskIds, '任务会议关联的任务');
+    assertReference(link.meeting_id, meetingIds, '任务会议关联的会议');
   }
   for (const risk of snapshot.risks) {
     assertReference(risk.project_id, projectIds, `风险 ${risk.id} 的项目`);
@@ -545,8 +633,30 @@ function assertUniqueKeys(snapshot: DatabaseSnapshot): void {
     '任务参与关系',
   );
   assertUnique(
+    snapshot.taskMeetings.map((row) => `${row.task_id}\u0000${row.meeting_id}`),
+    '任务会议关联',
+  );
+  assertUnique(
     snapshot.taskDependencies.map((row) => `${row.predecessor_id}\u0000${row.successor_id}`),
     '任务依赖关系',
+  );
+  assertUnique(
+    snapshot.namedListOrders.map((row) => row.id),
+    '保存排序 ID',
+  );
+  assertUnique(
+    snapshot.namedListOrders.map(
+      (row) => `${row.context}\u0000${row.context_id}\u0000${row.name.toLocaleLowerCase()}`,
+    ),
+    '保存排序名称',
+  );
+  assertUnique(
+    snapshot.taskProgressUpdates.map((row) => row.id),
+    '任务进展 ID',
+  );
+  assertUnique(
+    snapshot.taskChecklistItems.map((row) => row.id),
+    '任务待办 ID',
   );
 }
 

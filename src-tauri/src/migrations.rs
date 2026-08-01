@@ -70,5 +70,35 @@ pub fn migrations() -> Vec<Migration> {
             sql: include_str!("../migrations/0011_recurrence_exceptions_reschedule.sql"),
             kind: MigrationKind::Up,
         },
+        Migration {
+            version: 12,
+            description: "v1.3 productivity models",
+            sql: include_str!("../migrations/0012_v13_productivity.sql"),
+            kind: MigrationKind::Up,
+        },
+        Migration {
+            version: 13,
+            description: "relax meeting URL storage constraints",
+            sql: include_str!("../migrations/0013_relax_meeting_urls.sql"),
+            kind: MigrationKind::Up,
+        },
+        Migration {
+            version: 14,
+            description: "sectioned named orders and task archive provenance",
+            sql: include_str!("../migrations/0014_sort_sections_task_archive.sql"),
+            kind: MigrationKind::Up,
+        },
+        Migration {
+            version: 15,
+            description: "task to meeting association links",
+            sql: include_str!("../migrations/0015_task_meetings.sql"),
+            kind: MigrationKind::Up,
+        },
+        Migration {
+            version: 16,
+            description: "stable meeting anchors for recurring series associations",
+            sql: include_str!("../migrations/0016_recurrence_meeting_anchors.sql"),
+            kind: MigrationKind::Up,
+        },
     ]
 }

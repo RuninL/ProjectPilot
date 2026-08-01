@@ -37,6 +37,7 @@ describe('migration 0001 schema', () => {
       'app_settings',
       'meetings',
       'milestones',
+      'named_list_orders',
       'people',
       'project_links',
       'project_participants',
@@ -44,8 +45,11 @@ describe('migration 0001 schema', () => {
       'recurrence_exceptions',
       'recurrence_rules',
       'risks',
+      'task_checklist_items',
       'task_dependencies',
+      'task_meetings',
       'task_participants',
+      'task_progress_updates',
       'tasks',
     ]);
   });

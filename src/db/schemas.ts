@@ -59,6 +59,20 @@ export const riskStatusEnum = z.enum(['open', 'monitoring', 'mitigated', 'closed
 export const recurrenceKindEnum = z.enum(['task', 'meeting']);
 /** `materialized` is retained only to read data created by older app versions. */
 export const recurrenceActionEnum = z.enum(['skip', 'rescheduled', 'materialized']);
+export const namedListOrderContextEnum = z.enum([
+  'projects',
+  'tasks',
+  'meetings',
+  'people',
+  'risks',
+  'project_links',
+  'milestones',
+  'project_tasks',
+  'task_subtasks',
+  'task_progress',
+  'task_checklist',
+  'task_resources',
+]);
 
 export const projectRowSchema = z.object({
   id: z.string(),
@@ -89,6 +103,8 @@ export const taskRowSchema = z.object({
   // Added by migration 0002. Audit timestamps, not business dates.
   completed_at: z.string().nullable(),
   archived_at: z.string().nullable(),
+  // Added by migration 0014: why the task is archived ('manual' | 'project').
+  archived_source: z.enum(['manual', 'project']).nullable().default(null),
   source_meeting_id: z.string().nullable(),
   source_rule_id: z.string().nullable().default(null),
   source_occurrence_date: dateString.nullable().default(null),
@@ -142,6 +158,7 @@ export const meetingRowSchema = z.object({
   notes: z.string(),
   decisions: z.string(),
   risks: z.string(),
+  meeting_url: z.string().nullable().optional(),
   source_rule_id: z.string().nullable().default(null),
   source_occurrence_date: dateString.nullable().default(null),
   is_sample: sqliteBool,
@@ -161,6 +178,7 @@ export const recurrenceRuleRowSchema = z.object({
   duration_minutes: z.number().int().positive().nullable(),
   default_priority: taskPriorityEnum.nullable(),
   note: z.string(),
+  meeting_url: z.string().nullable().optional(),
   is_active: sqliteBool,
   is_sample: sqliteBool,
   ...auditColumns,
@@ -195,6 +213,7 @@ export const projectLinkRowSchema = z.object({
   link_type: linkTypeEnum,
   target: z.string(),
   description: z.string().default(''),
+  task_id: z.string().nullable().optional(),
   is_sample: sqliteBool,
   ...auditColumns,
 });
@@ -207,6 +226,36 @@ export const projectLinkWithProjectRowSchema = projectLinkRowSchema.extend({
 export const appSettingRowSchema = z.object({
   key: z.string(),
   value: z.string(),
+  ...auditColumns,
+});
+
+export const namedListOrderRowSchema = z.object({
+  id: z.string(),
+  context: namedListOrderContextEnum,
+  context_id: z.string(),
+  name: z.string(),
+  ordered_ids_json: z.string(),
+  is_default: sqliteBool,
+  ...auditColumns,
+});
+
+export const taskProgressUpdateRowSchema = z.object({
+  id: z.string(),
+  task_id: z.string(),
+  title: z.string(),
+  description: z.string(),
+  occurred_at: timestamp,
+  contribution_percent: z.number().int().min(0).max(100),
+  ...auditColumns,
+});
+
+export const taskChecklistItemRowSchema = z.object({
+  id: z.string(),
+  task_id: z.string(),
+  content: z.string(),
+  is_completed: sqliteBool,
+  sort_order: z.number().int().nonnegative(),
+  completed_at: timestamp.nullable(),
   ...auditColumns,
 });
 
@@ -258,6 +307,12 @@ export const taskParticipantRowSchema = z.object({
   task_id: z.string(),
   person_id: z.string(),
   assigned_at: timestamp,
+});
+
+export const taskMeetingRowSchema = z.object({
+  task_id: z.string(),
+  meeting_id: z.string(),
+  linked_at: timestamp,
 });
 
 export const projectParticipantPersonRowSchema = projectParticipantRowSchema.extend({

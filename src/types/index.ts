@@ -8,6 +8,8 @@ import type {
   meetingRowSchema,
   milestoneRowSchema,
   milestoneStatusEnum,
+  namedListOrderContextEnum,
+  namedListOrderRowSchema,
   personProjectParticipationRowSchema,
   personRowSchema,
   personTaskParticipationRowSchema,
@@ -30,6 +32,9 @@ import type {
   riskStatusEnum,
   riskWithProjectRowSchema,
   taskDependencyRowSchema,
+  taskChecklistItemRowSchema,
+  taskMeetingRowSchema,
+  taskProgressUpdateRowSchema,
   taskParticipantRowSchema,
   taskParticipantPersonRowSchema,
   taskPriorityEnum,
@@ -51,6 +56,9 @@ export type ActionItem = z.infer<typeof actionItemRowSchema>;
 export type ProjectLink = z.infer<typeof projectLinkRowSchema>;
 export type ProjectLinkWithProject = z.infer<typeof projectLinkWithProjectRowSchema>;
 export type AppSetting = z.infer<typeof appSettingRowSchema>;
+export type NamedListOrder = z.infer<typeof namedListOrderRowSchema>;
+export type TaskProgressUpdate = z.infer<typeof taskProgressUpdateRowSchema>;
+export type TaskChecklistItem = z.infer<typeof taskChecklistItemRowSchema>;
 export type Risk = z.infer<typeof riskRowSchema>;
 export type RiskWithProject = z.infer<typeof riskWithProjectRowSchema>;
 export type Person = z.infer<typeof personRowSchema>;
@@ -58,6 +66,7 @@ export type PersonWithCounts = z.infer<typeof personWithCountsRowSchema>;
 export type ProjectParticipant = z.infer<typeof projectParticipantRowSchema>;
 export type ProjectParticipantPerson = z.infer<typeof projectParticipantPersonRowSchema>;
 export type TaskParticipant = z.infer<typeof taskParticipantRowSchema>;
+export type TaskMeeting = z.infer<typeof taskMeetingRowSchema>;
 export type TaskParticipantPerson = z.infer<typeof taskParticipantPersonRowSchema>;
 export type PersonProjectParticipation = z.infer<typeof personProjectParticipationRowSchema>;
 export type PersonTaskParticipation = z.infer<typeof personTaskParticipationRowSchema>;
@@ -76,3 +85,4 @@ export type RiskLevel = z.infer<typeof riskLevelEnum>;
 export type RiskStatus = z.infer<typeof riskStatusEnum>;
 export type RecurrenceKind = z.infer<typeof recurrenceKindEnum>;
 export type RecurrenceAction = z.infer<typeof recurrenceActionEnum>;
+export type NamedListOrderContext = z.infer<typeof namedListOrderContextEnum>;

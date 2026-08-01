@@ -21,9 +21,7 @@ fn is_windows_absolute_path(value: &str) -> bool {
 fn validated_path(value: &str) -> CommandResult<&str> {
     let path = value.trim();
     if path.is_empty() || path.contains('\0') || !is_windows_absolute_path(path) {
-        return Err(CommandError::Invalid(
-            "仅支持 Windows 绝对本地路径".into(),
-        ));
+        return Err(CommandError::Invalid("仅支持 Windows 绝对本地路径".into()));
     }
     Ok(path)
 }

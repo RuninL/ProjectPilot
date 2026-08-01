@@ -3,6 +3,7 @@ import {
   appSettingRowSchema,
   meetingRowSchema,
   milestoneRowSchema,
+  namedListOrderRowSchema,
   personRowSchema,
   recurrenceExceptionRowSchema,
   recurrenceRuleRowSchema,
@@ -11,6 +12,9 @@ import {
   projectRowSchema,
   riskRowSchema,
   taskDependencyRowSchema,
+  taskChecklistItemRowSchema,
+  taskMeetingRowSchema,
+  taskProgressUpdateRowSchema,
   taskParticipantRowSchema,
   taskRowSchema,
 } from '@/db/schemas';
@@ -21,6 +25,7 @@ import type {
   AppSetting,
   Meeting,
   Milestone,
+  NamedListOrder,
   Person,
   Project,
   ProjectLink,
@@ -29,8 +34,11 @@ import type {
   RecurrenceRule,
   Risk,
   Task,
+  TaskChecklistItem,
   TaskDependency,
+  TaskMeeting,
   TaskParticipant,
+  TaskProgressUpdate,
 } from '@/types';
 import { parseRows } from './_shared';
 
@@ -49,6 +57,10 @@ export interface DatabaseSnapshot {
   people: Person[];
   projectParticipants: ProjectParticipant[];
   taskParticipants: TaskParticipant[];
+  taskMeetings: TaskMeeting[];
+  namedListOrders: NamedListOrder[];
+  taskProgressUpdates: TaskProgressUpdate[];
+  taskChecklistItems: TaskChecklistItem[];
 }
 
 const INSERTS = {
@@ -57,20 +69,20 @@ const INSERTS = {
      is_sample, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
   meeting: `INSERT INTO meetings
     (id, project_id, topic, date, start_time, attendees, agenda, notes, decisions, risks,
-     source_rule_id, source_occurrence_date, is_sample, created_at, updated_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+     source_rule_id, source_occurrence_date, is_sample, created_at, updated_at, meeting_url)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
   task: `INSERT INTO tasks
     (id, project_id, parent_task_id, title, description, status, priority, start_date, due_date,
-     progress, estimated_hours, actual_hours, completed_at, archived_at, source_meeting_id,
-     source_rule_id, source_occurrence_date, is_sample, created_at, updated_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+     progress, estimated_hours, actual_hours, completed_at, archived_at, archived_source,
+     source_meeting_id, source_rule_id, source_occurrence_date, is_sample, created_at, updated_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
   dependency: `INSERT INTO task_dependencies
     (id, predecessor_id, successor_id, dep_type, lag_days, created_at, updated_at)
     VALUES (?, ?, ?, ?, ?, ?, ?)`,
   recurrenceRule: `INSERT INTO recurrence_rules
     (id, project_id, kind, title, byweekday, interval, start_date, end_date, time_of_day,
-     duration_minutes, default_priority, note, is_active, is_sample, created_at, updated_at)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    duration_minutes, default_priority, note, is_active, is_sample, created_at, updated_at, meeting_url)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
   recurrenceException: `INSERT INTO recurrence_exceptions
     (id, rule_id, occurrence_date, action, replacement_date, materialized_id, created_at, updated_at)
     VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
@@ -81,8 +93,8 @@ const INSERTS = {
     (id, meeting_id, content, owner, due_date, status, converted_task_id, converted_at,
      created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
   projectLink: `INSERT INTO project_links
-    (id, project_id, label, link_type, target, description, is_sample, created_at, updated_at)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    (id, project_id, label, link_type, target, description, is_sample, created_at, updated_at, task_id)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
   risk: `INSERT INTO risks
     (id, project_id, title, description, category, likelihood, impact, level, status, owner,
      mitigation_plan, due_date, resolved_at, is_sample, created_at, updated_at)
@@ -94,49 +106,79 @@ const INSERTS = {
     (project_id, person_id, role, joined_at) VALUES (?, ?, ?, ?)`,
   taskParticipant: `INSERT INTO task_participants
     (task_id, person_id, assigned_at) VALUES (?, ?, ?)`,
+  taskMeeting: `INSERT INTO task_meetings
+    (task_id, meeting_id, linked_at) VALUES (?, ?, ?)`,
+  namedListOrder: `INSERT INTO named_list_orders
+    (id, context, context_id, name, ordered_ids_json, is_default, created_at, updated_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+  taskProgressUpdate: `INSERT INTO task_progress_updates
+    (id, task_id, title, description, occurred_at, contribution_percent, created_at, updated_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+  taskChecklistItem: `INSERT INTO task_checklist_items
+    (id, task_id, content, is_completed, sort_order, completed_at, created_at, updated_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
 } as const;
 
 export function createDataTransferRepository(db: SqlExecutor) {
   return {
     async readSnapshot(): Promise<DatabaseSnapshot> {
-      const projects = parseRows(projectRowSchema, await db.select('SELECT * FROM projects'));
-      const meetings = parseRows(meetingRowSchema, await db.select('SELECT * FROM meetings'));
-      const tasks = parseRows(taskRowSchema, await db.select('SELECT * FROM tasks'));
-      const taskDependencies = parseRows(
-        taskDependencyRowSchema,
-        await db.select('SELECT * FROM task_dependencies'),
-      );
-      const recurrenceRules = parseRows(
-        recurrenceRuleRowSchema,
-        await db.select('SELECT * FROM recurrence_rules'),
-      );
-      const recurrenceExceptions = parseRows(
-        recurrenceExceptionRowSchema,
-        await db.select('SELECT * FROM recurrence_exceptions'),
-      );
-      const milestones = parseRows(milestoneRowSchema, await db.select('SELECT * FROM milestones'));
-      const actionItems = parseRows(
-        actionItemRowSchema,
-        await db.select('SELECT * FROM action_items'),
-      );
-      const projectLinks = parseRows(
-        projectLinkRowSchema,
-        await db.select('SELECT * FROM project_links'),
-      );
-      const risks = parseRows(riskRowSchema, await db.select('SELECT * FROM risks'));
-      const appSettings = parseRows(
-        appSettingRowSchema,
-        await db.select('SELECT * FROM app_settings'),
-      );
-      const people = parseRows(personRowSchema, await db.select('SELECT * FROM people'));
-      const projectParticipants = parseRows(
-        projectParticipantRowSchema,
-        await db.select('SELECT * FROM project_participants'),
-      );
-      const taskParticipants = parseRows(
-        taskParticipantRowSchema,
-        await db.select('SELECT * FROM task_participants'),
-      );
+      const [
+        projectRows,
+        meetingRows,
+        taskRows,
+        dependencyRows,
+        recurrenceRuleRows,
+        recurrenceExceptionRows,
+        milestoneRows,
+        actionItemRows,
+        projectLinkRows,
+        riskRows,
+        appSettingRows,
+        peopleRows,
+        projectParticipantRows,
+        taskParticipantRows,
+        taskMeetingRows,
+        namedListOrderRows,
+        taskProgressRows,
+        taskChecklistRows,
+      ] = await Promise.all([
+        db.select('SELECT * FROM projects'),
+        db.select('SELECT * FROM meetings'),
+        db.select('SELECT * FROM tasks'),
+        db.select('SELECT * FROM task_dependencies'),
+        db.select('SELECT * FROM recurrence_rules'),
+        db.select('SELECT * FROM recurrence_exceptions'),
+        db.select('SELECT * FROM milestones'),
+        db.select('SELECT * FROM action_items'),
+        db.select('SELECT * FROM project_links'),
+        db.select('SELECT * FROM risks'),
+        db.select('SELECT * FROM app_settings'),
+        db.select('SELECT * FROM people'),
+        db.select('SELECT * FROM project_participants'),
+        db.select('SELECT * FROM task_participants'),
+        db.select('SELECT * FROM task_meetings'),
+        db.select('SELECT * FROM named_list_orders'),
+        db.select('SELECT * FROM task_progress_updates'),
+        db.select('SELECT * FROM task_checklist_items'),
+      ]);
+      const projects = parseRows(projectRowSchema, projectRows);
+      const meetings = parseRows(meetingRowSchema, meetingRows);
+      const tasks = parseRows(taskRowSchema, taskRows);
+      const taskDependencies = parseRows(taskDependencyRowSchema, dependencyRows);
+      const recurrenceRules = parseRows(recurrenceRuleRowSchema, recurrenceRuleRows);
+      const recurrenceExceptions = parseRows(recurrenceExceptionRowSchema, recurrenceExceptionRows);
+      const milestones = parseRows(milestoneRowSchema, milestoneRows);
+      const actionItems = parseRows(actionItemRowSchema, actionItemRows);
+      const projectLinks = parseRows(projectLinkRowSchema, projectLinkRows);
+      const risks = parseRows(riskRowSchema, riskRows);
+      const appSettings = parseRows(appSettingRowSchema, appSettingRows);
+      const people = parseRows(personRowSchema, peopleRows);
+      const projectParticipants = parseRows(projectParticipantRowSchema, projectParticipantRows);
+      const taskParticipants = parseRows(taskParticipantRowSchema, taskParticipantRows);
+      const taskMeetings = parseRows(taskMeetingRowSchema, taskMeetingRows);
+      const namedListOrders = parseRows(namedListOrderRowSchema, namedListOrderRows);
+      const taskProgressUpdates = parseRows(taskProgressUpdateRowSchema, taskProgressRows);
+      const taskChecklistItems = parseRows(taskChecklistItemRowSchema, taskChecklistRows);
       return {
         projects,
         meetings,
@@ -152,11 +194,18 @@ export function createDataTransferRepository(db: SqlExecutor) {
         people,
         projectParticipants,
         taskParticipants,
+        taskMeetings,
+        namedListOrders,
+        taskProgressUpdates,
+        taskChecklistItems,
       };
     },
 
     buildClearStatements(): BatchStatement[] {
       return [
+        { sql: 'DELETE FROM task_checklist_items' },
+        { sql: 'DELETE FROM task_progress_updates' },
+        { sql: 'DELETE FROM task_meetings' },
         { sql: 'DELETE FROM task_participants' },
         { sql: 'DELETE FROM project_participants' },
         { sql: 'DELETE FROM task_dependencies' },
@@ -170,6 +219,7 @@ export function createDataTransferRepository(db: SqlExecutor) {
         { sql: 'DELETE FROM recurrence_rules' },
         { sql: 'DELETE FROM projects' },
         { sql: 'DELETE FROM people' },
+        { sql: 'DELETE FROM named_list_orders' },
         { sql: 'DELETE FROM app_settings' },
       ];
     },
@@ -192,6 +242,10 @@ export function createDataTransferRepository(db: SqlExecutor) {
         ...snapshot.risks.map(riskStatement),
         ...snapshot.projectParticipants.map(projectParticipantStatement),
         ...snapshot.taskParticipants.map(taskParticipantStatement),
+        ...snapshot.taskMeetings.map(taskMeetingStatement),
+        ...snapshot.taskProgressUpdates.map(taskProgressUpdateStatement),
+        ...snapshot.taskChecklistItems.map(taskChecklistItemStatement),
+        ...snapshot.namedListOrders.map(namedListOrderStatement),
         ...snapshot.appSettings.map(appSettingStatement),
       ];
     },
@@ -236,6 +290,7 @@ function meetingStatement(row: Meeting): BatchStatement {
       row.is_sample,
       row.created_at,
       row.updated_at,
+      row.meeting_url ?? null,
     ],
   };
 }
@@ -258,6 +313,7 @@ function taskStatement(row: Task): BatchStatement {
       row.actual_hours,
       row.completed_at,
       row.archived_at,
+      row.archived_source,
       row.source_meeting_id,
       row.source_rule_id,
       row.source_occurrence_date,
@@ -303,6 +359,7 @@ function recurrenceRuleStatement(row: RecurrenceRule): BatchStatement {
       row.is_sample,
       row.created_at,
       row.updated_at,
+      row.meeting_url ?? null,
     ],
   };
 }
@@ -373,6 +430,7 @@ function projectLinkStatement(row: ProjectLink): BatchStatement {
       row.is_sample,
       row.created_at,
       row.updated_at,
+      row.task_id ?? null,
     ],
   };
 }
@@ -426,6 +484,61 @@ function taskParticipantStatement(row: TaskParticipant): BatchStatement {
   return {
     sql: INSERTS.taskParticipant,
     params: [row.task_id, row.person_id, row.assigned_at],
+  };
+}
+
+function taskMeetingStatement(row: TaskMeeting): BatchStatement {
+  return {
+    sql: INSERTS.taskMeeting,
+    params: [row.task_id, row.meeting_id, row.linked_at],
+  };
+}
+
+function namedListOrderStatement(row: NamedListOrder): BatchStatement {
+  return {
+    sql: INSERTS.namedListOrder,
+    params: [
+      row.id,
+      row.context,
+      row.context_id,
+      row.name,
+      row.ordered_ids_json,
+      row.is_default,
+      row.created_at,
+      row.updated_at,
+    ],
+  };
+}
+
+function taskProgressUpdateStatement(row: TaskProgressUpdate): BatchStatement {
+  return {
+    sql: INSERTS.taskProgressUpdate,
+    params: [
+      row.id,
+      row.task_id,
+      row.title,
+      row.description,
+      row.occurred_at,
+      row.contribution_percent,
+      row.created_at,
+      row.updated_at,
+    ],
+  };
+}
+
+function taskChecklistItemStatement(row: TaskChecklistItem): BatchStatement {
+  return {
+    sql: INSERTS.taskChecklistItem,
+    params: [
+      row.id,
+      row.task_id,
+      row.content,
+      row.is_completed,
+      row.sort_order,
+      row.completed_at,
+      row.created_at,
+      row.updated_at,
+    ],
   };
 }
 

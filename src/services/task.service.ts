@@ -120,6 +120,7 @@ export function createTaskService(deps: TaskServiceDeps) {
         actual_hours: parsed.actual_hours,
         completed_at: rules.completed_at,
         archived_at: null,
+        archived_source: null,
         source_meeting_id: null,
         source_rule_id: null,
         source_occurrence_date: null,
@@ -164,6 +165,32 @@ export function createTaskService(deps: TaskServiceDeps) {
     /** Direct children of a task; also what the delete guard counts. */
     async countChildren(id: string): Promise<number> {
       return deps.tasks.countChildren(id);
+    },
+
+    /** Manual archive; distinct from the automatic project-archive cascade. */
+    async archiveTask(id: string): Promise<void> {
+      const task = await requireTask(id);
+      if (task.archived_at !== null) {
+        return;
+      }
+      const now = nowIso();
+      await deps.tasks.update(id, { archived_at: now, archived_source: 'manual' }, now);
+    },
+
+    /**
+     * Explicit user restore. Clearing archived_source means a later
+     * "restore project and tasks" can never override this user decision.
+     */
+    async restoreTask(id: string): Promise<void> {
+      const task = await requireTask(id);
+      if (task.archived_at === null) {
+        return;
+      }
+      const project = await deps.projects.findById(task.project_id);
+      if (project !== null && project.archived_at !== null) {
+        throw new AppError('conflict', '所属项目已归档，请先恢复该项目');
+      }
+      await deps.tasks.update(id, { archived_at: null, archived_source: null }, nowIso());
     },
 
     /**

@@ -1,9 +1,11 @@
 import { z } from 'zod';
 import { isValidDateStr } from '@/lib/date';
+import { isDangerousWebAddress, isStorableWebAddress } from '@/lib/webAddress';
 import {
   actionItemStatusEnum,
   linkTypeEnum,
   milestoneStatusEnum,
+  namedListOrderContextEnum,
   projectStatusEnum,
   riskCategoryEnum,
   riskImpactEnum,
@@ -56,6 +58,18 @@ const optionalTime = z
   })
   .transform((value) => (value === '' ? null : value))
   .nullable()
+  .transform((value) => value ?? null);
+
+const optionalWebAddress = z
+  .string()
+  .trim()
+  .refine(
+    (value) => value === '' || isStorableWebAddress(value),
+    '请输入有效网址；无需填写 http:// 或 https://，危险协议不受支持',
+  )
+  .transform((value) => (value === '' ? null : value))
+  .nullable()
+  .optional()
   .transform((value) => value ?? null);
 
 /** Optional foreign key from a `<select>`; the empty option means "not set". */
@@ -183,6 +197,7 @@ export const meetingInputSchema = z.object({
   notes: z.string().trim().max(8000, '会议纪要不能超过 8000 个字符').default(''),
   decisions: z.string().trim().max(4000, '决议不能超过 4000 个字符').default(''),
   risks: z.string().trim().max(4000, '风险不能超过 4000 个字符').default(''),
+  meeting_url: optionalWebAddress,
 });
 
 export const actionItemInputSchema = z.object({
@@ -238,6 +253,7 @@ export const recurrenceRuleInputSchema = z
       .default(null),
     default_priority: taskPriorityEnum.nullable().default(null),
     note: z.string().trim().max(2000, '备注不能超过 2000 个字符').default(''),
+    meeting_url: optionalWebAddress,
     is_active: z.union([z.literal(0), z.literal(1)]).default(1),
   })
   .refine((value) => value.end_date >= value.start_date, {
@@ -267,15 +283,6 @@ export const riskInputSchema = z.object({
   due_date: optionalDate,
 });
 
-function isAbsoluteUrl(value: string): boolean {
-  try {
-    const parsed = new URL(value);
-    return parsed.protocol !== '' && parsed.href !== '';
-  } catch {
-    return false;
-  }
-}
-
 export function isAbsoluteWindowsPath(value: string): boolean {
   const path = value.trim();
   // Accept drive-rooted paths and UNC shares; reject relative/non-Windows paths and NUL injection.
@@ -290,13 +297,17 @@ export const projectLinkInputSchema = z
     link_type: linkTypeEnum,
     target: z.string().trim().min(1, '目标地址或路径不能为空').max(4000, '目标地址或路径过长'),
     description: z.string().trim().max(2000, '备注不能超过 2000 个字符').default(''),
+    task_id: optionalId.optional(),
   })
   .superRefine((value, context) => {
-    if (value.link_type === 'url' && !isAbsoluteUrl(value.target)) {
+    if (
+      value.link_type === 'url' &&
+      (!isStorableWebAddress(value.target) || isDangerousWebAddress(value.target))
+    ) {
       context.addIssue({
         code: z.ZodIssueCode.custom,
         path: ['target'],
-        message: '请输入包含协议的合法绝对 URL',
+        message: '请输入有效网址；无需填写 http:// 或 https://，危险协议不受支持',
       });
     }
     if (value.link_type === 'file_path' && !isAbsoluteWindowsPath(value.target)) {
@@ -307,6 +318,45 @@ export const projectLinkInputSchema = z
       });
     }
   });
+
+export const orderedIdsSchema = z.array(z.string().min(1)).max(10000);
+
+/**
+ * One named order can carry several sub-orders keyed by section (for example
+ * projects: active / archived / all). The legacy single-list payload maps to
+ * the '' section.
+ */
+export const orderSectionsSchema = z.record(z.string().max(80), orderedIdsSchema);
+
+export const namedListOrderInputSchema = z
+  .object({
+    context: namedListOrderContextEnum,
+    context_id: z.string().trim().max(160).default(''),
+    name: z.string().trim().min(1, '排序名称不能为空').max(120, '排序名称不能超过 120 个字符'),
+    /** Legacy single-section payload; normalized to `sections['']`. */
+    ordered_ids: orderedIdsSchema.optional(),
+    sections: orderSectionsSchema.optional(),
+    is_default: z.boolean().default(false),
+  })
+  .refine((value) => value.ordered_ids !== undefined || value.sections !== undefined, {
+    message: '保存的排序缺少顺序内容',
+    path: ['sections'],
+  });
+
+export const taskProgressUpdateInputSchema = z.object({
+  title: z.string().trim().min(1, '进展标题不能为空').max(160, '进展标题不能超过 160 个字符'),
+  description: z.string().trim().max(4000, '进展描述不能超过 4000 个字符').default(''),
+  occurred_at: z.string().datetime({ offset: true, message: '进展时间必须是有效时间' }),
+  contribution_percent: z.coerce
+    .number()
+    .int('贡献百分比必须是整数')
+    .min(0, '贡献百分比不能小于 0')
+    .max(100, '贡献百分比不能大于 100'),
+});
+
+export const taskChecklistItemInputSchema = z.object({
+  content: z.string().trim().min(1, '待办内容不能为空').max(300, '待办内容不能超过 300 个字符'),
+});
 
 const optionalProfileText = (max: number, message: string) =>
   z
@@ -345,10 +395,13 @@ export type MeetingInput = z.infer<typeof meetingInputSchema>;
 export type ActionItemInput = z.infer<typeof actionItemInputSchema>;
 export type ConvertActionItemInput = z.infer<typeof convertActionItemSchema>;
 export type MilestoneInput = z.infer<typeof milestoneInputSchema>;
-export type RecurrenceRuleInput = z.infer<typeof recurrenceRuleInputSchema>;
+export type RecurrenceRuleInput = z.input<typeof recurrenceRuleInputSchema>;
 export type RecurrenceExceptionInput = z.infer<typeof recurrenceExceptionInputSchema>;
 export type RiskInput = z.infer<typeof riskInputSchema>;
-export type ProjectLinkInput = z.infer<typeof projectLinkInputSchema>;
+export type ProjectLinkInput = z.input<typeof projectLinkInputSchema>;
+export type NamedListOrderInput = z.infer<typeof namedListOrderInputSchema>;
+export type TaskProgressUpdateInput = z.infer<typeof taskProgressUpdateInputSchema>;
+export type TaskChecklistItemInput = z.infer<typeof taskChecklistItemInputSchema>;
 export type PersonInput = z.input<typeof personInputSchema>;
 export type ProjectParticipantInput = z.infer<typeof projectParticipantInputSchema>;
 export type TaskParticipantInput = z.infer<typeof taskParticipantInputSchema>;

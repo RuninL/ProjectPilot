@@ -94,6 +94,7 @@ describe('CSV 导出完整覆盖', () => {
       }));
       snapshot.taskDependencies = [];
       snapshot.taskParticipants = [];
+      snapshot.taskMeetings = [];
       snapshot.actionItems = snapshot.actionItems.map((item) => ({
         ...item,
         converted_task_id: null,
@@ -130,6 +131,9 @@ describe('CSV 导出完整覆盖', () => {
           resolved_at,
         }),
       );
+      snapshot.projectLinks = snapshot.projectLinks.map((link) => ({ ...link, task_id: null }));
+      snapshot.taskProgressUpdates = [];
+      snapshot.taskChecklistItems = [];
       seedSnapshot(harness.db, snapshot);
       const persisted = await harness.repository.readSnapshot();
 

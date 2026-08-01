@@ -1,4 +1,4 @@
-import { CalendarDays, Clock, Pencil, Plus, Trash2 } from 'lucide-react';
+import { CalendarDays, Clock, Copy, ExternalLink, Pencil, Plus, Trash2 } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { ConfirmDialog } from '@/components/common/ConfirmDialog';
@@ -8,7 +8,12 @@ import { LoadingState } from '@/components/common/LoadingState';
 import { SampleBadge } from '@/components/common/SampleBadge';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 import { PageHeader } from '@/components/common/PageHeader';
+import { ReorderHandle } from '@/features/sorting/ReorderHandle';
+import { SavedOrderControls } from '@/features/sorting/SavedOrderControls';
+import { useDragReorder } from '@/features/sorting/useDragReorder';
+import { useSectionedListOrder } from '@/features/sorting/useSavedListOrder';
 import {
   Dialog,
   DialogContent,
@@ -19,13 +24,20 @@ import {
 } from '@/components/ui/dialog';
 import { toAppError } from '@/lib/errors';
 import { todayHK } from '@/lib/date';
-import { expandRule } from '@/services/recurrence.service';
+import { getMeetingService } from '@/services/meeting.service';
+import { expandRule, getRecurrenceService } from '@/services/recurrence.service';
 import { useMeetingStore } from '@/stores/useMeetingStore';
 import { useProjectStore } from '@/stores/useProjectStore';
 import { useRecurrenceStore } from '@/stores/useRecurrenceStore';
-import type { Meeting, RecurrenceRule } from '@/types';
+import type { Meeting, RecurrenceException, RecurrenceRule } from '@/types';
 import type { RecurrenceRuleInput } from '@/services/schemas';
 import { MeetingForm } from '../components/MeetingForm';
+import {
+  buildMeetingOccurrences,
+  filterAndSortMeetingOccurrences,
+  type MeetingRange,
+  type MeetingTimeSort,
+} from '../meetingListModel';
 import { RecurrenceRuleForm } from '../components/RecurrenceRuleForm';
 
 interface PendingDelete {
@@ -81,12 +93,27 @@ export function MeetingsPage() {
     rule: RecurrenceRule;
     input: RecurrenceRuleInput;
   } | null>(null);
+  const [exceptionsByRule, setExceptionsByRule] = useState<
+    ReadonlyMap<string, readonly RecurrenceException[]>
+  >(new Map());
+  const [search, setSearch] = useState('');
+  const [projectId, setProjectId] = useState('all');
+  const [linkFilter, setLinkFilter] = useState<'all' | 'with' | 'without'>('all');
+  const [range, setRange] = useState<MeetingRange>('future');
+  const [timeSort, setTimeSort] = useState<MeetingTimeSort>('time_asc');
   const [searchParams] = useSearchParams();
 
   useEffect(() => {
     void loadMeetings();
     void loadOptions();
     void loadRules();
+    void getMeetingService()
+      .then((service) => service.getListPreferences())
+      .then((preferences) => {
+        setRange(preferences.range);
+        setTimeSort(preferences.timeSort);
+      })
+      .catch(() => undefined);
   }, [loadMeetings, loadOptions, loadRules]);
 
   useEffect(() => {
@@ -96,6 +123,75 @@ export function MeetingsPage() {
       setEditingRule(rule);
     }
   }, [rules, searchParams]);
+
+  useEffect(() => {
+    let active = true;
+    void getRecurrenceService()
+      .then(async (service) => {
+        const exceptions = await service.listExceptionsByRuleIds(rules.map((rule) => rule.id));
+        if (active) setExceptionsByRule(exceptions);
+      })
+      .catch(() => {
+        if (active) setExceptionsByRule(new Map());
+      });
+    return () => {
+      active = false;
+    };
+  }, [rules]);
+
+  // Standalone area: only plain meetings — recurring series and their
+  // occurrences (expected or materialized) never enter this list.
+  const standaloneMatches = useMemo(() => {
+    const query = search.trim().toLocaleLowerCase('zh-CN');
+    return buildMeetingOccurrences(meetings, rules, exceptionsByRule).filter(
+      (occurrence) =>
+        occurrence.source_rule_id === null &&
+        (query === '' || occurrence.topic.toLocaleLowerCase('zh-CN').includes(query)) &&
+        (projectId === 'all' || occurrence.project_id === projectId) &&
+        (linkFilter === 'all' ||
+          (linkFilter === 'with'
+            ? occurrence.meeting_url !== null
+            : occurrence.meeting_url === null)),
+    );
+  }, [exceptionsByRule, linkFilter, meetings, projectId, rules, search]);
+
+  // Recurring area: one row per series, stable series id, never expanded here.
+  const filteredSeries = useMemo(() => {
+    const query = search.trim().toLocaleLowerCase('zh-CN');
+    return rules
+      .filter(
+        (rule) =>
+          rule.kind === 'meeting' &&
+          (query === '' || rule.title.toLocaleLowerCase('zh-CN').includes(query)) &&
+          (projectId === 'all' || rule.project_id === projectId) &&
+          (linkFilter === 'all' ||
+            (linkFilter === 'with'
+              ? (rule.meeting_url ?? null) !== null
+              : (rule.meeting_url ?? null) === null)),
+      )
+      .sort((a, b) => a.title.localeCompare(b.title, 'zh-CN', { sensitivity: 'base' }));
+  }, [linkFilter, projectId, rules, search]);
+
+  // One named config stores all five sub-orders (recurringSeries plus one per
+  // standalone time range); switching range just reads the matching section.
+  const sectionItems = useMemo(
+    () => ({
+      recurringSeries: filteredSeries,
+      'standalone.future': filterAndSortMeetingOccurrences(standaloneMatches, 'future', timeSort),
+      'standalone.today': filterAndSortMeetingOccurrences(standaloneMatches, 'today', timeSort),
+      'standalone.past': filterAndSortMeetingOccurrences(standaloneMatches, 'past', timeSort),
+      'standalone.all': filterAndSortMeetingOccurrences(standaloneMatches, 'all', timeSort),
+    }),
+    [filteredSeries, standaloneMatches, timeSort],
+  );
+  const savedOrder = useSectionedListOrder('meetings', '', sectionItems);
+  const seriesSection = savedOrder.section('recurringSeries');
+  const standaloneSection = savedOrder.section(`standalone.${range}`);
+  const manualMode = savedOrder.mode !== 'dynamic';
+  const seriesDrag = useDragReorder(seriesSection.moveTo, !manualMode);
+  const dragReorder = useDragReorder(standaloneSection.moveTo, !manualMode);
+  const filteredOccurrences = standaloneSection.displayedItems;
+  const rulesById = useMemo(() => new Map(rules.map((rule) => [rule.id, rule])), [rules]);
 
   const projectName = useMemo(() => {
     const byId = new Map(projectOptions.map((project) => [project.id, project.name]));
@@ -176,25 +272,143 @@ export function MeetingsPage() {
         <p className="mb-4 text-sm text-destructive">{recurrenceError}</p>
       )}
 
-      <section className="mb-6 rounded-lg border bg-card p-4" aria-label="周期会议规则">
+      <section className="mb-6 space-y-3 rounded-lg border bg-card p-4" aria-label="会议筛选">
+        <div className="flex flex-wrap gap-2" aria-label="会议时间范围">
+          {(
+            [
+              ['future', '未来'],
+              ['today', '今天'],
+              ['past', '过去'],
+              ['all', '全部'],
+            ] as const
+          ).map(([value, label]) => (
+            <Button
+              key={value}
+              size="sm"
+              variant={range === value ? 'default' : 'outline'}
+              onClick={() => {
+                setRange(value);
+                void getMeetingService()
+                  .then((service) => service.setListRange(value))
+                  .catch(() => {
+                    setActionError('无法保存会议列表偏好');
+                  });
+                if (value === 'future' || value === 'today') {
+                  setTimeSort('time_asc');
+                  void getMeetingService()
+                    .then((service) => service.setListTimeSort('time_asc'))
+                    .catch(() => {
+                      setActionError('无法保存会议列表偏好');
+                    });
+                }
+                if (value === 'past') {
+                  setTimeSort('time_desc');
+                  void getMeetingService()
+                    .then((service) => service.setListTimeSort('time_desc'))
+                    .catch(() => {
+                      setActionError('无法保存会议列表偏好');
+                    });
+                }
+              }}
+            >
+              {label}
+            </Button>
+          ))}
+        </div>
+        <div className="grid gap-3 md:grid-cols-4">
+          <Input
+            aria-label="搜索会议名称"
+            placeholder="搜索会议名称"
+            value={search}
+            onChange={(event) => {
+              setSearch(event.target.value);
+            }}
+          />
+          <select
+            aria-label="筛选所属项目"
+            className="h-10 rounded-md border border-input bg-background px-3 text-sm"
+            value={projectId}
+            onChange={(event) => {
+              setProjectId(event.target.value);
+            }}
+          >
+            <option value="all">全部项目</option>
+            {projectOptions.map((project) => (
+              <option key={project.id} value={project.id}>
+                {project.name}
+              </option>
+            ))}
+          </select>
+          <select
+            aria-label="会议链接"
+            className="h-10 rounded-md border border-input bg-background px-3 text-sm"
+            value={linkFilter}
+            onChange={(event) => {
+              setLinkFilter(event.target.value as typeof linkFilter);
+            }}
+          >
+            <option value="all">全部链接</option>
+            <option value="with">有会议链接</option>
+            <option value="without">无会议链接</option>
+          </select>
+          <select
+            aria-label="会议时间排序"
+            className="h-10 rounded-md border border-input bg-background px-3 text-sm"
+            value={timeSort}
+            onChange={(event) => {
+              const value = event.target.value as MeetingTimeSort;
+              setTimeSort(value);
+              void getMeetingService()
+                .then((service) => service.setListTimeSort(value))
+                .catch(() => {
+                  setActionError('无法保存会议列表偏好');
+                });
+            }}
+          >
+            <option value="time_asc">实际会议时间正序</option>
+            <option value="time_desc">实际会议时间倒序</option>
+          </select>
+        </div>
+        <SavedOrderControls controller={savedOrder} disabledReason={null} />
+      </section>
+
+      <section className="mb-6 rounded-lg border bg-card p-4" aria-label="周期会议">
         <div className="mb-3">
           <div>
             <h2 className="text-lg font-medium">周期会议</h2>
-            <p className="text-sm text-muted-foreground">日历会根据重复设置直接显示各次会议。</p>
+            <p className="text-sm text-muted-foreground">
+              每个系列只显示一次；日历会根据重复设置直接显示各次会议。
+            </p>
           </div>
         </div>
-        {rules.length === 0 ? (
-          <p className="text-sm text-muted-foreground">暂无周期会议规则。</p>
+        {seriesSection.displayedItems.length === 0 ? (
+          <p className="text-sm text-muted-foreground">暂无符合条件的周期会议系列。</p>
         ) : (
           <ul className="divide-y">
-            {rules
-              .filter((rule) => rule.kind === 'meeting')
-              .sort((a, b) => a.title.localeCompare(b.title, 'zh-CN', { sensitivity: 'base' }))
-              .map((rule) => (
-                <li
-                  key={rule.id}
-                  className="flex flex-wrap items-center justify-between gap-3 rounded bg-recurrence-background px-3 py-3"
-                >
+            {seriesSection.displayedItems.map((rule) => (
+              <li
+                key={rule.id}
+                {...seriesDrag.dropProps(rule.id)}
+                className={`flex flex-wrap items-center justify-between gap-3 rounded bg-recurrence-background px-3 py-3 ${
+                  seriesDrag.dropTargetId === rule.id
+                    ? 'border-primary ring-1 ring-inset ring-primary'
+                    : ''
+                } ${seriesDrag.activeId === rule.id ? 'opacity-60' : ''}`}
+              >
+                <div className="flex min-w-0 items-center gap-2">
+                  {manualMode && (
+                    <ReorderHandle
+                      label={rule.title}
+                      disabled={false}
+                      onMoveUp={() => {
+                        seriesSection.move(rule.id, -1);
+                      }}
+                      onMoveDown={() => {
+                        seriesSection.move(rule.id, 1);
+                      }}
+                      dragHandleProps={seriesDrag.handleProps(rule.id)}
+                    />
+                  )}
                   <div>
                     <p className="font-medium text-recurrence">{`${rule.title} [周期会议]`}</p>
                     <p className="text-sm text-muted-foreground">
@@ -202,37 +416,47 @@ export function MeetingsPage() {
                       {rule.project_id === null ? '独立会议' : projectName(rule.project_id)}
                     </p>
                   </div>
-                  <div className="flex gap-2">
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      onClick={() => {
-                        setEditingRule(rule);
-                        setRuleFormOpen(true);
-                      }}
-                    >
-                      修改整个系列
-                    </Button>
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      onClick={() => {
-                        setDeletingRule(rule);
-                      }}
-                    >
-                      删除整个系列
-                    </Button>
-                  </div>
-                </li>
-              ))}
+                </div>
+                <div className="flex gap-2">
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => {
+                      setEditingRule(rule);
+                      setRuleFormOpen(true);
+                    }}
+                  >
+                    修改整个系列
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => {
+                      setDeletingRule(rule);
+                    }}
+                  >
+                    删除整个系列
+                  </Button>
+                </div>
+              </li>
+            ))}
           </ul>
         )}
       </section>
 
-      {meetings.length === 0 ? (
+      <h2 className="mb-3 text-lg font-medium">独立会议</h2>
+      {filteredOccurrences.length === 0 ? (
         <EmptyState
-          title="还没有会议记录"
-          description="新建会议后可以记录议程、纪要、决议与行动项。"
+          title={
+            meetings.length === 0 && rules.length === 0
+              ? '还没有会议记录'
+              : '没有符合条件的独立会议'
+          }
+          description={
+            meetings.length === 0 && rules.length === 0
+              ? '新建会议后可以记录议程、纪要、决议与行动项。'
+              : '调整时间范围或筛选条件，也可以创建新会议。'
+          }
           action={
             <Button
               onClick={() => {
@@ -246,75 +470,141 @@ export function MeetingsPage() {
         />
       ) : (
         <ul className="divide-y rounded-lg border bg-card">
-          {[...meetings]
-            .sort(
-              (a, b) =>
-                a.date.localeCompare(b.date) ||
-                (a.start_time === null
-                  ? 1
-                  : b.start_time === null
-                    ? -1
-                    : a.start_time.localeCompare(b.start_time)) ||
-                a.topic.localeCompare(b.topic, 'zh-CN', { sensitivity: 'base' }),
-            )
-            .map((meeting) => (
+          {filteredOccurrences.map((occurrence) => {
+            const meeting = occurrence.meeting;
+            const rule =
+              occurrence.source_rule_id === null
+                ? undefined
+                : rulesById.get(occurrence.source_rule_id);
+            const manual = manualMode;
+            return (
               <li
-                key={meeting.id}
-                className="flex flex-wrap items-center justify-between gap-3 p-4"
+                key={occurrence.id}
+                {...dragReorder.dropProps(occurrence.id)}
+                className={`flex flex-wrap items-center justify-between gap-3 p-4 ${
+                  dragReorder.dropTargetId === occurrence.id
+                    ? 'border-primary ring-1 ring-inset ring-primary'
+                    : ''
+                } ${dragReorder.activeId === occurrence.id ? 'opacity-60' : ''}`}
               >
                 <div className="min-w-0">
                   <div className="flex flex-wrap items-center gap-2">
-                    <Link
-                      to={`/meetings/${meeting.id}`}
-                      className="text-sm font-medium hover:underline"
-                    >
-                      {meeting.topic}
-                    </Link>
-                    <Badge variant="outline">{projectName(meeting.project_id)}</Badge>
-                    {meeting.is_sample === 1 && <SampleBadge />}
+                    {meeting === null ? (
+                      <span className="text-sm font-medium">{occurrence.topic}</span>
+                    ) : (
+                      <Link
+                        to={`/meetings/${meeting.id}`}
+                        className="text-sm font-medium hover:underline"
+                      >
+                        {occurrence.topic}
+                      </Link>
+                    )}
+                    <Badge variant="outline">{projectName(occurrence.project_id)}</Badge>
+                    {occurrence.source_rule_id !== null && (
+                      <Badge variant="secondary">周期会议</Badge>
+                    )}
+                    {meeting?.is_sample === 1 && <SampleBadge />}
                   </div>
                   <div className="mt-1 flex flex-wrap items-center gap-3 text-xs text-muted-foreground">
                     <span className="inline-flex items-center gap-1">
                       <CalendarDays className="h-3.5 w-3.5" aria-hidden />
-                      {meeting.date}
+                      {occurrence.date}
                     </span>
-                    {meeting.start_time !== null && (
+                    {occurrence.start_time !== null && (
                       <span className="inline-flex items-center gap-1">
                         <Clock className="h-3.5 w-3.5" aria-hidden />
-                        {meeting.start_time}
+                        {occurrence.start_time}
                       </span>
                     )}
                   </div>
                 </div>
                 <div className="flex shrink-0 items-center gap-1">
-                  <Button size="sm" variant="outline" asChild>
-                    <Link to={`/meetings/${meeting.id}`}>打开</Link>
-                  </Button>
+                  {manual && (
+                    <ReorderHandle
+                      label={occurrence.topic}
+                      disabled={false}
+                      onMoveUp={() => {
+                        standaloneSection.move(occurrence.id, -1);
+                      }}
+                      onMoveDown={() => {
+                        standaloneSection.move(occurrence.id, 1);
+                      }}
+                      dragHandleProps={dragReorder.handleProps(occurrence.id)}
+                    />
+                  )}
+                  {meeting !== null && (
+                    <Button size="sm" variant="outline" asChild>
+                      <Link to={`/meetings/${meeting.id}`}>打开</Link>
+                    </Button>
+                  )}
+                  {occurrence.meeting_url !== null && (
+                    <>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => {
+                          setActionError(null);
+                          void getMeetingService()
+                            .then((service) =>
+                              service.openMeetingUrlValue(occurrence.meeting_url ?? ''),
+                            )
+                            .catch((caught: unknown) => {
+                              setActionError(toAppError(caught).message);
+                            });
+                        }}
+                      >
+                        <ExternalLink className="h-4 w-4" aria-hidden />
+                        加入会议
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        aria-label={`复制链接：${occurrence.topic}`}
+                        onClick={() => {
+                          void navigator.clipboard
+                            .writeText(occurrence.meeting_url ?? '')
+                            .catch(() => {
+                              setActionError('无法复制会议链接');
+                            });
+                        }}
+                      >
+                        <Copy className="h-4 w-4" aria-hidden />
+                      </Button>
+                    </>
+                  )}
                   <Button
                     size="sm"
                     variant="ghost"
-                    aria-label={`编辑会议：${meeting.topic}`}
+                    aria-label={`编辑会议：${occurrence.topic}`}
                     onClick={() => {
-                      setEditing(meeting);
-                      setFormOpen(true);
+                      if (meeting !== null) {
+                        setEditing(meeting);
+                        setFormOpen(true);
+                      } else if (rule !== undefined) {
+                        setEditingRule(rule);
+                        setRuleFormOpen(true);
+                      }
                     }}
                   >
                     <Pencil className="h-4 w-4" aria-hidden />
                   </Button>
-                  <Button
-                    size="sm"
-                    variant="ghost"
-                    aria-label={`删除会议：${meeting.topic}`}
-                    disabled={busy}
-                    onClick={() => {
-                      askDelete(meeting);
-                    }}
-                  >
-                    <Trash2 className="h-4 w-4" aria-hidden />
-                  </Button>
+                  {meeting !== null && (
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      aria-label={`删除会议：${meeting.topic}`}
+                      disabled={busy}
+                      onClick={() => {
+                        askDelete(meeting);
+                      }}
+                    >
+                      <Trash2 className="h-4 w-4" aria-hidden />
+                    </Button>
+                  )}
                 </div>
               </li>
-            ))}
+            );
+          })}
         </ul>
       )}
 
@@ -324,9 +614,9 @@ export function MeetingsPage() {
         projects={projectOptions}
         defaultProjectId={null}
         lockProject={false}
-        onSubmit={async (input) => {
+        onSubmit={async (input, taskIds) => {
           if (editing === null) {
-            await createMeeting(input);
+            await createMeeting(input, taskIds);
           } else {
             await updateMeeting(editing.id, input);
           }
@@ -378,9 +668,9 @@ export function MeetingsPage() {
         open={ruleFormOpen}
         rule={editingRule}
         projects={projectOptions}
-        onSubmit={async (input) => {
+        onSubmit={async (input, taskIds) => {
           if (editingRule === null) {
-            await createRule(input);
+            await createRule(input, taskIds);
           } else {
             setPendingRuleUpdate({ rule: editingRule, input });
           }

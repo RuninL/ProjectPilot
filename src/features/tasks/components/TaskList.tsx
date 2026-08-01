@@ -1,6 +1,8 @@
 import { Fragment } from 'react';
 import type { TaskWithProject } from '@/types';
 import { TaskRow } from './TaskRow';
+import { ReorderHandle } from '@/features/sorting/ReorderHandle';
+import { useDragReorder } from '@/features/sorting/useDragReorder';
 
 interface TaskListProps {
   tasks: readonly TaskWithProject[];
@@ -9,7 +11,12 @@ interface TaskListProps {
   onToggleSelect: (id: string) => void;
   onEdit: (task: TaskWithProject) => void;
   onDelete: (task: TaskWithProject) => void;
+  onArchive?: (task: TaskWithProject) => void;
+  onRestore?: (task: TaskWithProject) => void;
   participantsByTask?: Readonly<Record<string, readonly string[]>>;
+  reorderEnabled?: boolean;
+  onMove?: (id: string, offset: -1 | 1) => void;
+  onMoveTo?: (sourceId: string, targetId: string) => void;
 }
 
 /**
@@ -24,8 +31,35 @@ export function TaskList({
   onToggleSelect,
   onEdit,
   onDelete,
+  onArchive,
+  onRestore,
   participantsByTask = {},
+  reorderEnabled = false,
+  onMove = () => undefined,
+  onMoveTo = () => undefined,
 }: TaskListProps) {
+  const dragReorder = useDragReorder(onMoveTo, !reorderEnabled);
+  const reorderProps = (task: TaskWithProject) =>
+    reorderEnabled
+      ? {
+          dropTargetProps: dragReorder.dropProps(task.id),
+          isDropTarget: dragReorder.dropTargetId === task.id,
+          isDragSource: dragReorder.activeId === task.id,
+          reorderHandle: (
+            <ReorderHandle
+              label={task.title}
+              disabled={false}
+              onMoveUp={() => {
+                onMove(task.id, -1);
+              }}
+              onMoveDown={() => {
+                onMove(task.id, 1);
+              }}
+              dragHandleProps={dragReorder.handleProps(task.id)}
+            />
+          ),
+        }
+      : {};
   const present = new Set(tasks.map((task) => task.id));
   const childrenByParent = new Map<string, TaskWithProject[]>();
   const roots: TaskWithProject[] = [];
@@ -52,7 +86,10 @@ export function TaskList({
             onToggleSelect={onToggleSelect}
             onEdit={onEdit}
             onDelete={onDelete}
+            {...(onArchive === undefined ? {} : { onArchive })}
+            {...(onRestore === undefined ? {} : { onRestore })}
             participantNames={participantsByTask[task.id] ?? []}
+            {...reorderProps(task)}
           />
           {(childrenByParent.get(task.id) ?? []).map((child) => (
             <TaskRow
@@ -64,7 +101,10 @@ export function TaskList({
               onToggleSelect={onToggleSelect}
               onEdit={onEdit}
               onDelete={onDelete}
+              {...(onArchive === undefined ? {} : { onArchive })}
+              {...(onRestore === undefined ? {} : { onRestore })}
               participantNames={participantsByTask[child.id] ?? []}
+              {...reorderProps(child)}
             />
           ))}
         </Fragment>

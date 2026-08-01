@@ -1,5 +1,6 @@
 import { ArchiveRestore, Archive, MoreHorizontal, Pencil, Trash2 } from 'lucide-react';
 import { Link } from 'react-router-dom';
+import type { ReactNode } from 'react';
 import { SampleBadge } from '@/components/common/SampleBadge';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -11,8 +12,10 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { formatDisplay } from '@/lib/date';
+import { cn } from '@/lib/cn';
 import { PROJECT_STATUS_LABELS } from '@/lib/labels';
 import { formatProgress, type ProjectProgress } from '@/services/projectProgress';
+import type { DropTargetProps } from '@/features/sorting/useDragReorder';
 import type { Project } from '@/types';
 
 interface ProjectListItemProps {
@@ -23,6 +26,10 @@ interface ProjectListItemProps {
   onRestore: (project: Project) => void;
   onDelete: (project: Project) => void;
   participantNames?: readonly string[];
+  reorderHandle?: ReactNode;
+  dropTargetProps?: DropTargetProps;
+  isDropTarget?: boolean;
+  isDragSource?: boolean;
 }
 
 /** One row of the project list: identity, dates, completion rate and actions. */
@@ -34,12 +41,24 @@ export function ProjectListItem({
   onRestore,
   onDelete,
   participantNames = [],
+  reorderHandle,
+  dropTargetProps,
+  isDropTarget = false,
+  isDragSource = false,
 }: ProjectListItemProps) {
   const archived = project.archived_at !== null;
   const rate = progress ?? { total: 0, done: 0, percent: 0 };
 
   return (
-    <li className="flex items-center gap-4 rounded-lg border bg-card p-4">
+    <li
+      className={cn(
+        'flex items-center gap-4 rounded-lg border bg-card p-4',
+        isDropTarget && 'border-primary ring-1 ring-primary',
+        isDragSource && 'opacity-60',
+      )}
+      {...dropTargetProps}
+    >
+      {reorderHandle}
       <span
         className="h-10 w-1.5 shrink-0 rounded-full"
         style={{ backgroundColor: project.color }}

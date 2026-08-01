@@ -1,7 +1,17 @@
+import { openUrl } from '@tauri-apps/plugin-opener';
+import { executeBatch, type BatchStatement } from '@/lib/commands';
 import { nowIso } from '@/lib/date';
-import { AppError } from '@/lib/errors';
+import { AppError, toAppError } from '@/lib/errors';
 import { newId } from '@/lib/uuid';
-import type { ActionItemRepository, MeetingRepository, ProjectRepository } from '@/repositories';
+import { resolveWebAddressForOpen } from '@/lib/webAddress';
+import type {
+  ActionItemRepository,
+  AppSettingRepository,
+  MeetingRepository,
+  ProjectRepository,
+  TaskMeetingRepository,
+  TaskRepository,
+} from '@/repositories';
 import { getRepositories } from '@/repositories';
 import type { Meeting } from '@/types';
 import { meetingInputSchema, type MeetingInput } from './schemas';
@@ -10,6 +20,11 @@ export interface MeetingServiceDeps {
   meetings: MeetingRepository;
   actionItems: ActionItemRepository;
   projects: ProjectRepository;
+  tasks: TaskRepository;
+  taskMeetings: TaskMeetingRepository;
+  appSettings?: AppSettingRepository;
+  openUrl: (url: string) => Promise<void>;
+  runBatch: (statements: BatchStatement[]) => Promise<number>;
 }
 
 /**
@@ -49,11 +64,28 @@ export function createMeetingService(deps: MeetingServiceDeps) {
     if (projectId === null) {
       return null;
     }
+
     const project = await deps.projects.findById(projectId);
     if (project === null) {
       throw new AppError('validation', '所属项目不存在或已被删除');
     }
     return project.id;
+  }
+
+  async function openValidatedUrl(url: string | null): Promise<void> {
+    const resolved = resolveWebAddressForOpen(url ?? '');
+    if (!resolved.ok) {
+      throw new AppError(
+        'validation',
+        resolved.reason === 'unsupported' ? '暂不支持该链接类型' : '会议没有可安全打开的链接',
+      );
+    }
+    try {
+      await deps.openUrl(resolved.value);
+    } catch (caught) {
+      const error = toAppError(caught);
+      throw new AppError(error.kind, `无法打开会议链接：${error.message}`, { cause: caught });
+    }
   }
 
   return {
@@ -65,13 +97,55 @@ export function createMeetingService(deps: MeetingServiceDeps) {
       return deps.meetings.findByProject(projectId);
     },
 
+    async getListPreferences(): Promise<{
+      range: 'future' | 'today' | 'past' | 'all';
+      timeSort: 'time_asc' | 'time_desc';
+    }> {
+      const [range, timeSort] = await Promise.all([
+        deps.appSettings?.get('meetings:list_range'),
+        deps.appSettings?.get('meetings:time_sort'),
+      ]);
+      return {
+        range:
+          range?.value === 'today' || range?.value === 'past' || range?.value === 'all'
+            ? range.value
+            : 'future',
+        timeSort: timeSort?.value === 'time_desc' ? 'time_desc' : 'time_asc',
+      };
+    },
+
+    async setListRange(range: 'future' | 'today' | 'past' | 'all'): Promise<void> {
+      await deps.appSettings?.set('meetings:list_range', range, nowIso());
+    },
+
+    async setListTimeSort(timeSort: 'time_asc' | 'time_desc'): Promise<void> {
+      await deps.appSettings?.set('meetings:time_sort', timeSort, nowIso());
+    },
+
     async getMeeting(id: string): Promise<Meeting> {
       return requireMeeting(id);
     },
 
-    async createMeeting(input: MeetingInput): Promise<Meeting> {
+    async openMeetingUrl(id: string): Promise<void> {
+      const meeting = await requireMeeting(id);
+      await openValidatedUrl(meeting.meeting_url ?? null);
+    },
+
+    async openMeetingUrlValue(url: string): Promise<void> {
+      await openValidatedUrl(url);
+    },
+
+    async createMeeting(input: MeetingInput, taskIds: readonly string[] = []): Promise<Meeting> {
       const parsed = meetingInputSchema.parse(input);
       const projectId = await resolveProjectId(parsed.project_id);
+      const uniqueTaskIds = [...new Set(taskIds)];
+      if (uniqueTaskIds.length !== taskIds.length) {
+        throw new AppError('validation', '关联任务不能重复');
+      }
+      const linkedTasks = await deps.tasks.findByIds(uniqueTaskIds);
+      if (linkedTasks.length !== uniqueTaskIds.length) {
+        throw new AppError('validation', '关联任务不存在或已被删除');
+      }
 
       const now = nowIso();
       const meeting: Meeting = {
@@ -85,13 +159,27 @@ export function createMeetingService(deps: MeetingServiceDeps) {
         notes: parsed.notes,
         decisions: parsed.decisions,
         risks: parsed.risks,
+        meeting_url: parsed.meeting_url,
         source_rule_id: null,
         source_occurrence_date: null,
         is_sample: 0,
         created_at: now,
         updated_at: now,
       };
-      await deps.meetings.insert(meeting);
+      if (uniqueTaskIds.length === 0) {
+        await deps.meetings.insert(meeting);
+      } else {
+        await deps.runBatch([
+          deps.meetings.buildInsert(meeting),
+          ...uniqueTaskIds.map((taskId) =>
+            deps.taskMeetings.buildInsert({
+              task_id: taskId,
+              meeting_id: meeting.id,
+              linked_at: now,
+            }),
+          ),
+        ]);
+      }
       return meeting;
     },
 
@@ -112,6 +200,7 @@ export function createMeetingService(deps: MeetingServiceDeps) {
           notes: parsed.notes,
           decisions: parsed.decisions,
           risks: parsed.risks,
+          meeting_url: parsed.meeting_url,
         },
         nowIso(),
       );
@@ -143,5 +232,10 @@ export async function getMeetingService(): Promise<MeetingService> {
     meetings: repos.meetings,
     actionItems: repos.actionItems,
     projects: repos.projects,
+    tasks: repos.tasks,
+    taskMeetings: repos.taskMeetings,
+    appSettings: repos.appSettings,
+    openUrl,
+    runBatch: executeBatch,
   });
 }

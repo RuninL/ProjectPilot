@@ -1,4 +1,4 @@
-import { ArrowLeft, CalendarDays, Clock, Pencil, Trash2 } from 'lucide-react';
+import { ArrowLeft, CalendarDays, Clock, Copy, ExternalLink, Pencil, Trash2 } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { ConfirmDialog } from '@/components/common/ConfirmDialog';
@@ -8,12 +8,13 @@ import { SampleBadge } from '@/components/common/SampleBadge';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { toAppError } from '@/lib/errors';
-import { parseAttendees } from '@/services/meeting.service';
+import { getMeetingService, parseAttendees } from '@/services/meeting.service';
 import { useMeetingStore } from '@/stores/useMeetingStore';
 import { useProjectStore } from '@/stores/useProjectStore';
 import type { Project } from '@/types';
 import { ActionItemSection } from '../components/ActionItemSection';
 import { MeetingForm } from '../components/MeetingForm';
+import { MeetingTaskSummary } from '../components/MeetingTaskSummary';
 
 interface NoteBlock {
   title: string;
@@ -150,6 +151,34 @@ export function MeetingDetailPage() {
           </div>
         </div>
         <div className="flex shrink-0 gap-2">
+          {meeting.meeting_url !== null && (
+            <>
+              <Button
+                onClick={() => {
+                  setActionError(null);
+                  void getMeetingService()
+                    .then((service) => service.openMeetingUrl(meeting.id))
+                    .catch((caught: unknown) => {
+                      setActionError(toAppError(caught).message);
+                    });
+                }}
+              >
+                <ExternalLink className="h-4 w-4" aria-hidden />
+                加入会议
+              </Button>
+              <Button
+                variant="outline"
+                onClick={() => {
+                  void navigator.clipboard.writeText(meeting.meeting_url ?? '').catch(() => {
+                    setActionError('无法复制会议链接');
+                  });
+                }}
+              >
+                <Copy className="h-4 w-4" aria-hidden />
+                复制链接
+              </Button>
+            </>
+          )}
           <Button
             variant="outline"
             onClick={() => {
@@ -187,6 +216,8 @@ export function MeetingDetailPage() {
           </ul>
         )}
       </section>
+
+      <MeetingTaskSummary meetingId={meeting.id} refreshKey={formOpen} />
 
       <div className="mb-6 grid gap-4 sm:grid-cols-2">
         {notes.map((block) => (

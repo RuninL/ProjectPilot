@@ -1,5 +1,5 @@
 import { zodResolver } from '@hookform/resolvers/zod';
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { Button } from '@/components/ui/button';
 import {
@@ -17,6 +17,8 @@ import { toAppError } from '@/lib/errors';
 import { parseAttendees } from '@/services/meeting.service';
 import { meetingInputSchema, type MeetingInput } from '@/services/schemas';
 import type { Meeting, Project } from '@/types';
+import { MeetingParticipantSelector } from './MeetingParticipantSelector';
+import { MeetingTaskSelector } from './MeetingTaskSelector';
 
 /** Raw form state: every control is a string, exactly as the DOM produces it. */
 interface MeetingFormValues {
@@ -29,6 +31,7 @@ interface MeetingFormValues {
   notes: string;
   decisions: string;
   risks: string;
+  meeting_url: string;
 }
 
 const SELECT_CLASS =
@@ -46,6 +49,7 @@ function toFormValues(meeting: Meeting | null, defaultProjectId: string | null):
       notes: '',
       decisions: '',
       risks: '',
+      meeting_url: '',
     };
   }
   return {
@@ -59,6 +63,7 @@ function toFormValues(meeting: Meeting | null, defaultProjectId: string | null):
     notes: meeting.notes,
     decisions: meeting.decisions,
     risks: meeting.risks,
+    meeting_url: meeting.meeting_url ?? '',
   };
 }
 
@@ -70,7 +75,7 @@ interface MeetingFormProps {
   defaultProjectId: string | null;
   /** True when the meeting belongs to a project that must not be changed here. */
   lockProject: boolean;
-  onSubmit: (input: MeetingInput) => Promise<void>;
+  onSubmit: (input: MeetingInput, taskIds: readonly string[]) => Promise<void>;
   onClose: () => void;
 }
 
@@ -93,26 +98,34 @@ export function MeetingForm({
     handleSubmit,
     reset,
     setError,
+    setValue,
+    watch,
     formState: { errors, isSubmitting },
   } = useForm<MeetingFormValues>({
     resolver: zodResolver(meetingInputSchema, undefined, { raw: true }),
     defaultValues: toFormValues(meeting, defaultProjectId),
   });
+  const [selectedTaskIds, setSelectedTaskIds] = useState<readonly string[]>([]);
 
   useEffect(() => {
     if (open) {
       reset(toFormValues(meeting, defaultProjectId));
+      setSelectedTaskIds([]);
     }
   }, [open, meeting, defaultProjectId, reset]);
 
   const submit = handleSubmit(async (values) => {
     try {
-      await onSubmit(meetingInputSchema.parse(values));
+      await onSubmit(meetingInputSchema.parse(values), selectedTaskIds);
       onClose();
     } catch (caught) {
       setError('root', { message: toAppError(caught).message });
     }
   });
+  const attendeeNames = watch('attendees')
+    .split(/[\n,，]/)
+    .map((name) => name.trim())
+    .filter((name, index, names) => name !== '' && names.indexOf(name) === index);
 
   return (
     <Dialog
@@ -143,6 +156,12 @@ export function MeetingForm({
             <Input id="meeting-topic" {...register('topic')} />
             {errors.topic && <p className="text-sm text-destructive">{errors.topic.message}</p>}
           </div>
+
+          <MeetingTaskSelector
+            meetingId={meeting?.id ?? null}
+            selectedTaskIds={selectedTaskIds}
+            onSelectedTaskIdsChange={setSelectedTaskIds}
+          />
 
           <div className="grid gap-1.5">
             <Label htmlFor="meeting-project">所属项目</Label>
@@ -180,12 +199,37 @@ export function MeetingForm({
           </div>
 
           <div className="grid gap-1.5">
+            <Label htmlFor="meeting-url">在线会议链接（可选）</Label>
+            <Input
+              id="meeting-url"
+              type="text"
+              placeholder="例如：www.example.com 或 https://example.com"
+              {...register('meeting_url')}
+            />
+            {errors.meeting_url && (
+              <p className="text-sm text-destructive">{errors.meeting_url.message}</p>
+            )}
+            <p className="text-xs text-muted-foreground">
+              可直接输入网址，无需填写 http:// 或 https://
+            </p>
+          </div>
+
+          <div className="grid gap-1.5">
             <Label htmlFor="meeting-attendees">参与者</Label>
             <Textarea
               id="meeting-attendees"
-              rows={2}
-              placeholder="每行一个姓名，也可用逗号分隔"
+              className="sr-only"
+              rows={1}
               {...register('attendees')}
+            />
+            <MeetingParticipantSelector
+              selectedNames={attendeeNames}
+              onChange={(names) => {
+                setValue('attendees', names.join('\n'), {
+                  shouldDirty: true,
+                  shouldValidate: true,
+                });
+              }}
             />
             {errors.attendees && (
               <p className="text-sm text-destructive">{errors.attendees.message}</p>

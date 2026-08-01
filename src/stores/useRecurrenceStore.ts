@@ -9,7 +9,7 @@ interface RecurrenceState {
   loading: boolean;
   error: string | null;
   loadRules: () => Promise<void>;
-  createRule: (input: RecurrenceRuleInput) => Promise<RecurrenceRule>;
+  createRule: (input: RecurrenceRuleInput, taskIds?: readonly string[]) => Promise<RecurrenceRule>;
   updateRule: (id: string, input: RecurrenceRuleInput) => Promise<RecurrenceRule>;
   deleteRule: (id: string) => Promise<void>;
   skip: (ruleId: string, date: string) => Promise<void>;
@@ -36,9 +36,10 @@ export const useRecurrenceStore = create<RecurrenceState>((set) => {
         set({ loading: false, error: toAppError(caught).message });
       }
     },
-    createRule: async (input) => {
+    createRule: async (input, taskIds = []) => {
       try {
-        const rule = await (await getRecurrenceService()).createRule(input);
+        const service = await getRecurrenceService();
+        const rule = await service.createRule(input, taskIds);
         await reload();
         return rule;
       } catch (caught) {

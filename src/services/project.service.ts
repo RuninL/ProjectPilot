@@ -1,3 +1,5 @@
+import type { BatchStatement } from '@/lib/commands';
+import { executeBatch } from '@/lib/commands';
 import { nowIso } from '@/lib/date';
 import { AppError } from '@/lib/errors';
 import { newId } from '@/lib/uuid';
@@ -10,6 +12,7 @@ import { projectInputSchema, type ProjectInput } from './schemas';
 export interface ProjectServiceDeps {
   projects: ProjectRepository;
   tasks: TaskRepository;
+  runBatch: (statements: BatchStatement[]) => Promise<number>;
 }
 
 /** What a permanent delete would destroy, shown before the user confirms. */
@@ -84,7 +87,11 @@ export function createProjectService(deps: ProjectServiceDeps) {
 
     /**
      * Archiving is the only writer of `archived_at`, and it always moves
-     * `status` in lockstep so the two can never disagree.
+     * `status` in lockstep so the two can never disagree. Archiving a project
+     * also archives every live task of that project (parents and children)
+     * with archived_source = 'project', in ONE transaction — no data,
+     * relations, progress, checklists or resources are removed. Tasks the
+     * user archived manually keep archived_source = 'manual'.
      */
     async archiveProject(id: string): Promise<void> {
       const project = await requireProject(id);
@@ -92,15 +99,45 @@ export function createProjectService(deps: ProjectServiceDeps) {
         return;
       }
       const now = nowIso();
-      await deps.projects.update(id, { archived_at: now, status: 'archived' }, now);
+      const statements: BatchStatement[] = [deps.tasks.buildArchiveProjectTasks(id, now)];
+      const projectStatement = deps.projects.buildUpdateStatement(
+        id,
+        { archived_at: now, status: 'archived' },
+        now,
+      );
+      if (projectStatement !== null) statements.push(projectStatement);
+      await deps.runBatch(statements);
     },
 
-    async restoreProject(id: string): Promise<void> {
+    /**
+     * Restore a project; when `restoreTasks` is true, also restore exactly the
+     * tasks that the project archive auto-archived (archived_source =
+     * 'project'). Tasks archived manually — before or after the project
+     * archive — and tasks the user already restored stay untouched.
+     */
+    async restoreProject(id: string, restoreTasks = false): Promise<void> {
       const project = await requireProject(id);
       if (project.archived_at === null) {
         return;
       }
-      await deps.projects.update(id, { archived_at: null, status: 'active' }, nowIso());
+      const now = nowIso();
+      const statements: BatchStatement[] = [];
+      const projectStatement = deps.projects.buildUpdateStatement(
+        id,
+        { archived_at: null, status: 'active' },
+        now,
+      );
+      if (projectStatement !== null) statements.push(projectStatement);
+      if (restoreTasks) {
+        statements.push(deps.tasks.buildRestoreProjectArchivedTasks(id, now));
+      }
+      await deps.runBatch(statements);
+    },
+
+    /** How many tasks a "restore project and tasks" choice would restore. */
+    async countProjectArchivedTasks(id: string): Promise<number> {
+      await requireProject(id);
+      return deps.tasks.countProjectArchivedTasks(id);
     },
 
     /** Real counts for the delete confirmation — never an estimate or a placeholder. */
@@ -134,5 +171,9 @@ export type ProjectService = ReturnType<typeof createProjectService>;
 
 export async function getProjectService(): Promise<ProjectService> {
   const repos = await getRepositories();
-  return createProjectService({ projects: repos.projects, tasks: repos.tasks });
+  return createProjectService({
+    projects: repos.projects,
+    tasks: repos.tasks,
+    runBatch: executeBatch,
+  });
 }

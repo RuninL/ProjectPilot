@@ -1,6 +1,6 @@
 import Database from '@tauri-apps/plugin-sql';
-import { invoke } from '@tauri-apps/api/core';
 import { AppError } from './errors';
+import { recordPerformanceEvent } from './performanceDiagnostics';
 
 /** Result of a write statement (mirrors tauri-plugin-sql's QueryResult). */
 export interface QueryResult {
@@ -20,18 +20,40 @@ export interface SqlExecutor {
 
 const DB_URL = 'sqlite:projectpilot.db';
 
-interface MigrationChecksumRepair {
-  repaired: boolean;
-  backup_path: string | null;
-}
-
-interface MigrationFailureRecovery {
-  archived_path: string;
-  snapshot_path: string | null;
-}
-
 let instance: SqlExecutor | null = null;
-let startupRecoveryNotice: string | null = null;
+
+function queryLabel(query: string): string {
+  return query.replace(/\s+/g, ' ').trim().slice(0, 160);
+}
+
+function instrumentSqlExecutor(db: SqlExecutor): SqlExecutor {
+  return {
+    async select<T>(query: string, bindValues?: unknown[]): Promise<T> {
+      const started = performance.now();
+      try {
+        return await db.select<T>(query, bindValues);
+      } finally {
+        recordPerformanceEvent(
+          'sqlite',
+          `select:${queryLabel(query)}`,
+          performance.now() - started,
+        );
+      }
+    },
+    async execute(query: string, bindValues?: unknown[]): Promise<QueryResult> {
+      const started = performance.now();
+      try {
+        return await db.execute(query, bindValues);
+      } finally {
+        recordPerformanceEvent(
+          'sqlite',
+          `execute:${queryLabel(query)}`,
+          performance.now() - started,
+        );
+      }
+    },
+  };
+}
 
 interface ForeignKeysRow {
   foreign_keys: number;
@@ -64,36 +86,14 @@ export async function getDb(): Promise<SqlExecutor> {
   if (instance !== null) {
     return instance;
   }
-  // SQLx correctly blocks edited migration files. Earlier development builds
-  // changed historical migration metadata, so reconcile only a complete,
-  // integrity-checked local history after making a SQLite safety copy;
-  // new/incomplete databases are untouched.
-  let db: SqlExecutor;
-  try {
-    await invoke<MigrationChecksumRepair>('reconcile_migration_checksum');
-    db = await Database.load(DB_URL);
-  } catch {
-    const recovery = await invoke<MigrationFailureRecovery>('isolate_failed_migration_database');
-    startupRecoveryNotice = [
-      '检测到无法安全升级的旧数据库，已保留原始文件并启动新的空数据库。',
-      `原始数据库：${recovery.archived_path}`,
-      recovery.snapshot_path === null ? '' : `一致性快照：${recovery.snapshot_path}`,
-      '旧数据未自动导入；请在确认数据后通过设置中的备份恢复或数据导入功能处理。',
-    ]
-      .filter((part) => part !== '')
-      .join(' ');
-    db = await Database.load(DB_URL);
-  }
+  const db = await Database.load(DB_URL);
   await assertForeignKeys(db);
-  instance = db;
+  instance = import.meta.env.DEV ? instrumentSqlExecutor(db) : db;
   return db;
 }
 
-/** Read the one-time startup warning created by safe migration recovery. */
 export function takeDatabaseRecoveryNotice(): string | null {
-  const notice = startupRecoveryNotice;
-  startupRecoveryNotice = null;
-  return notice;
+  return null;
 }
 
 /** Override the singleton (tests only). */
