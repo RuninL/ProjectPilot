@@ -347,3 +347,39 @@ describe('countChildren', () => {
     expect(await service.countChildren(parent.id)).toBe(1);
   });
 });
+
+describe('archiveTask / restoreTask', () => {
+  it('manual archive records archived_source = manual', async () => {
+    const task = await service.createTask(input({ title: 'A' }));
+
+    await service.archiveTask(task.id);
+
+    const after = await createTaskRepository(db.executor).findById(task.id);
+    expect(after?.archived_at).not.toBeNull();
+    expect(after?.archived_source).toBe('manual');
+  });
+
+  it('restore clears archived_at and archived_source', async () => {
+    const task = await service.createTask(input({ title: 'A' }));
+    await service.archiveTask(task.id);
+
+    await service.restoreTask(task.id);
+
+    const after = await createTaskRepository(db.executor).findById(task.id);
+    expect(after?.archived_at).toBeNull();
+    expect(after?.archived_source).toBeNull();
+  });
+
+  it('refuses to restore a task whose project is archived', async () => {
+    const repo = createProjectRepository(db.executor);
+    const task = await service.createTask(input({ title: 'A' }));
+    await service.archiveTask(task.id);
+    await repo.update(
+      'p1',
+      { status: 'archived', archived_at: '2026-07-01T00:00:00Z' },
+      '2026-07-01T00:00:00Z',
+    );
+
+    await expect(service.restoreTask(task.id)).rejects.toThrow('所属项目已归档');
+  });
+});

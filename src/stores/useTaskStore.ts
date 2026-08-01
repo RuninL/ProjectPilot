@@ -22,6 +22,9 @@ interface TaskState {
     patch: BulkTaskUpdate,
     query: TaskQuery,
   ) => Promise<void>;
+  /** Manual archive — recorded as archived_source = 'manual'. */
+  archiveTask: (id: string, query: TaskQuery) => Promise<void>;
+  restoreTask: (id: string, query: TaskQuery) => Promise<void>;
 }
 
 /**
@@ -84,6 +87,14 @@ export const useTaskStore = create<TaskState>((set, get) => {
 
     bulkUpdateTasks: async (ids, patch, query) => {
       await mutate(query, (service) => service.bulkUpdateTasks(ids, patch));
+    },
+
+    archiveTask: async (id, query) => {
+      await mutate(query, (service) => service.archiveTask(id));
+    },
+
+    restoreTask: async (id, query) => {
+      await mutate(query, (service) => service.restoreTask(id));
     },
   };
 });

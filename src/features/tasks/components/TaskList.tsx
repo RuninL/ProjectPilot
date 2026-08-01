@@ -11,9 +11,10 @@ interface TaskListProps {
   onToggleSelect: (id: string) => void;
   onEdit: (task: TaskWithProject) => void;
   onDelete: (task: TaskWithProject) => void;
+  onArchive?: (task: TaskWithProject) => void;
+  onRestore?: (task: TaskWithProject) => void;
   participantsByTask?: Readonly<Record<string, readonly string[]>>;
   reorderEnabled?: boolean;
-  reorderDisabled?: boolean;
   onMove?: (id: string, offset: -1 | 1) => void;
   onMoveTo?: (sourceId: string, targetId: string) => void;
 }
@@ -30,13 +31,14 @@ export function TaskList({
   onToggleSelect,
   onEdit,
   onDelete,
+  onArchive,
+  onRestore,
   participantsByTask = {},
   reorderEnabled = false,
-  reorderDisabled = false,
   onMove = () => undefined,
   onMoveTo = () => undefined,
 }: TaskListProps) {
-  const dragReorder = useDragReorder(onMoveTo, !reorderEnabled || reorderDisabled);
+  const dragReorder = useDragReorder(onMoveTo, !reorderEnabled);
   const reorderProps = (task: TaskWithProject) =>
     reorderEnabled
       ? {
@@ -45,7 +47,7 @@ export function TaskList({
           reorderHandle: (
             <ReorderHandle
               label={task.title}
-              disabled={reorderDisabled}
+              disabled={false}
               onMoveUp={() => {
                 onMove(task.id, -1);
               }}
@@ -83,6 +85,8 @@ export function TaskList({
             onToggleSelect={onToggleSelect}
             onEdit={onEdit}
             onDelete={onDelete}
+            {...(onArchive === undefined ? {} : { onArchive })}
+            {...(onRestore === undefined ? {} : { onRestore })}
             participantNames={participantsByTask[task.id] ?? []}
             {...reorderProps(task)}
           />
@@ -96,6 +100,8 @@ export function TaskList({
               onToggleSelect={onToggleSelect}
               onEdit={onEdit}
               onDelete={onDelete}
+              {...(onArchive === undefined ? {} : { onArchive })}
+              {...(onRestore === undefined ? {} : { onRestore })}
               participantNames={participantsByTask[child.id] ?? []}
               {...reorderProps(child)}
             />

@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import type { TaskQuery, TaskSort } from '@/repositories';
+import type { TaskQuery, TaskScope, TaskSort } from '@/repositories';
 import type { TaskPriority, TaskStatus } from '@/types';
 
 interface TaskFilterState {
@@ -11,6 +11,8 @@ interface TaskFilterState {
   dueFrom: string | null;
   dueTo: string | null;
   sortBy: TaskSort;
+  /** 活动 / 已归档 / 全部 view; 'active' also excludes project-archived tasks. */
+  scope: TaskScope;
   selectedIds: string[];
   setSearch: (search: string) => void;
   setStatuses: (statuses: TaskStatus[]) => void;
@@ -19,6 +21,7 @@ interface TaskFilterState {
   setParticipantIds: (ids: string[]) => void;
   setDueRange: (from: string | null, to: string | null) => void;
   setSortBy: (sortBy: TaskSort) => void;
+  setScope: (scope: TaskScope) => void;
   toggleSelected: (id: string) => void;
   setSelectedIds: (ids: string[]) => void;
   clearSelection: () => void;
@@ -34,6 +37,7 @@ const initial = {
   dueFrom: null as string | null,
   dueTo: null as string | null,
   sortBy: 'due_date' as TaskSort,
+  scope: 'active' as TaskScope,
   selectedIds: [] as string[],
 };
 
@@ -60,6 +64,9 @@ export const useTaskFilterStore = create<TaskFilterState>((set) => ({
   },
   setSortBy: (sortBy) => {
     set({ sortBy });
+  },
+  setScope: (scope) => {
+    set({ scope });
   },
   toggleSelected: (id) => {
     set((state) => ({
@@ -91,6 +98,7 @@ export function toTaskQuery(
     | 'dueFrom'
     | 'dueTo'
     | 'sortBy'
+    | 'scope'
   >,
   projectId?: string,
 ): TaskQuery {
@@ -101,6 +109,7 @@ export function toTaskQuery(
     projectIds: projectId === undefined ? state.projectIds : [projectId],
     participantIds: state.participantIds,
     sort: state.sortBy,
+    scope: state.scope,
     ...(state.dueFrom === null ? {} : { dueFrom: state.dueFrom }),
     ...(state.dueTo === null ? {} : { dueTo: state.dueTo }),
   };

@@ -4,10 +4,12 @@ import { EmptyState } from '@/components/common/EmptyState';
 import { ErrorState } from '@/components/common/ErrorState';
 import { LoadingState } from '@/components/common/LoadingState';
 import { Button } from '@/components/ui/button';
+import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { getPeopleService } from '@/services/people.service';
 import { useProjectStore } from '@/stores/useProjectStore';
 import { toTaskQuery, useTaskFilterStore } from '@/stores/useTaskFilterStore';
 import { useTaskStore } from '@/stores/useTaskStore';
+import type { TaskScope } from '@/repositories';
 import type { Person, TaskWithProject } from '@/types';
 import { BulkEditBar } from './BulkEditBar';
 import { BulkEditDialog } from './BulkEditDialog';
@@ -16,7 +18,7 @@ import { TaskFilters } from './TaskFilters';
 import { TaskForm } from './TaskForm';
 import { TaskList } from './TaskList';
 import { SavedOrderControls } from '@/features/sorting/SavedOrderControls';
-import { useSavedListOrder } from '@/features/sorting/useSavedListOrder';
+import { useSectionedListOrder } from '@/features/sorting/useSavedListOrder';
 
 interface TaskWorkspaceProps {
   /** When set, the list is scoped to that project and the project filter is hidden. */
@@ -25,6 +27,16 @@ interface TaskWorkspaceProps {
   canCreate: boolean;
   /** Explains why creation is unavailable, shown next to the disabled button. */
   createHint: string | null;
+}
+
+const SCOPE_OPTIONS: { value: TaskScope; label: string }[] = [
+  { value: 'active', label: '活动任务' },
+  { value: 'archived', label: '已归档任务' },
+  { value: 'all', label: '全部任务' },
+];
+
+function isTaskScope(value: string): value is TaskScope {
+  return SCOPE_OPTIONS.some((option) => option.value === value);
 }
 
 /**
@@ -43,6 +55,8 @@ export function TaskWorkspace({ projectId, canCreate, createHint }: TaskWorkspac
   const updateTask = useTaskStore((state) => state.updateTask);
   const deleteTask = useTaskStore((state) => state.deleteTask);
   const bulkUpdateTasks = useTaskStore((state) => state.bulkUpdateTasks);
+  const archiveTask = useTaskStore((state) => state.archiveTask);
+  const restoreTask = useTaskStore((state) => state.restoreTask);
 
   const projectOptions = useProjectStore((state) => state.options);
   const loadOptions = useProjectStore((state) => state.loadOptions);
@@ -55,6 +69,7 @@ export function TaskWorkspace({ projectId, canCreate, createHint }: TaskWorkspac
   const dueFrom = useTaskFilterStore((state) => state.dueFrom);
   const dueTo = useTaskFilterStore((state) => state.dueTo);
   const sortBy = useTaskFilterStore((state) => state.sortBy);
+  const scope = useTaskFilterStore((state) => state.scope);
   const selectedIds = useTaskFilterStore((state) => state.selectedIds);
   const setSearch = useTaskFilterStore((state) => state.setSearch);
   const setStatuses = useTaskFilterStore((state) => state.setStatuses);
@@ -63,6 +78,7 @@ export function TaskWorkspace({ projectId, canCreate, createHint }: TaskWorkspac
   const setParticipantIds = useTaskFilterStore((state) => state.setParticipantIds);
   const setDueRange = useTaskFilterStore((state) => state.setDueRange);
   const setSortBy = useTaskFilterStore((state) => state.setSortBy);
+  const setScope = useTaskFilterStore((state) => state.setScope);
   const toggleSelected = useTaskFilterStore((state) => state.toggleSelected);
   const clearSelection = useTaskFilterStore((state) => state.clearSelection);
   const resetFilters = useTaskFilterStore((state) => state.reset);
@@ -76,28 +92,35 @@ export function TaskWorkspace({ projectId, canCreate, createHint }: TaskWorkspac
   const [participantsByTask, setParticipantsByTask] = useState<
     Readonly<Record<string, readonly string[]>>
   >({});
-  const savedOrder = useSavedListOrder(
+  // One named order carries three sub-orders (active / archived / all); the
+  // visible scope selects which sub-order is read and written. Search/filters
+  // no longer disable reordering — dragging while filtered only rearranges the
+  // visible rows inside the saved full order.
+  const savedOrder = useSectionedListOrder(
     projectId === null ? 'tasks' : 'project_tasks',
     projectId ?? '',
-    tasks,
+    { [scope]: tasks },
   );
-  const reorderDisabled =
-    search.trim() !== '' ||
-    statuses.length > 0 ||
-    priorities.length > 0 ||
-    participantIds.length > 0 ||
-    dueFrom !== null ||
-    dueTo !== null ||
-    (projectId === null && projectIds.length > 0);
-  const reorderReason = reorderDisabled ? '清除搜索或筛选后可调整自定义顺序' : null;
+  const scopeSection = savedOrder.section(scope);
 
   const query = useMemo(
     () =>
       toTaskQuery(
-        { search, statuses, priorities, projectIds, participantIds, dueFrom, dueTo, sortBy },
+        { search, statuses, priorities, projectIds, participantIds, dueFrom, dueTo, sortBy, scope },
         projectId ?? undefined,
       ),
-    [search, statuses, priorities, projectIds, participantIds, dueFrom, dueTo, sortBy, projectId],
+    [
+      search,
+      statuses,
+      priorities,
+      projectIds,
+      participantIds,
+      dueFrom,
+      dueTo,
+      sortBy,
+      scope,
+      projectId,
+    ],
   );
 
   useEffect(() => {
@@ -164,6 +187,25 @@ export function TaskWorkspace({ projectId, canCreate, createHint }: TaskWorkspac
       </div>
 
       <div className="mb-4">
+        <Tabs
+          value={scope}
+          onValueChange={(next) => {
+            if (isTaskScope(next)) {
+              setScope(next);
+            }
+          }}
+        >
+          <TabsList>
+            {SCOPE_OPTIONS.map((option) => (
+              <TabsTrigger key={option.value} value={option.value}>
+                {option.label}
+              </TabsTrigger>
+            ))}
+          </TabsList>
+        </Tabs>
+      </div>
+
+      <div className="mb-4">
         <TaskFilters
           search={search}
           statuses={statuses}
@@ -185,7 +227,7 @@ export function TaskWorkspace({ projectId, canCreate, createHint }: TaskWorkspac
           onReset={resetFilters}
         />
         <div className="mt-3">
-          <SavedOrderControls controller={savedOrder} disabledReason={reorderReason} />
+          <SavedOrderControls controller={savedOrder} disabledReason={null} />
         </div>
       </div>
 
@@ -216,7 +258,7 @@ export function TaskWorkspace({ projectId, canCreate, createHint }: TaskWorkspac
         />
       ) : (
         <TaskList
-          tasks={savedOrder.displayedItems}
+          tasks={scopeSection.displayedItems}
           selectedIds={visibleSelectedIds}
           showProject={projectId === null}
           onToggleSelect={toggleSelected}
@@ -230,11 +272,16 @@ export function TaskWorkspace({ projectId, canCreate, createHint }: TaskWorkspac
             setFormOpen(true);
           }}
           onDelete={setDeleteTarget}
+          onArchive={(task) => {
+            void archiveTask(task.id, query);
+          }}
+          onRestore={(task) => {
+            void restoreTask(task.id, query);
+          }}
           participantsByTask={participantsByTask}
           reorderEnabled={savedOrder.mode !== 'dynamic'}
-          reorderDisabled={reorderDisabled}
-          onMove={savedOrder.move}
-          onMoveTo={savedOrder.moveTo}
+          onMove={scopeSection.move}
+          onMoveTo={scopeSection.moveTo}
         />
       )}
 

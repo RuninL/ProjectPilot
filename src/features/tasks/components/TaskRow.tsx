@@ -1,4 +1,4 @@
-import { MoreHorizontal, Pencil, Trash2 } from 'lucide-react';
+import { Archive, ArchiveRestore, MoreHorizontal, Pencil, Trash2 } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import type { DragEventHandler, ReactNode } from 'react';
 import { SampleBadge } from '@/components/common/SampleBadge';
@@ -30,6 +30,8 @@ interface TaskRowProps {
   onToggleSelect: (id: string) => void;
   onEdit: (task: TaskWithProject) => void;
   onDelete: (task: TaskWithProject) => void;
+  onArchive?: (task: TaskWithProject) => void;
+  onRestore?: (task: TaskWithProject) => void;
   participantNames?: readonly string[];
   reorderHandle?: ReactNode;
   onDragOver?: DragEventHandler<HTMLLIElement>;
@@ -46,6 +48,8 @@ export function TaskRow({
   onToggleSelect,
   onEdit,
   onDelete,
+  onArchive,
+  onRestore,
   participantNames = [],
   reorderHandle,
   onDragOver,
@@ -90,6 +94,7 @@ export function TaskRow({
           <Badge variant={TASK_PRIORITY_VARIANTS[task.priority]}>
             {TASK_PRIORITY_LABELS[task.priority]}
           </Badge>
+          {task.archived_at !== null && <Badge variant="outline">已归档</Badge>}
           {task.is_sample === 1 && <SampleBadge />}
         </div>
         <p className="mt-1 flex items-center gap-2 text-xs text-muted-foreground">
@@ -129,6 +134,27 @@ export function TaskRow({
             <Pencil className="h-4 w-4" aria-hidden />
             编辑
           </DropdownMenuItem>
+          {task.archived_at === null
+            ? onArchive !== undefined && (
+                <DropdownMenuItem
+                  onSelect={() => {
+                    onArchive(task);
+                  }}
+                >
+                  <Archive className="h-4 w-4" aria-hidden />
+                  归档任务
+                </DropdownMenuItem>
+              )
+            : onRestore !== undefined && (
+                <DropdownMenuItem
+                  onSelect={() => {
+                    onRestore(task);
+                  }}
+                >
+                  <ArchiveRestore className="h-4 w-4" aria-hidden />
+                  恢复任务
+                </DropdownMenuItem>
+              )}
           <DropdownMenuItem
             destructive
             onSelect={() => {
