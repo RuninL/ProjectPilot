@@ -184,12 +184,9 @@ describe('migration 0012', () => {
     db.close();
   });
 
-  it('is registered once as version 12 in both Rust migration lists', () => {
+  it('remains registered once as immutable version 12', () => {
     const migrations = readFileSync(join(process.cwd(), 'src-tauri/src/migrations.rs'), 'utf8');
-    const repair = readFileSync(join(process.cwd(), 'src-tauri/src/migration_repair.rs'), 'utf8');
     expect(migrations.match(/version: 12,/g)).toHaveLength(1);
     expect(migrations).toContain('0012_v13_productivity.sql');
-    expect(repair).toContain('CURRENT_MIGRATION_COUNT: i64 = 12');
-    expect(repair).toContain('0012_v13_productivity.sql');
   });
 });

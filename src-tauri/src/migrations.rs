@@ -76,5 +76,11 @@ pub fn migrations() -> Vec<Migration> {
             sql: include_str!("../migrations/0012_v13_productivity.sql"),
             kind: MigrationKind::Up,
         },
+        Migration {
+            version: 13,
+            description: "relax meeting URL storage constraints",
+            sql: include_str!("../migrations/0013_relax_meeting_urls.sql"),
+            kind: MigrationKind::Up,
+        },
     ]
 }

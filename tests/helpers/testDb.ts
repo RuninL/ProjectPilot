@@ -20,6 +20,7 @@ const MIGRATION_FILES = [
   '0010_recurrence_standalone_meetings.sql',
   '0011_recurrence_exceptions_reschedule.sql',
   '0012_v13_productivity.sql',
+  '0013_relax_meeting_urls.sql',
 ] as const;
 
 /**
