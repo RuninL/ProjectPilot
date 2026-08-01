@@ -342,7 +342,7 @@ describe('ProjectListPage drag reorder', () => {
   }
 
   function visibleProjectNames(): string[] {
-    return screen.getAllByRole('link').map((link) => link.textContent ?? '');
+    return screen.getAllByRole('link').map((link) => link.textContent);
   }
 
   async function seedProjects(entries: readonly [string, string, string?][]) {

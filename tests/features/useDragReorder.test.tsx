@@ -48,9 +48,7 @@ function Sortable({
 }
 
 function rowTexts(prefix: string): string[] {
-  return screen
-    .getAllByTestId(new RegExp(`^${prefix}-row-`))
-    .map((row) => row.textContent ?? '');
+  return screen.getAllByTestId(new RegExp(`^${prefix}-row-`)).map((row) => row.textContent);
 }
 
 function drag(prefix: string, sourceId: string, targetId: string) {

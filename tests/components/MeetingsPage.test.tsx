@@ -109,6 +109,85 @@ describe('MeetingsPage', () => {
     });
   });
 
+  it('reorders recurring series by dragging R3 before R1, isolated from standalone meetings', async () => {
+    const user = userEvent.setup();
+    const current = useRealDb();
+    const repos = await getRepositories();
+    const base: Omit<RecurrenceRule, 'id' | 'title'> = {
+      project_id: null,
+      kind: 'meeting',
+      byweekday: 0,
+      interval: 1,
+      start_date: '2099-01-04',
+      end_date: '2099-03-01',
+      time_of_day: '10:00',
+      duration_minutes: null,
+      default_priority: null,
+      note: '',
+      meeting_url: null,
+      is_active: 1,
+      is_sample: 0,
+      created_at: '2026-01-01T00:00:00Z',
+      updated_at: '2026-01-01T00:00:00Z',
+    };
+    await repos.recurrence.insert({ ...base, id: 'r1', title: '系列一' });
+    await repos.recurrence.insert({ ...base, id: 'r2', title: '系列二' });
+    await repos.recurrence.insert({ ...base, id: 'r3', title: '系列三' });
+    await repos.meetings.insert(
+      makeMeeting({ id: 'm1', project_id: null, topic: '独立会', date: '2099-02-01' }),
+    );
+
+    renderPage();
+    await screen.findByText(/系列一 \[周期会议\]/);
+    await user.selectOptions(screen.getByLabelText('自定义排序'), 'custom');
+
+    const seriesTitles = () => screen.getAllByText(/\[周期会议\]$/).map((node) => node.textContent);
+    // Whatever the dynamic order is, drag the last series directly before the first.
+    const initial = seriesTitles();
+    expect(initial).toHaveLength(3);
+    const firstTitle = (initial[0] ?? '').replace(' [周期会议]', '');
+    const lastTitle = (initial[2] ?? '').replace(' [周期会议]', '');
+
+    const handle = screen.getByLabelText(`拖动排序 ${lastTitle}`);
+    const target = screen.getByText(`${firstTitle} [周期会议]`).closest('li');
+    if (target === null) throw new Error('第一个系列行应存在');
+    fireEvent.pointerDown(handle, { button: 0, pointerId: 1, clientX: 0, clientY: 0 });
+    fireEvent.pointerMove(target, { pointerId: 1, clientX: 0, clientY: 80 });
+    expect(target).toHaveClass('ring-primary');
+    fireEvent.pointerUp(target, { pointerId: 1, clientX: 0, clientY: 80 });
+
+    const reordered = [initial[2], initial[0], initial[1]];
+    expect(seriesTitles()).toEqual(reordered);
+
+    // Dragging a series over a standalone meeting row commits nothing there.
+    const standalone = screen.getByRole('link', { name: '独立会' }).closest('li');
+    if (standalone === null) throw new Error('独立会议行应存在');
+    const handle2 = screen.getByLabelText(`拖动排序 ${firstTitle}`);
+    fireEvent.pointerDown(handle2, { button: 0, pointerId: 1, clientX: 0, clientY: 0 });
+    fireEvent.pointerMove(standalone, { pointerId: 1, clientX: 0, clientY: 200 });
+    expect(standalone).not.toHaveClass('ring-primary');
+    fireEvent.pointerUp(standalone, { pointerId: 1, clientX: 0, clientY: 200 });
+    expect(seriesTitles()).toEqual(reordered);
+
+    // One named config stores the series sub-order alongside the standalone ones.
+    const idByTitle: Record<string, string> = { 系列一: 'r1', 系列二: 'r2', 系列三: 'r3' };
+    const expectedIds = reordered.map((text) => idByTitle[(text ?? '').replace(' [周期会议]', '')]);
+    await user.click(screen.getByRole('button', { name: '保存当前排序' }));
+    await user.type(screen.getByLabelText('排序名称'), '系列排序');
+    await user.click(screen.getByRole('button', { name: '保存' }));
+    await waitFor(() => {
+      const payload = current.raw
+        .prepare(
+          `SELECT ordered_ids_json FROM named_list_orders
+             WHERE context = 'meetings' AND name = '系列排序'`,
+        )
+        .pluck()
+        .get();
+      const parsed = JSON.parse(payload as string) as { sections: Record<string, string[]> };
+      expect(parsed.sections['recurringSeries']).toEqual(expectedIds);
+    });
+  });
+
   it('shows the loading state while the first read is in flight', async () => {
     setDbForTesting({
       select: () => new Promise(() => undefined),
