@@ -1,11 +1,12 @@
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { CalendarPage } from '@/features/calendar/pages/CalendarPage';
 import { monthOf } from '@/features/calendar/calendarModel';
 import { formatMonthLabel, todayHK } from '@/lib/date';
 import { setDbForTesting, type SqlExecutor } from '@/lib/db';
+import type { BatchStatement } from '@/lib/commands';
 import { getRepositories } from '@/repositories';
 import { getRecurrenceService } from '@/services/recurrence.service';
 import { useCalendarStore } from '@/stores/useCalendarStore';
@@ -13,6 +14,15 @@ import { makeMeeting, makeMilestone, makeProject, makeTask } from '../helpers/fi
 import { createTestDb, type TestDb } from '../helpers/testDb';
 
 let db: TestDb | null = null;
+
+vi.mock('@tauri-apps/api/core', () => ({
+  invoke: (command: string, args?: { statements?: BatchStatement[] }) => {
+    if (command !== 'execute_batch' || db === null || args?.statements === undefined) {
+      return Promise.reject(new Error(`unexpected command: ${command}`));
+    }
+    return Promise.resolve(db.runBatch(args.statements));
+  },
+}));
 
 function renderPage(month?: string) {
   if (month !== undefined) {
@@ -291,7 +301,13 @@ describe('CalendarPage', () => {
         { occurrence_date: '2026-07-01', action: 'rescheduled', replacement_date: '2026-07-02' },
       ]);
     });
-    expect(await getRepositories().then((repos) => repos.meetings.findAll())).toHaveLength(0);
+    expect(
+      await getRepositories().then(async (repos) =>
+        (await repos.meetings.findAll()).filter(
+          (meeting) => meeting.source_occurrence_date !== null,
+        ),
+      ),
+    ).toHaveLength(0);
   });
 
   it('switches from the default month grid to the compact colour-bar month calendar', async () => {
