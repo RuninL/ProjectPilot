@@ -32,14 +32,10 @@ export function createTaskMeetingService(deps: TaskMeetingServiceDeps) {
     },
 
     async listMeetingsByTask(taskId: string): Promise<Meeting[]> {
-      await requireTask(taskId);
       return deps.taskMeetings.findMeetingsByTask(taskId);
     },
 
     async listTasksByMeeting(meetingId: string): Promise<TaskWithProject[]> {
-      if ((await deps.meetings.findById(meetingId)) === null) {
-        throw new AppError('not_found', '会议不存在或已被删除');
-      }
       return deps.taskMeetings.findTasksByMeeting(meetingId);
     },
 

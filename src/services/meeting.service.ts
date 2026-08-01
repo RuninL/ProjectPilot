@@ -1,4 +1,5 @@
 import { openUrl } from '@tauri-apps/plugin-opener';
+import { executeBatch, type BatchStatement } from '@/lib/commands';
 import { nowIso } from '@/lib/date';
 import { AppError, toAppError } from '@/lib/errors';
 import { newId } from '@/lib/uuid';
@@ -8,6 +9,8 @@ import type {
   AppSettingRepository,
   MeetingRepository,
   ProjectRepository,
+  TaskMeetingRepository,
+  TaskRepository,
 } from '@/repositories';
 import { getRepositories } from '@/repositories';
 import type { Meeting } from '@/types';
@@ -17,8 +20,11 @@ export interface MeetingServiceDeps {
   meetings: MeetingRepository;
   actionItems: ActionItemRepository;
   projects: ProjectRepository;
+  tasks: TaskRepository;
+  taskMeetings: TaskMeetingRepository;
   appSettings?: AppSettingRepository;
   openUrl: (url: string) => Promise<void>;
+  runBatch: (statements: BatchStatement[]) => Promise<number>;
 }
 
 /**
@@ -129,9 +135,17 @@ export function createMeetingService(deps: MeetingServiceDeps) {
       await openValidatedUrl(url);
     },
 
-    async createMeeting(input: MeetingInput): Promise<Meeting> {
+    async createMeeting(input: MeetingInput, taskIds: readonly string[] = []): Promise<Meeting> {
       const parsed = meetingInputSchema.parse(input);
       const projectId = await resolveProjectId(parsed.project_id);
+      const uniqueTaskIds = [...new Set(taskIds)];
+      if (uniqueTaskIds.length !== taskIds.length) {
+        throw new AppError('validation', '关联任务不能重复');
+      }
+      const linkedTasks = await deps.tasks.findByIds(uniqueTaskIds);
+      if (linkedTasks.length !== uniqueTaskIds.length) {
+        throw new AppError('validation', '关联任务不存在或已被删除');
+      }
 
       const now = nowIso();
       const meeting: Meeting = {
@@ -152,7 +166,16 @@ export function createMeetingService(deps: MeetingServiceDeps) {
         created_at: now,
         updated_at: now,
       };
-      await deps.meetings.insert(meeting);
+      await deps.runBatch([
+        deps.meetings.buildInsert(meeting),
+        ...uniqueTaskIds.map((taskId) =>
+          deps.taskMeetings.buildInsert({
+            task_id: taskId,
+            meeting_id: meeting.id,
+            linked_at: now,
+          }),
+        ),
+      ]);
       return meeting;
     },
 
@@ -205,7 +228,10 @@ export async function getMeetingService(): Promise<MeetingService> {
     meetings: repos.meetings,
     actionItems: repos.actionItems,
     projects: repos.projects,
+    tasks: repos.tasks,
+    taskMeetings: repos.taskMeetings,
     appSettings: repos.appSettings,
     openUrl,
+    runBatch: executeBatch,
   });
 }

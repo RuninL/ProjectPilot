@@ -14,6 +14,7 @@ import { useProjectStore } from '@/stores/useProjectStore';
 import type { Project } from '@/types';
 import { ActionItemSection } from '../components/ActionItemSection';
 import { MeetingForm } from '../components/MeetingForm';
+import { MeetingTaskSummary } from '../components/MeetingTaskSummary';
 
 interface NoteBlock {
   title: string;
@@ -215,6 +216,8 @@ export function MeetingDetailPage() {
           </ul>
         )}
       </section>
+
+      <MeetingTaskSummary meetingId={meeting.id} refreshKey={formOpen} />
 
       <div className="mb-6 grid gap-4 sm:grid-cols-2">
         {notes.map((block) => (

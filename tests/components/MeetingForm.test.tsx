@@ -6,6 +6,18 @@ import { AppError } from '@/lib/errors';
 import type { MeetingInput } from '@/services/schemas';
 import { makeMeeting, makeProject } from '../helpers/fixtures';
 
+vi.mock('@/services/task.service', () => ({
+  getTaskService: () => Promise.resolve({ listTasks: () => Promise.resolve([]) }),
+}));
+vi.mock('@/services/taskMeeting.service', () => ({
+  getTaskMeetingService: () =>
+    Promise.resolve({
+      listTasksByMeeting: () => Promise.resolve([]),
+      link: () => Promise.resolve(),
+      unlink: () => Promise.resolve(),
+    }),
+}));
+
 const projects = [makeProject({ id: 'p1', name: '内网门户重构' })];
 
 function setup(
@@ -56,6 +68,7 @@ describe('MeetingForm', () => {
     await waitFor(() => {
       expect(onSubmit).toHaveBeenCalledWith(
         expect.objectContaining({ project_id: 'p1', start_time: '14:00' }),
+        [],
       );
     });
   });
@@ -69,18 +82,21 @@ describe('MeetingForm', () => {
     await user.click(screen.getByRole('button', { name: '保存' }));
 
     await waitFor(() => {
-      expect(onSubmit).toHaveBeenCalledWith({
-        project_id: null,
-        topic: '双周评审',
-        date: '2026-07-20',
-        start_time: null,
-        attendees: ['张三', '李四', '王五'],
-        agenda: '',
-        notes: '',
-        decisions: '',
-        risks: '',
-        meeting_url: null,
-      });
+      expect(onSubmit).toHaveBeenCalledWith(
+        {
+          project_id: null,
+          topic: '双周评审',
+          date: '2026-07-20',
+          start_time: null,
+          attendees: ['张三', '李四', '王五'],
+          agenda: '',
+          notes: '',
+          decisions: '',
+          risks: '',
+          meeting_url: null,
+        },
+        [],
+      );
     });
     expect(onClose).toHaveBeenCalledTimes(1);
   });

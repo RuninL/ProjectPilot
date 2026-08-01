@@ -616,9 +616,9 @@ export function MeetingsPage() {
         projects={projectOptions}
         defaultProjectId={null}
         lockProject={false}
-        onSubmit={async (input) => {
+        onSubmit={async (input, taskIds) => {
           if (editing === null) {
-            await createMeeting(input);
+            await createMeeting(input, taskIds);
           } else {
             await updateMeeting(editing.id, input);
           }

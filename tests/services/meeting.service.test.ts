@@ -5,6 +5,8 @@ import {
   createAppSettingRepository,
   createMeetingRepository,
   createProjectRepository,
+  createTaskMeetingRepository,
+  createTaskRepository,
 } from '@/repositories';
 import {
   createMeetingService,
@@ -12,7 +14,7 @@ import {
   type MeetingService,
 } from '@/services/meeting.service';
 import type { MeetingInput } from '@/services/schemas';
-import { makeActionItem, makeProject } from '../helpers/fixtures';
+import { makeActionItem, makeProject, makeTask } from '../helpers/fixtures';
 import { createTestDb, type TestDb } from '../helpers/testDb';
 
 let db: TestDb;
@@ -24,8 +26,11 @@ function buildService(current: TestDb): MeetingService {
     meetings: createMeetingRepository(current.executor),
     actionItems: createActionItemRepository(current.executor),
     projects: createProjectRepository(current.executor),
+    tasks: createTaskRepository(current.executor),
+    taskMeetings: createTaskMeetingRepository(current.executor),
     appSettings: createAppSettingRepository(current.executor),
     openUrl,
+    runBatch: (statements) => Promise.resolve(current.runBatch(statements)),
   });
 }
 
@@ -51,6 +56,10 @@ beforeEach(async () => {
   db = createTestDb();
   service = buildService(db);
   await createProjectRepository(db.executor).insert(makeProject({ id: 'p1' }));
+  await createTaskRepository(db.executor).insert(makeTask({ id: 't1', project_id: 'p1' }));
+  await createTaskRepository(db.executor).insert(
+    makeTask({ id: 't2', project_id: 'p1', title: '第二项任务' }),
+  );
 });
 
 afterEach(() => {
@@ -83,6 +92,21 @@ describe('createMeeting', () => {
     expect(meeting.start_time).toBeNull();
     expect(meeting.is_sample).toBe(0);
     expect(await service.getMeeting(meeting.id)).toStrictEqual(meeting);
+  });
+
+  it('creates a meeting and multiple task links in one batch', async () => {
+    const meeting = await service.createMeeting(input(), ['t1', 't2']);
+    const links = db.raw
+      .prepare('SELECT task_id FROM task_meetings WHERE meeting_id = ? ORDER BY task_id')
+      .all(meeting.id);
+    expect(links).toEqual([{ task_id: 't1' }, { task_id: 't2' }]);
+  });
+
+  it('does not create a meeting when a requested task link is invalid', async () => {
+    await expect(service.createMeeting(input(), ['missing'])).rejects.toThrow(
+      '关联任务不存在或已被删除',
+    );
+    expect(db.raw.prepare('SELECT COUNT(*) AS n FROM meetings').get()).toEqual({ n: 0 });
   });
 
   describe('openMeetingUrl', () => {

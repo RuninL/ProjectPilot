@@ -1,5 +1,5 @@
 import { zodResolver } from '@hookform/resolvers/zod';
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { Button } from '@/components/ui/button';
 import {
@@ -18,6 +18,7 @@ import { parseAttendees } from '@/services/meeting.service';
 import { meetingInputSchema, type MeetingInput } from '@/services/schemas';
 import type { Meeting, Project } from '@/types';
 import { MeetingParticipantSelector } from './MeetingParticipantSelector';
+import { MeetingTaskSelector } from './MeetingTaskSelector';
 
 /** Raw form state: every control is a string, exactly as the DOM produces it. */
 interface MeetingFormValues {
@@ -74,7 +75,7 @@ interface MeetingFormProps {
   defaultProjectId: string | null;
   /** True when the meeting belongs to a project that must not be changed here. */
   lockProject: boolean;
-  onSubmit: (input: MeetingInput) => Promise<void>;
+  onSubmit: (input: MeetingInput, taskIds: readonly string[]) => Promise<void>;
   onClose: () => void;
 }
 
@@ -104,16 +105,18 @@ export function MeetingForm({
     resolver: zodResolver(meetingInputSchema, undefined, { raw: true }),
     defaultValues: toFormValues(meeting, defaultProjectId),
   });
+  const [selectedTaskIds, setSelectedTaskIds] = useState<readonly string[]>([]);
 
   useEffect(() => {
     if (open) {
       reset(toFormValues(meeting, defaultProjectId));
+      setSelectedTaskIds([]);
     }
   }, [open, meeting, defaultProjectId, reset]);
 
   const submit = handleSubmit(async (values) => {
     try {
-      await onSubmit(meetingInputSchema.parse(values));
+      await onSubmit(meetingInputSchema.parse(values), selectedTaskIds);
       onClose();
     } catch (caught) {
       setError('root', { message: toAppError(caught).message });
@@ -153,6 +156,12 @@ export function MeetingForm({
             <Input id="meeting-topic" {...register('topic')} />
             {errors.topic && <p className="text-sm text-destructive">{errors.topic.message}</p>}
           </div>
+
+          <MeetingTaskSelector
+            meetingId={meeting?.id ?? null}
+            selectedTaskIds={selectedTaskIds}
+            onSelectedTaskIdsChange={setSelectedTaskIds}
+          />
 
           <div className="grid gap-1.5">
             <Label htmlFor="meeting-project">所属项目</Label>

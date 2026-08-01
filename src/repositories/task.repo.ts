@@ -206,6 +206,15 @@ export function createTaskRepository(db: SqlExecutor) {
       return parseOptional(taskRowSchema, rows);
     },
 
+    async findByIds(ids: readonly string[]): Promise<Task[]> {
+      if (ids.length === 0) return [];
+      const rows = await db.select(
+        `SELECT * FROM tasks WHERE id IN (${ids.map(() => '?').join(', ')}) ORDER BY id ASC`,
+        [...ids],
+      );
+      return parseRows(taskRowSchema, rows);
+    },
+
     /** Cross-project task list joined with the project name/color for display. */
     async findByQuery(query: TaskQuery = {}): Promise<TaskWithProject[]> {
       const where = composeWhere(taskConditions(query));

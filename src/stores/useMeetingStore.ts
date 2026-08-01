@@ -18,7 +18,7 @@ interface MeetingState {
   loadMeeting: (id: string) => Promise<void>;
   /** Read-only count for the delete confirmation on the list page. */
   countActionItems: (id: string) => Promise<number>;
-  createMeeting: (input: MeetingInput) => Promise<Meeting>;
+  createMeeting: (input: MeetingInput, taskIds?: readonly string[]) => Promise<Meeting>;
   updateMeeting: (id: string, input: MeetingInput) => Promise<void>;
   deleteMeeting: (id: string) => Promise<void>;
   createActionItem: (meetingId: string, input: ActionItemInput) => Promise<void>;
@@ -101,10 +101,10 @@ export const useMeetingStore = create<MeetingState>((set, get) => {
       return service.countActionItems(id);
     },
 
-    createMeeting: async (input) => {
+    createMeeting: async (input, taskIds = []) => {
       try {
         const service = await getMeetingService();
-        const meeting = await service.createMeeting(input);
+        const meeting = await service.createMeeting(input, taskIds);
         set({ error: null });
         await get().loadMeetings();
         return meeting;

@@ -1,7 +1,8 @@
 import { Plus, Trash2 } from 'lucide-react';
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useDeferredValue, useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { toAppError } from '@/lib/errors';
 import { getMeetingService } from '@/services/meeting.service';
@@ -19,8 +20,10 @@ function meetingLabel(meeting: Meeting): string {
 
 export function TaskMeetingSection({ taskId }: Props) {
   const [meetings, setMeetings] = useState<readonly Meeting[]>([]);
-  const [linkedIds, setLinkedIds] = useState<readonly string[]>([]);
+  const [linked, setLinked] = useState<readonly Meeting[]>([]);
   const [selectedId, setSelectedId] = useState('');
+  const [search, setSearch] = useState('');
+  const deferredSearch = useDeferredValue(search);
   const [error, setError] = useState<string | null>(null);
 
   const load = useCallback(async () => {
@@ -28,12 +31,12 @@ export function TaskMeetingSection({ taskId }: Props) {
       getMeetingService(),
       getTaskMeetingService(),
     ]);
-    const [allMeetings, links] = await Promise.all([
+    const [allMeetings, linkedMeetings] = await Promise.all([
       meetingService.listMeetings(),
-      taskMeetingService.listByTask(taskId),
+      taskMeetingService.listMeetingsByTask(taskId),
     ]);
     setMeetings(allMeetings);
-    setLinkedIds(links.map((link) => link.meeting_id));
+    setLinked(linkedMeetings);
   }, [taskId]);
 
   useEffect(() => {
@@ -42,10 +45,21 @@ export function TaskMeetingSection({ taskId }: Props) {
     });
   }, [load]);
 
-  const linked = linkedIds
-    .map((id) => meetings.find((meeting) => meeting.id === id))
-    .filter((meeting): meeting is Meeting => meeting !== undefined);
-  const available = meetings.filter((meeting) => !linkedIds.includes(meeting.id));
+  const meetingsById = useMemo(
+    () => new Map(meetings.map((meeting) => [meeting.id, meeting])),
+    [meetings],
+  );
+  const available = useMemo(() => {
+    const linkedIds = new Set(linked.map((meeting) => meeting.id));
+    const query = deferredSearch.trim().toLocaleLowerCase('zh-CN');
+    return meetings
+      .filter(
+        (meeting) =>
+          !linkedIds.has(meeting.id) &&
+          (query === '' || meeting.topic.toLocaleLowerCase('zh-CN').includes(query)),
+      )
+      .slice(0, 100);
+  }, [deferredSearch, linked, meetings]);
 
   return (
     <section className="rounded-md border p-3">
@@ -53,6 +67,15 @@ export function TaskMeetingSection({ taskId }: Props) {
       <div className="mt-2 flex items-end gap-2">
         <div className="flex-1 space-y-1">
           <Label htmlFor="task-meeting-select">选择会议</Label>
+          <Input
+            className="mb-1"
+            aria-label="搜索会议"
+            value={search}
+            placeholder="搜索会议主题"
+            onChange={(event) => {
+              setSearch(event.target.value);
+            }}
+          />
           <select
             id="task-meeting-select"
             className="h-9 w-full rounded-md border border-input bg-background px-2 text-sm"
@@ -75,9 +98,10 @@ export function TaskMeetingSection({ taskId }: Props) {
             setError(null);
             void getTaskMeetingService()
               .then((service) => service.link(taskId, selectedId))
-              .then(async () => {
+              .then(() => {
+                const meeting = meetingsById.get(selectedId);
+                if (meeting !== undefined) setLinked((current) => [...current, meeting]);
                 setSelectedId('');
-                await load();
               })
               .catch((caught: unknown) => {
                 setError(toAppError(caught).message);
@@ -106,7 +130,9 @@ export function TaskMeetingSection({ taskId }: Props) {
                   setError(null);
                   void getTaskMeetingService()
                     .then((service) => service.unlink(taskId, meeting.id))
-                    .then(load)
+                    .then(() => {
+                      setLinked((current) => current.filter((item) => item.id !== meeting.id));
+                    })
                     .catch((caught: unknown) => {
                       setError(toAppError(caught).message);
                     });

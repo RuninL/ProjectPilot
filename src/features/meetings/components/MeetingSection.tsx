@@ -250,9 +250,9 @@ export function MeetingSection({ project }: MeetingSectionProps) {
         projects={[project]}
         defaultProjectId={project.id}
         lockProject
-        onSubmit={async (input) => {
+        onSubmit={async (input, taskIds) => {
           if (editing === null) {
-            await createMeeting(input);
+            await createMeeting(input, taskIds);
           } else {
             await updateMeeting(editing.id, input);
           }
