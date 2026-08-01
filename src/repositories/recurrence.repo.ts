@@ -16,6 +16,7 @@ const RULE_UPDATABLE = [
   'duration_minutes',
   'default_priority',
   'note',
+  'meeting_url',
   'is_active',
 ] as const;
 
@@ -55,7 +56,7 @@ export function createRecurrenceRepository(db: SqlExecutor) {
     },
     async insert(rule: RecurrenceRule): Promise<void> {
       await db.execute(
-        `INSERT INTO recurrence_rules (id, project_id, kind, title, byweekday, interval, start_date, end_date, time_of_day, duration_minutes, default_priority, note, is_active, is_sample, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        `INSERT INTO recurrence_rules (id, project_id, kind, title, byweekday, interval, start_date, end_date, time_of_day, duration_minutes, default_priority, note, is_active, is_sample, created_at, updated_at, meeting_url) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         [
           rule.id,
           rule.project_id,
@@ -73,6 +74,7 @@ export function createRecurrenceRepository(db: SqlExecutor) {
           rule.is_sample,
           rule.created_at,
           rule.updated_at,
+          rule.meeting_url ?? null,
         ],
       );
     },

@@ -4,6 +4,7 @@ import {
   appSettingRowSchema,
   meetingRowSchema,
   milestoneRowSchema,
+  namedListOrderRowSchema,
   personRowSchema,
   recurrenceExceptionRowSchema,
   recurrenceRuleRowSchema,
@@ -12,6 +13,8 @@ import {
   projectRowSchema,
   riskRowSchema,
   taskDependencyRowSchema,
+  taskChecklistItemRowSchema,
+  taskProgressUpdateRowSchema,
   taskParticipantRowSchema,
   taskRowSchema,
 } from '@/db/schemas';
@@ -34,6 +37,9 @@ export const entityCountSchema = z
     people: z.number().int().nonnegative().default(0),
     projectParticipants: z.number().int().nonnegative().default(0),
     taskParticipants: z.number().int().nonnegative().default(0),
+    namedListOrders: z.number().int().nonnegative().default(0),
+    taskProgressUpdates: z.number().int().nonnegative().default(0),
+    taskChecklistItems: z.number().int().nonnegative().default(0),
   })
   .strict();
 
@@ -53,6 +59,9 @@ export const exportDataSchema = z
     people: z.array(personRowSchema.strict()).default([]),
     projectParticipants: z.array(projectParticipantRowSchema.strict()).default([]),
     taskParticipants: z.array(taskParticipantRowSchema.strict()).default([]),
+    namedListOrders: z.array(namedListOrderRowSchema.strict()).default([]),
+    taskProgressUpdates: z.array(taskProgressUpdateRowSchema.strict()).default([]),
+    taskChecklistItems: z.array(taskChecklistItemRowSchema.strict()).default([]),
   })
   .strict();
 

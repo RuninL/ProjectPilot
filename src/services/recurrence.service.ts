@@ -78,7 +78,7 @@ export interface RecurrenceServiceDeps {
 }
 
 export function createRecurrenceService(deps: RecurrenceServiceDeps) {
-  function parseRuleInput(input: RecurrenceRuleInput): RecurrenceRuleInput {
+  function parseRuleInput(input: RecurrenceRuleInput) {
     const parsed = recurrenceRuleInputSchema.safeParse(input);
     if (!parsed.success) {
       throw new AppError('validation', parsed.error.issues[0]?.message ?? '周期规则数据无效');
@@ -98,7 +98,11 @@ export function createRecurrenceService(deps: RecurrenceServiceDeps) {
     }
   }
 
-  function buildRule(input: RecurrenceRuleInput, id = newId(), now = nowIso()): RecurrenceRule {
+  function buildRule(
+    input: ReturnType<typeof parseRuleInput>,
+    id = newId(),
+    now = nowIso(),
+  ): RecurrenceRule {
     return {
       id,
       project_id: input.project_id,
@@ -112,6 +116,7 @@ export function createRecurrenceService(deps: RecurrenceServiceDeps) {
       duration_minutes: input.duration_minutes,
       default_priority: input.default_priority,
       note: input.note,
+      meeting_url: input.meeting_url,
       is_active: input.is_active,
       is_sample: 0,
       created_at: now,

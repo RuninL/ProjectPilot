@@ -70,5 +70,11 @@ pub fn migrations() -> Vec<Migration> {
             sql: include_str!("../migrations/0011_recurrence_exceptions_reschedule.sql"),
             kind: MigrationKind::Up,
         },
+        Migration {
+            version: 12,
+            description: "v1.3 productivity models",
+            sql: include_str!("../migrations/0012_v13_productivity.sql"),
+            kind: MigrationKind::Up,
+        },
     ]
 }

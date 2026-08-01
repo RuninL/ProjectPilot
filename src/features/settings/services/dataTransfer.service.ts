@@ -48,6 +48,9 @@ const ENTITY_KEYS = [
   'people',
   'projectParticipants',
   'taskParticipants',
+  'namedListOrders',
+  'taskProgressUpdates',
+  'taskChecklistItems',
 ] as const;
 
 export function createDataTransferService(deps: DataTransferServiceDeps) {
@@ -156,8 +159,18 @@ function selectImportRows(
   const people = new Set([...current.people, ...selected.people].map((row) => row.id));
   const projects = new Set([...current.projects, ...selected.projects].map((row) => row.id));
   const tasks = new Set([...current.tasks, ...selected.tasks].map((row) => row.id));
+  const currentDefaultContexts = new Set(
+    current.namedListOrders
+      .filter((row) => row.is_default === 1)
+      .map((row) => `${row.context}\u0000${row.context_id}`),
+  );
   return {
     ...selected,
+    namedListOrders: selected.namedListOrders.map((row) =>
+      currentDefaultContexts.has(`${row.context}\u0000${row.context_id}`)
+        ? { ...row, is_default: 0 }
+        : row,
+    ),
     projectParticipants: selected.projectParticipants.filter(
       (row) => projects.has(row.project_id) && people.has(row.person_id),
     ),
@@ -191,6 +204,9 @@ function countSnapshot(snapshot: DatabaseSnapshot): EntityCounts {
     people: snapshot.people.length,
     projectParticipants: snapshot.projectParticipants.length,
     taskParticipants: snapshot.taskParticipants.length,
+    namedListOrders: snapshot.namedListOrders.length,
+    taskProgressUpdates: snapshot.taskProgressUpdates.length,
+    taskChecklistItems: snapshot.taskChecklistItems.length,
   };
 }
 
@@ -210,6 +226,9 @@ function emptyCounts(): EntityCounts {
     people: 0,
     projectParticipants: 0,
     taskParticipants: 0,
+    namedListOrders: 0,
+    taskProgressUpdates: 0,
+    taskChecklistItems: 0,
   };
 }
 
@@ -269,6 +288,17 @@ function withoutConflicts(incoming: ExportData, current: DatabaseSnapshot): Data
       current.taskParticipants,
       (row) => `${row.task_id}\u0000${row.person_id}`,
     ),
+    namedListOrders: excludeIds(incoming.namedListOrders, current.namedListOrders, (row) => row.id),
+    taskProgressUpdates: excludeIds(
+      incoming.taskProgressUpdates,
+      current.taskProgressUpdates,
+      (row) => row.id,
+    ),
+    taskChecklistItems: excludeIds(
+      incoming.taskChecklistItems,
+      current.taskChecklistItems,
+      (row) => row.id,
+    ),
   };
 }
 
@@ -318,7 +348,10 @@ function withoutSampleData(snapshot: DatabaseSnapshot): DatabaseSnapshot {
         (row.converted_task_id === null || taskIds.has(row.converted_task_id)),
     ),
     projectLinks: snapshot.projectLinks.filter(
-      (row) => row.is_sample === 0 && projectIds.has(row.project_id),
+      (row) =>
+        row.is_sample === 0 &&
+        projectIds.has(row.project_id) &&
+        (row.task_id == null || taskIds.has(row.task_id)),
     ),
     risks: snapshot.risks.filter((row) => row.is_sample === 0 && projectIds.has(row.project_id)),
     appSettings: snapshot.appSettings,
@@ -327,6 +360,9 @@ function withoutSampleData(snapshot: DatabaseSnapshot): DatabaseSnapshot {
       projectIds.has(row.project_id),
     ),
     taskParticipants: snapshot.taskParticipants.filter((row) => taskIds.has(row.task_id)),
+    namedListOrders: snapshot.namedListOrders,
+    taskProgressUpdates: snapshot.taskProgressUpdates.filter((row) => taskIds.has(row.task_id)),
+    taskChecklistItems: snapshot.taskChecklistItems.filter((row) => taskIds.has(row.task_id)),
   };
 }
 
@@ -355,6 +391,9 @@ function mergeSnapshots(current: DatabaseSnapshot, incoming: DatabaseSnapshot): 
     people: [...current.people, ...incoming.people],
     projectParticipants: [...current.projectParticipants, ...incoming.projectParticipants],
     taskParticipants: [...current.taskParticipants, ...incoming.taskParticipants],
+    namedListOrders: [...current.namedListOrders, ...incoming.namedListOrders],
+    taskProgressUpdates: [...current.taskProgressUpdates, ...incoming.taskProgressUpdates],
+    taskChecklistItems: [...current.taskChecklistItems, ...incoming.taskChecklistItems],
   };
 }
 
@@ -456,6 +495,25 @@ function validateSnapshot(snapshot: DatabaseSnapshot): void {
   }
   for (const link of snapshot.projectLinks) {
     assertReference(link.project_id, projectIds, `项目链接 ${link.id} 的项目`);
+    assertNullableReference(link.task_id ?? null, taskIds, `项目链接 ${link.id} 的关联任务`);
+    if (link.task_id != null && tasks.get(link.task_id)?.project_id !== link.project_id) {
+      throw validationError(`项目链接 ${link.id} 的关联任务不属于同一项目`);
+    }
+  }
+  const progressTotals = new Map<string, number>();
+  for (const update of snapshot.taskProgressUpdates) {
+    assertReference(update.task_id, taskIds, `任务进展 ${update.id} 的任务`);
+    const total = (progressTotals.get(update.task_id) ?? 0) + update.contribution_percent;
+    if (total > 100) throw validationError(`任务 ${update.task_id} 的进展合计超过 100%`);
+    progressTotals.set(update.task_id, total);
+  }
+  for (const [taskId, total] of progressTotals) {
+    if (tasks.get(taskId)?.progress !== total) {
+      throw validationError(`任务 ${taskId} 的当前进度与进展合计不一致`);
+    }
+  }
+  for (const item of snapshot.taskChecklistItems) {
+    assertReference(item.task_id, taskIds, `任务待办 ${item.id} 的任务`);
   }
   for (const risk of snapshot.risks) {
     assertReference(risk.project_id, projectIds, `风险 ${risk.id} 的项目`);
@@ -547,6 +605,24 @@ function assertUniqueKeys(snapshot: DatabaseSnapshot): void {
   assertUnique(
     snapshot.taskDependencies.map((row) => `${row.predecessor_id}\u0000${row.successor_id}`),
     '任务依赖关系',
+  );
+  assertUnique(
+    snapshot.namedListOrders.map((row) => row.id),
+    '保存排序 ID',
+  );
+  assertUnique(
+    snapshot.namedListOrders.map(
+      (row) => `${row.context}\u0000${row.context_id}\u0000${row.name.toLocaleLowerCase()}`,
+    ),
+    '保存排序名称',
+  );
+  assertUnique(
+    snapshot.taskProgressUpdates.map((row) => row.id),
+    '任务进展 ID',
+  );
+  assertUnique(
+    snapshot.taskChecklistItems.map((row) => row.id),
+    '任务待办 ID',
   );
 }
 

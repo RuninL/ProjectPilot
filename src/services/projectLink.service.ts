@@ -8,6 +8,7 @@ import {
   type ProjectLinkQuery,
   type ProjectLinkRepository,
   type ProjectRepository,
+  type TaskRepository,
 } from '@/repositories';
 import type { ProjectLink, ProjectLinkWithProject } from '@/types';
 import { isAbsoluteWindowsPath, projectLinkInputSchema, type ProjectLinkInput } from './schemas';
@@ -21,6 +22,7 @@ export interface ProjectLinkOpenDeps {
 export interface ProjectLinkServiceDeps extends ProjectLinkOpenDeps {
   projectLinks: ProjectLinkRepository;
   projects: ProjectRepository;
+  tasks?: TaskRepository;
 }
 
 export function isOpenableHttpUrl(value: string): boolean {
@@ -47,6 +49,14 @@ export function createProjectLinkService(deps: ProjectLinkServiceDeps) {
     return link;
   }
 
+  async function validateTask(projectId: string, taskId: string | null): Promise<void> {
+    if (taskId === null) return;
+    const task = deps.tasks === undefined ? null : await deps.tasks.findById(taskId);
+    if (task === null || task.project_id !== projectId) {
+      throw new AppError('validation', '关联任务必须属于当前项目');
+    }
+  }
+
   return {
     async listProjectLinks(projectId: string): Promise<ProjectLink[]> {
       await requireProject(projectId);
@@ -60,6 +70,7 @@ export function createProjectLinkService(deps: ProjectLinkServiceDeps) {
     async createProjectLink(projectId: string, input: ProjectLinkInput): Promise<ProjectLink> {
       await requireProject(projectId);
       const parsed = projectLinkInputSchema.parse(input);
+      await validateTask(projectId, parsed.task_id ?? null);
       const now = nowIso();
       const link: ProjectLink = {
         id: newId(),
@@ -68,6 +79,7 @@ export function createProjectLinkService(deps: ProjectLinkServiceDeps) {
         link_type: parsed.link_type,
         target: parsed.target,
         description: parsed.description,
+        task_id: parsed.task_id ?? null,
         is_sample: 0,
         created_at: now,
         updated_at: now,
@@ -83,6 +95,7 @@ export function createProjectLinkService(deps: ProjectLinkServiceDeps) {
     ): Promise<ProjectLink> {
       await requireOwnedLink(projectId, id);
       const parsed = projectLinkInputSchema.parse(input);
+      await validateTask(projectId, parsed.task_id ?? null);
       await deps.projectLinks.update(id, parsed, nowIso());
       return requireOwnedLink(projectId, id);
     },
@@ -123,6 +136,7 @@ export async function getProjectLinkService(): Promise<ProjectLinkService> {
   return createProjectLinkService({
     projectLinks: repositories.projectLinks,
     projects: repositories.projects,
+    tasks: repositories.tasks,
     openUrl,
     pathExists: localPathExists,
     openPath: openLocalPath,

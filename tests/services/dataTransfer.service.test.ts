@@ -34,6 +34,7 @@ function snapshot(projectId = 'project-1'): DatabaseSnapshot {
         notes: '纪要',
         decisions: '决定',
         risks: '风险',
+        meeting_url: 'https://meet.example.com/room',
         source_rule_id: `rule-meeting-${projectId}`,
         source_occurrence_date: '2026-07-14',
         is_sample: 0,
@@ -112,6 +113,7 @@ function snapshot(projectId = 'project-1'): DatabaseSnapshot {
         duration_minutes: null,
         default_priority: 'high',
         note: '周期任务说明',
+        meeting_url: null,
         is_active: 1,
         is_sample: 0,
         created_at: NOW,
@@ -130,6 +132,7 @@ function snapshot(projectId = 'project-1'): DatabaseSnapshot {
         duration_minutes: 60,
         default_priority: null,
         note: '周期会议说明',
+        meeting_url: 'https://meet.example.com/series',
         is_active: 1,
         is_sample: 0,
         created_at: NOW,
@@ -195,6 +198,7 @@ function snapshot(projectId = 'project-1'): DatabaseSnapshot {
         link_type: 'url',
         target: 'https://example.com',
         description: '',
+        task_id: `task-root-${projectId}`,
         is_sample: 0,
         created_at: NOW,
         updated_at: NOW,
@@ -247,6 +251,9 @@ function snapshot(projectId = 'project-1'): DatabaseSnapshot {
         assigned_at: NOW,
       },
     ],
+    namedListOrders: [],
+    taskProgressUpdates: [],
+    taskChecklistItems: [],
   };
 }
 
@@ -308,6 +315,9 @@ describe('dataTransfer.service', () => {
       people: 1,
       projectParticipants: 1,
       taskParticipants: 1,
+      namedListOrders: 0,
+      taskProgressUpdates: 0,
+      taskChecklistItems: 0,
     });
     expect(file.data).toEqual(snapshot());
   });
@@ -437,6 +447,9 @@ describe('dataTransfer.service', () => {
       people: 0,
       projectParticipants: 0,
       taskParticipants: 0,
+      namedListOrders: 0,
+      taskProgressUpdates: 0,
+      taskChecklistItems: 0,
     });
 
     expect(result.skipped).toEqual(file.statistics);

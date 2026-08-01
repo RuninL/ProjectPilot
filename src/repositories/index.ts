@@ -4,6 +4,7 @@ import { createAppSettingRepository } from './appSetting.repo';
 import { createDataTransferRepository } from './dataTransfer.repo';
 import { createMeetingRepository } from './meeting.repo';
 import { createMilestoneRepository } from './milestone.repo';
+import { createNamedListOrderRepository } from './namedListOrder.repo';
 import { createPeopleRepository } from './people.repo';
 import { createProjectRepository } from './project.repo';
 import { createProjectLinkRepository } from './projectLink.repo';
@@ -12,6 +13,8 @@ import { createRiskRepository } from './risk.repo';
 import { createSampleDataRepository } from './sample.repo';
 import { createTaskRepository } from './task.repo';
 import { createTaskDependencyRepository } from './taskDependency.repo';
+import { createTaskChecklistRepository } from './taskChecklist.repo';
+import { createTaskProgressRepository } from './taskProgress.repo';
 
 export * from './project.repo';
 export * from './task.repo';
@@ -26,6 +29,9 @@ export * from './risk.repo';
 export * from './dataTransfer.repo';
 export * from './people.repo';
 export * from './recurrence.repo';
+export * from './namedListOrder.repo';
+export * from './taskProgress.repo';
+export * from './taskChecklist.repo';
 
 /** Build every repository bound to the live SQLite singleton. */
 export async function getRepositories() {
@@ -44,6 +50,9 @@ export async function getRepositories() {
     risks: createRiskRepository(db),
     people: createPeopleRepository(db),
     recurrence: createRecurrenceRepository(db),
+    namedListOrders: createNamedListOrderRepository(db),
+    taskProgress: createTaskProgressRepository(db),
+    taskChecklist: createTaskChecklistRepository(db),
   };
 }
 

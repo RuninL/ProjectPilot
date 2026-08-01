@@ -17,6 +17,9 @@ function emptySnapshot(): DatabaseSnapshot {
     people: [],
     projectParticipants: [],
     taskParticipants: [],
+    namedListOrders: [],
+    taskProgressUpdates: [],
+    taskChecklistItems: [],
   };
 }
 

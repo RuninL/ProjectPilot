@@ -11,7 +11,7 @@ import {
   type SqlFragment,
 } from './_shared';
 
-const UPDATABLE = ['label', 'link_type', 'target', 'description'] as const;
+const UPDATABLE = ['label', 'link_type', 'target', 'description', 'task_id'] as const;
 
 export interface ProjectLinkQuery {
   search?: string;
@@ -47,6 +47,15 @@ export function createProjectLinkRepository(db: SqlExecutor) {
       return parseRows(projectLinkRowSchema, rows);
     },
 
+    async findByTask(taskId: string): Promise<ProjectLink[]> {
+      return parseRows(
+        projectLinkRowSchema,
+        await db.select('SELECT * FROM project_links WHERE task_id = ? ORDER BY created_at ASC', [
+          taskId,
+        ]),
+      );
+    },
+
     async findAllWithProject(query: ProjectLinkQuery = {}): Promise<ProjectLinkWithProject[]> {
       const where = composeWhere(projectLinkConditions(query));
       const rows = await db.select(
@@ -68,8 +77,8 @@ export function createProjectLinkRepository(db: SqlExecutor) {
     async insert(link: ProjectLink): Promise<void> {
       await db.execute(
         `INSERT INTO project_links
-          (id, project_id, label, link_type, target, description, is_sample, created_at, updated_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          (id, project_id, label, link_type, target, description, is_sample, created_at, updated_at, task_id)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         [
           link.id,
           link.project_id,
@@ -80,6 +89,7 @@ export function createProjectLinkRepository(db: SqlExecutor) {
           link.is_sample,
           link.created_at,
           link.updated_at,
+          link.task_id,
         ],
       );
     },

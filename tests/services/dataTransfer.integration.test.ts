@@ -27,6 +27,9 @@ const ZERO_COUNTS: EntityCounts = {
   people: 0,
   projectParticipants: 0,
   taskParticipants: 0,
+  namedListOrders: 0,
+  taskProgressUpdates: 0,
+  taskChecklistItems: 0,
 };
 
 function countSnapshot(snapshot: DatabaseSnapshot): EntityCounts {
@@ -45,6 +48,9 @@ function countSnapshot(snapshot: DatabaseSnapshot): EntityCounts {
     people: snapshot.people.length,
     projectParticipants: snapshot.projectParticipants.length,
     taskParticipants: snapshot.taskParticipants.length,
+    namedListOrders: snapshot.namedListOrders.length,
+    taskProgressUpdates: snapshot.taskProgressUpdates.length,
+    taskChecklistItems: snapshot.taskChecklistItems.length,
   };
 }
 
@@ -74,6 +80,9 @@ function sortedSnapshot(snapshot: DatabaseSnapshot): DatabaseSnapshot {
         `${right.task_id}\u0000${right.person_id}`,
       ),
     ),
+    namedListOrders: byId(snapshot.namedListOrders),
+    taskProgressUpdates: byId(snapshot.taskProgressUpdates),
+    taskChecklistItems: byId(snapshot.taskChecklistItems),
   };
 }
 
@@ -142,6 +151,7 @@ function prefixedSnapshot(prefix: string): DatabaseSnapshot {
       ...row,
       id: `${prefix}-${row.id}`,
       project_id: projectId(row.project_id),
+      task_id: row.task_id == null ? null : taskId(row.task_id),
     })),
     risks: snapshot.risks.map((row) => ({
       ...row,
@@ -163,6 +173,21 @@ function prefixedSnapshot(prefix: string): DatabaseSnapshot {
       ...row,
       task_id: taskId(row.task_id),
       person_id: personId(row.person_id),
+    })),
+    namedListOrders: snapshot.namedListOrders.map((row) => ({
+      ...row,
+      id: `${prefix}-${row.id}`,
+      name: `${prefix}-${row.name}`,
+    })),
+    taskProgressUpdates: snapshot.taskProgressUpdates.map((row) => ({
+      ...row,
+      id: `${prefix}-${row.id}`,
+      task_id: taskId(row.task_id),
+    })),
+    taskChecklistItems: snapshot.taskChecklistItems.map((row) => ({
+      ...row,
+      id: `${prefix}-${row.id}`,
+      task_id: taskId(row.task_id),
     })),
   };
 }
@@ -318,6 +343,9 @@ describe('数据交换真实 SQLite 集成', () => {
         people: [...existing.people, ...added.people],
         projectParticipants: [...existing.projectParticipants, ...added.projectParticipants],
         taskParticipants: [...existing.taskParticipants, ...added.taskParticipants],
+        namedListOrders: [...existing.namedListOrders, ...added.namedListOrders],
+        taskProgressUpdates: [...existing.taskProgressUpdates, ...added.taskProgressUpdates],
+        taskChecklistItems: [...existing.taskChecklistItems, ...added.taskChecklistItems],
       };
 
       const result = await harness.service.importData(fileFor(mixed), 'merge');
@@ -334,6 +362,8 @@ describe('数据交换真实 SQLite 集成', () => {
     try {
       const clearSql = harness.repository.buildClearStatements().map((statement) => statement.sql);
       expect(clearSql).toEqual([
+        'DELETE FROM task_checklist_items',
+        'DELETE FROM task_progress_updates',
         'DELETE FROM task_participants',
         'DELETE FROM project_participants',
         'DELETE FROM task_dependencies',
@@ -347,6 +377,7 @@ describe('数据交换真实 SQLite 集成', () => {
         'DELETE FROM recurrence_rules',
         'DELETE FROM projects',
         'DELETE FROM people',
+        'DELETE FROM named_list_orders',
         'DELETE FROM app_settings',
       ]);
 

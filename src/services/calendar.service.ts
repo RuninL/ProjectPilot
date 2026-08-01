@@ -99,6 +99,7 @@ async function loadMonthData(
           notes: '',
           decisions: '',
           risks: '',
+          meeting_url: rule.meeting_url ?? null,
           source_rule_id: rule.id,
           source_occurrence_date: occurrence.occurrenceDate,
           is_sample: 0 as const,

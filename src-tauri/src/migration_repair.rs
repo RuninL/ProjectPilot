@@ -12,7 +12,7 @@ use crate::backup::{
 };
 use crate::error::{CommandError, CommandResult};
 
-const CURRENT_MIGRATION_COUNT: i64 = 11;
+const CURRENT_MIGRATION_COUNT: i64 = 12;
 
 const CURRENT_MIGRATIONS: &[(i64, &str)] = &[
     (1, include_str!("../migrations/0001_init.sql")),
@@ -40,6 +40,10 @@ const CURRENT_MIGRATIONS: &[(i64, &str)] = &[
     (
         11,
         include_str!("../migrations/0011_recurrence_exceptions_reschedule.sql"),
+    ),
+    (
+        12,
+        include_str!("../migrations/0012_v13_productivity.sql"),
     ),
 ];
 

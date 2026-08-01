@@ -14,14 +14,15 @@ const UPDATABLE = [
   'notes',
   'decisions',
   'risks',
+  'meeting_url',
   'source_rule_id',
   'source_occurrence_date',
 ] as const;
 
 const INSERT_SQL = `INSERT INTO meetings
   (id, project_id, topic, date, start_time, attendees, agenda, notes, decisions, risks,
-   source_rule_id, source_occurrence_date, is_sample, created_at, updated_at)
- VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`;
+   source_rule_id, source_occurrence_date, is_sample, created_at, updated_at, meeting_url)
+ VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`;
 
 function insertParams(meeting: Meeting): unknown[] {
   return [
@@ -40,6 +41,7 @@ function insertParams(meeting: Meeting): unknown[] {
     meeting.is_sample,
     meeting.created_at,
     meeting.updated_at,
+    meeting.meeting_url ?? null,
   ];
 }
 

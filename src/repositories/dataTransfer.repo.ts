@@ -3,6 +3,7 @@ import {
   appSettingRowSchema,
   meetingRowSchema,
   milestoneRowSchema,
+  namedListOrderRowSchema,
   personRowSchema,
   recurrenceExceptionRowSchema,
   recurrenceRuleRowSchema,
@@ -11,6 +12,8 @@ import {
   projectRowSchema,
   riskRowSchema,
   taskDependencyRowSchema,
+  taskChecklistItemRowSchema,
+  taskProgressUpdateRowSchema,
   taskParticipantRowSchema,
   taskRowSchema,
 } from '@/db/schemas';
@@ -21,6 +24,7 @@ import type {
   AppSetting,
   Meeting,
   Milestone,
+  NamedListOrder,
   Person,
   Project,
   ProjectLink,
@@ -29,8 +33,10 @@ import type {
   RecurrenceRule,
   Risk,
   Task,
+  TaskChecklistItem,
   TaskDependency,
   TaskParticipant,
+  TaskProgressUpdate,
 } from '@/types';
 import { parseRows } from './_shared';
 
@@ -49,6 +55,9 @@ export interface DatabaseSnapshot {
   people: Person[];
   projectParticipants: ProjectParticipant[];
   taskParticipants: TaskParticipant[];
+  namedListOrders: NamedListOrder[];
+  taskProgressUpdates: TaskProgressUpdate[];
+  taskChecklistItems: TaskChecklistItem[];
 }
 
 const INSERTS = {
@@ -57,8 +66,8 @@ const INSERTS = {
      is_sample, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
   meeting: `INSERT INTO meetings
     (id, project_id, topic, date, start_time, attendees, agenda, notes, decisions, risks,
-     source_rule_id, source_occurrence_date, is_sample, created_at, updated_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+     source_rule_id, source_occurrence_date, is_sample, created_at, updated_at, meeting_url)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
   task: `INSERT INTO tasks
     (id, project_id, parent_task_id, title, description, status, priority, start_date, due_date,
      progress, estimated_hours, actual_hours, completed_at, archived_at, source_meeting_id,
@@ -69,8 +78,8 @@ const INSERTS = {
     VALUES (?, ?, ?, ?, ?, ?, ?)`,
   recurrenceRule: `INSERT INTO recurrence_rules
     (id, project_id, kind, title, byweekday, interval, start_date, end_date, time_of_day,
-     duration_minutes, default_priority, note, is_active, is_sample, created_at, updated_at)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    duration_minutes, default_priority, note, is_active, is_sample, created_at, updated_at, meeting_url)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
   recurrenceException: `INSERT INTO recurrence_exceptions
     (id, rule_id, occurrence_date, action, replacement_date, materialized_id, created_at, updated_at)
     VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
@@ -81,8 +90,8 @@ const INSERTS = {
     (id, meeting_id, content, owner, due_date, status, converted_task_id, converted_at,
      created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
   projectLink: `INSERT INTO project_links
-    (id, project_id, label, link_type, target, description, is_sample, created_at, updated_at)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    (id, project_id, label, link_type, target, description, is_sample, created_at, updated_at, task_id)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
   risk: `INSERT INTO risks
     (id, project_id, title, description, category, likelihood, impact, level, status, owner,
      mitigation_plan, due_date, resolved_at, is_sample, created_at, updated_at)
@@ -94,6 +103,15 @@ const INSERTS = {
     (project_id, person_id, role, joined_at) VALUES (?, ?, ?, ?)`,
   taskParticipant: `INSERT INTO task_participants
     (task_id, person_id, assigned_at) VALUES (?, ?, ?)`,
+  namedListOrder: `INSERT INTO named_list_orders
+    (id, context, context_id, name, ordered_ids_json, is_default, created_at, updated_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+  taskProgressUpdate: `INSERT INTO task_progress_updates
+    (id, task_id, title, description, occurred_at, contribution_percent, created_at, updated_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+  taskChecklistItem: `INSERT INTO task_checklist_items
+    (id, task_id, content, is_completed, sort_order, completed_at, created_at, updated_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
 } as const;
 
 export function createDataTransferRepository(db: SqlExecutor) {
@@ -137,6 +155,18 @@ export function createDataTransferRepository(db: SqlExecutor) {
         taskParticipantRowSchema,
         await db.select('SELECT * FROM task_participants'),
       );
+      const namedListOrders = parseRows(
+        namedListOrderRowSchema,
+        await db.select('SELECT * FROM named_list_orders'),
+      );
+      const taskProgressUpdates = parseRows(
+        taskProgressUpdateRowSchema,
+        await db.select('SELECT * FROM task_progress_updates'),
+      );
+      const taskChecklistItems = parseRows(
+        taskChecklistItemRowSchema,
+        await db.select('SELECT * FROM task_checklist_items'),
+      );
       return {
         projects,
         meetings,
@@ -152,11 +182,16 @@ export function createDataTransferRepository(db: SqlExecutor) {
         people,
         projectParticipants,
         taskParticipants,
+        namedListOrders,
+        taskProgressUpdates,
+        taskChecklistItems,
       };
     },
 
     buildClearStatements(): BatchStatement[] {
       return [
+        { sql: 'DELETE FROM task_checklist_items' },
+        { sql: 'DELETE FROM task_progress_updates' },
         { sql: 'DELETE FROM task_participants' },
         { sql: 'DELETE FROM project_participants' },
         { sql: 'DELETE FROM task_dependencies' },
@@ -170,6 +205,7 @@ export function createDataTransferRepository(db: SqlExecutor) {
         { sql: 'DELETE FROM recurrence_rules' },
         { sql: 'DELETE FROM projects' },
         { sql: 'DELETE FROM people' },
+        { sql: 'DELETE FROM named_list_orders' },
         { sql: 'DELETE FROM app_settings' },
       ];
     },
@@ -192,6 +228,9 @@ export function createDataTransferRepository(db: SqlExecutor) {
         ...snapshot.risks.map(riskStatement),
         ...snapshot.projectParticipants.map(projectParticipantStatement),
         ...snapshot.taskParticipants.map(taskParticipantStatement),
+        ...snapshot.taskProgressUpdates.map(taskProgressUpdateStatement),
+        ...snapshot.taskChecklistItems.map(taskChecklistItemStatement),
+        ...snapshot.namedListOrders.map(namedListOrderStatement),
         ...snapshot.appSettings.map(appSettingStatement),
       ];
     },
@@ -236,6 +275,7 @@ function meetingStatement(row: Meeting): BatchStatement {
       row.is_sample,
       row.created_at,
       row.updated_at,
+      row.meeting_url ?? null,
     ],
   };
 }
@@ -303,6 +343,7 @@ function recurrenceRuleStatement(row: RecurrenceRule): BatchStatement {
       row.is_sample,
       row.created_at,
       row.updated_at,
+      row.meeting_url ?? null,
     ],
   };
 }
@@ -373,6 +414,7 @@ function projectLinkStatement(row: ProjectLink): BatchStatement {
       row.is_sample,
       row.created_at,
       row.updated_at,
+      row.task_id ?? null,
     ],
   };
 }
@@ -426,6 +468,54 @@ function taskParticipantStatement(row: TaskParticipant): BatchStatement {
   return {
     sql: INSERTS.taskParticipant,
     params: [row.task_id, row.person_id, row.assigned_at],
+  };
+}
+
+function namedListOrderStatement(row: NamedListOrder): BatchStatement {
+  return {
+    sql: INSERTS.namedListOrder,
+    params: [
+      row.id,
+      row.context,
+      row.context_id,
+      row.name,
+      row.ordered_ids_json,
+      row.is_default,
+      row.created_at,
+      row.updated_at,
+    ],
+  };
+}
+
+function taskProgressUpdateStatement(row: TaskProgressUpdate): BatchStatement {
+  return {
+    sql: INSERTS.taskProgressUpdate,
+    params: [
+      row.id,
+      row.task_id,
+      row.title,
+      row.description,
+      row.occurred_at,
+      row.contribution_percent,
+      row.created_at,
+      row.updated_at,
+    ],
+  };
+}
+
+function taskChecklistItemStatement(row: TaskChecklistItem): BatchStatement {
+  return {
+    sql: INSERTS.taskChecklistItem,
+    params: [
+      row.id,
+      row.task_id,
+      row.content,
+      row.is_completed,
+      row.sort_order,
+      row.completed_at,
+      row.created_at,
+      row.updated_at,
+    ],
   };
 }
 

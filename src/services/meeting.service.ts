@@ -85,6 +85,7 @@ export function createMeetingService(deps: MeetingServiceDeps) {
         notes: parsed.notes,
         decisions: parsed.decisions,
         risks: parsed.risks,
+        meeting_url: parsed.meeting_url,
         source_rule_id: null,
         source_occurrence_date: null,
         is_sample: 0,
@@ -112,6 +113,7 @@ export function createMeetingService(deps: MeetingServiceDeps) {
           notes: parsed.notes,
           decisions: parsed.decisions,
           risks: parsed.risks,
+          meeting_url: parsed.meeting_url,
         },
         nowIso(),
       );
