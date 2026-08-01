@@ -13,7 +13,7 @@ import { PageHeader } from '@/components/common/PageHeader';
 import { ReorderHandle } from '@/features/sorting/ReorderHandle';
 import { SavedOrderControls } from '@/features/sorting/SavedOrderControls';
 import { useDragReorder } from '@/features/sorting/useDragReorder';
-import { useSavedListOrder } from '@/features/sorting/useSavedListOrder';
+import { useSectionedListOrder } from '@/features/sorting/useSavedListOrder';
 import {
   Dialog,
   DialogContent,
@@ -98,7 +98,6 @@ export function MeetingsPage() {
   >(new Map());
   const [search, setSearch] = useState('');
   const [projectId, setProjectId] = useState('all');
-  const [meetingKind, setMeetingKind] = useState<'all' | 'standalone' | 'recurring'>('all');
   const [linkFilter, setLinkFilter] = useState<'all' | 'with' | 'without'>('all');
   const [range, setRange] = useState<MeetingRange>('future');
   const [timeSort, setTimeSort] = useState<MeetingTimeSort>('time_asc');
@@ -142,48 +141,58 @@ export function MeetingsPage() {
     };
   }, [rules]);
 
-  const filteredOccurrences = useMemo(() => {
+  // Standalone area: only plain meetings — recurring series and their
+  // occurrences (expected or materialized) never enter this list.
+  const standaloneMatches = useMemo(() => {
     const query = search.trim().toLocaleLowerCase('zh-CN');
-    return filterAndSortMeetingOccurrences(
-      buildMeetingOccurrences(meetings, rules, exceptionsByRule),
-      range,
-      timeSort,
-    ).filter(
+    return buildMeetingOccurrences(meetings, rules, exceptionsByRule).filter(
       (occurrence) =>
+        occurrence.source_rule_id === null &&
         (query === '' || occurrence.topic.toLocaleLowerCase('zh-CN').includes(query)) &&
         (projectId === 'all' || occurrence.project_id === projectId) &&
-        (meetingKind === 'all' ||
-          (meetingKind === 'recurring'
-            ? occurrence.source_rule_id !== null
-            : occurrence.source_rule_id === null)) &&
         (linkFilter === 'all' ||
           (linkFilter === 'with'
             ? occurrence.meeting_url !== null
             : occurrence.meeting_url === null)),
     );
-  }, [
-    exceptionsByRule,
-    linkFilter,
-    meetingKind,
-    meetings,
-    projectId,
-    range,
-    rules,
-    search,
-    timeSort,
-  ]);
-  const savedOrder = useSavedListOrder('meetings', '', filteredOccurrences);
-  const reorderDisabled =
-    search.trim() !== '' ||
-    projectId !== 'all' ||
-    meetingKind !== 'all' ||
-    linkFilter !== 'all' ||
-    range !== 'all';
-  const reorderReason = reorderDisabled ? '清除搜索或筛选后可调整自定义顺序' : null;
-  const dragReorder = useDragReorder(
-    savedOrder.moveTo,
-    savedOrder.mode === 'dynamic' || reorderDisabled,
+  }, [exceptionsByRule, linkFilter, meetings, projectId, rules, search]);
+
+  // Recurring area: one row per series, stable series id, never expanded here.
+  const filteredSeries = useMemo(() => {
+    const query = search.trim().toLocaleLowerCase('zh-CN');
+    return rules
+      .filter(
+        (rule) =>
+          rule.kind === 'meeting' &&
+          (query === '' || rule.title.toLocaleLowerCase('zh-CN').includes(query)) &&
+          (projectId === 'all' || rule.project_id === projectId) &&
+          (linkFilter === 'all' ||
+            (linkFilter === 'with'
+              ? (rule.meeting_url ?? null) !== null
+              : (rule.meeting_url ?? null) === null)),
+      )
+      .sort((a, b) => a.title.localeCompare(b.title, 'zh-CN', { sensitivity: 'base' }));
+  }, [linkFilter, projectId, rules, search]);
+
+  // One named config stores all five sub-orders (recurringSeries plus one per
+  // standalone time range); switching range just reads the matching section.
+  const sectionItems = useMemo(
+    () => ({
+      recurringSeries: filteredSeries,
+      'standalone.future': filterAndSortMeetingOccurrences(standaloneMatches, 'future', timeSort),
+      'standalone.today': filterAndSortMeetingOccurrences(standaloneMatches, 'today', timeSort),
+      'standalone.past': filterAndSortMeetingOccurrences(standaloneMatches, 'past', timeSort),
+      'standalone.all': filterAndSortMeetingOccurrences(standaloneMatches, 'all', timeSort),
+    }),
+    [filteredSeries, standaloneMatches, timeSort],
   );
+  const savedOrder = useSectionedListOrder('meetings', '', sectionItems);
+  const seriesSection = savedOrder.section('recurringSeries');
+  const standaloneSection = savedOrder.section(`standalone.${range}`);
+  const manualMode = savedOrder.mode !== 'dynamic';
+  const seriesDrag = useDragReorder(seriesSection.moveTo, !manualMode);
+  const dragReorder = useDragReorder(standaloneSection.moveTo, !manualMode);
+  const filteredOccurrences = standaloneSection.displayedItems;
   const rulesById = useMemo(() => new Map(rules.map((rule) => [rule.id, rule])), [rules]);
 
   const projectName = useMemo(() => {
@@ -308,7 +317,7 @@ export function MeetingsPage() {
             </Button>
           ))}
         </div>
-        <div className="grid gap-3 md:grid-cols-5">
+        <div className="grid gap-3 md:grid-cols-4">
           <Input
             aria-label="搜索会议名称"
             placeholder="搜索会议名称"
@@ -331,18 +340,6 @@ export function MeetingsPage() {
                 {project.name}
               </option>
             ))}
-          </select>
-          <select
-            aria-label="会议类型"
-            className="h-10 rounded-md border border-input bg-background px-3 text-sm"
-            value={meetingKind}
-            onChange={(event) => {
-              setMeetingKind(event.target.value as typeof meetingKind);
-            }}
-          >
-            <option value="all">全部类型</option>
-            <option value="standalone">独立会议</option>
-            <option value="recurring">周期会议</option>
           </select>
           <select
             aria-label="会议链接"
@@ -374,28 +371,46 @@ export function MeetingsPage() {
             <option value="time_desc">实际会议时间倒序</option>
           </select>
         </div>
-        <SavedOrderControls controller={savedOrder} disabledReason={reorderReason} />
+        <SavedOrderControls controller={savedOrder} disabledReason={null} />
       </section>
 
-      <section className="mb-6 rounded-lg border bg-card p-4" aria-label="周期会议规则">
+      <section className="mb-6 rounded-lg border bg-card p-4" aria-label="周期会议">
         <div className="mb-3">
           <div>
             <h2 className="text-lg font-medium">周期会议</h2>
-            <p className="text-sm text-muted-foreground">日历会根据重复设置直接显示各次会议。</p>
+            <p className="text-sm text-muted-foreground">
+              每个系列只显示一次；日历会根据重复设置直接显示各次会议。
+            </p>
           </div>
         </div>
-        {rules.length === 0 ? (
-          <p className="text-sm text-muted-foreground">暂无周期会议规则。</p>
+        {seriesSection.displayedItems.length === 0 ? (
+          <p className="text-sm text-muted-foreground">暂无符合条件的周期会议系列。</p>
         ) : (
           <ul className="divide-y">
-            {rules
-              .filter((rule) => rule.kind === 'meeting')
-              .sort((a, b) => a.title.localeCompare(b.title, 'zh-CN', { sensitivity: 'base' }))
-              .map((rule) => (
-                <li
-                  key={rule.id}
-                  className="flex flex-wrap items-center justify-between gap-3 rounded bg-recurrence-background px-3 py-3"
-                >
+            {seriesSection.displayedItems.map((rule) => (
+              <li
+                key={rule.id}
+                {...seriesDrag.dropProps(rule.id)}
+                className={`flex flex-wrap items-center justify-between gap-3 rounded bg-recurrence-background px-3 py-3 ${
+                  seriesDrag.dropTargetId === rule.id
+                    ? 'border-primary ring-1 ring-inset ring-primary'
+                    : ''
+                }`}
+              >
+                <div className="flex min-w-0 items-center gap-2">
+                  {manualMode && (
+                    <ReorderHandle
+                      label={rule.title}
+                      disabled={false}
+                      onMoveUp={() => {
+                        seriesSection.move(rule.id, -1);
+                      }}
+                      onMoveDown={() => {
+                        seriesSection.move(rule.id, 1);
+                      }}
+                      dragHandleProps={seriesDrag.handleProps(rule.id)}
+                    />
+                  )}
                   <div>
                     <p className="font-medium text-recurrence">{`${rule.title} [周期会议]`}</p>
                     <p className="text-sm text-muted-foreground">
@@ -403,37 +418,39 @@ export function MeetingsPage() {
                       {rule.project_id === null ? '独立会议' : projectName(rule.project_id)}
                     </p>
                   </div>
-                  <div className="flex gap-2">
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      onClick={() => {
-                        setEditingRule(rule);
-                        setRuleFormOpen(true);
-                      }}
-                    >
-                      修改整个系列
-                    </Button>
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      onClick={() => {
-                        setDeletingRule(rule);
-                      }}
-                    >
-                      删除整个系列
-                    </Button>
-                  </div>
-                </li>
-              ))}
+                </div>
+                <div className="flex gap-2">
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => {
+                      setEditingRule(rule);
+                      setRuleFormOpen(true);
+                    }}
+                  >
+                    修改整个系列
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => {
+                      setDeletingRule(rule);
+                    }}
+                  >
+                    删除整个系列
+                  </Button>
+                </div>
+              </li>
+            ))}
           </ul>
         )}
       </section>
 
+      <h2 className="mb-3 text-lg font-medium">独立会议</h2>
       {filteredOccurrences.length === 0 ? (
         <EmptyState
           title={
-            meetings.length === 0 && rules.length === 0 ? '还没有会议记录' : '没有符合条件的会议'
+            meetings.length === 0 && rules.length === 0 ? '还没有会议记录' : '没有符合条件的独立会议'
           }
           description={
             meetings.length === 0 && rules.length === 0
@@ -453,13 +470,13 @@ export function MeetingsPage() {
         />
       ) : (
         <ul className="divide-y rounded-lg border bg-card">
-          {savedOrder.displayedItems.map((occurrence) => {
+          {filteredOccurrences.map((occurrence) => {
             const meeting = occurrence.meeting;
             const rule =
               occurrence.source_rule_id === null
                 ? undefined
                 : rulesById.get(occurrence.source_rule_id);
-            const manual = savedOrder.mode !== 'dynamic';
+            const manual = manualMode;
             return (
               <li
                 key={occurrence.id}
@@ -505,12 +522,12 @@ export function MeetingsPage() {
                   {manual && (
                     <ReorderHandle
                       label={occurrence.topic}
-                      disabled={reorderDisabled}
+                      disabled={false}
                       onMoveUp={() => {
-                        savedOrder.move(occurrence.id, -1);
+                        standaloneSection.move(occurrence.id, -1);
                       }}
                       onMoveDown={() => {
-                        savedOrder.move(occurrence.id, 1);
+                        standaloneSection.move(occurrence.id, 1);
                       }}
                       dragHandleProps={dragReorder.handleProps(occurrence.id)}
                     />

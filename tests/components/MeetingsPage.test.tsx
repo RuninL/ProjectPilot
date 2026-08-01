@@ -10,6 +10,7 @@ import { useProjectStore } from '@/stores/useProjectStore';
 import { useRecurrenceStore } from '@/stores/useRecurrenceStore';
 import { makeActionItem, makeMeeting, makeProject } from '../helpers/fixtures';
 import { createTestDb, type TestDb } from '../helpers/testDb';
+import type { RecurrenceRule } from '@/types';
 
 /**
  * The list page runs against a real in-memory SQLite through the actual
@@ -94,16 +95,28 @@ describe('MeetingsPage', () => {
     await user.click(screen.getByRole('button', { name: '保存当前排序' }));
     await user.type(screen.getByLabelText('排序名称'), '会议排序2');
     await user.click(screen.getByRole('button', { name: '保存' }));
+    // One named config stores all five sub-orders; the drag happened in the
+    // standalone "all" range, so only that section carries the new sequence.
     await waitFor(() => {
-      expect(
-        current.raw
-          .prepare(
-            `SELECT ordered_ids_json FROM named_list_orders
+      const payload = current.raw
+        .prepare(
+          `SELECT ordered_ids_json FROM named_list_orders
              WHERE context = 'meetings' AND name = '会议排序2'`,
-          )
-          .pluck()
-          .get(),
-      ).toBe('["meeting:m2","meeting:m3","meeting:m1"]');
+        )
+        .pluck()
+        .get();
+      expect(typeof payload).toBe('string');
+      const parsed = JSON.parse(payload as string) as {
+        v: number;
+        sections: Record<string, string[]>;
+      };
+      expect(parsed.v).toBe(2);
+      expect(parsed.sections['standalone.all']).toEqual([
+        'meeting:m2',
+        'meeting:m3',
+        'meeting:m1',
+      ]);
+      expect(parsed.sections['recurringSeries']).toEqual([]);
     });
   });
 
@@ -306,5 +319,48 @@ describe('MeetingsPage', () => {
     await user.click(screen.getByRole('button', { name: '保存规则' }));
     expect(await screen.findByText(/独立同步会 \[周期会议\]/)).toBeInTheDocument();
     expect((await repos.recurrence.findAll())[0]?.project_id).toBeNull();
+  });
+
+  it('keeps recurring series out of the standalone list and shows each series once', async () => {
+    const user = userEvent.setup();
+    useRealDb();
+    const repos = await getRepositories();
+    const rule: RecurrenceRule = {
+      id: 'r1',
+      project_id: null,
+      kind: 'meeting',
+      title: '每周例会',
+      byweekday: 0,
+      interval: 1,
+      start_date: '2099-01-04',
+      end_date: '2099-03-01',
+      time_of_day: '10:00',
+      duration_minutes: null,
+      default_priority: null,
+      note: '',
+      meeting_url: null,
+      is_active: 1,
+      is_sample: 0,
+      created_at: '2026-01-01T00:00:00Z',
+      updated_at: '2026-01-01T00:00:00Z',
+    };
+    await repos.recurrence.insert(rule);
+    await repos.meetings.insert(
+      makeMeeting({ id: 'm1', project_id: null, topic: '独立评审会', date: '2099-02-01' }),
+    );
+
+    renderPage();
+    await screen.findByRole('link', { name: '独立评审会' });
+    await user.click(screen.getByRole('button', { name: '全部' }));
+
+    // The series appears exactly once, in the recurring area only.
+    expect(screen.getAllByText(/每周例会 \[周期会议\]/)).toHaveLength(1);
+    // No expanded occurrence rows leak into the standalone list.
+    const standaloneLinks = screen
+      .getAllByRole('link')
+      .map((link) => link.textContent)
+      .filter((text) => text !== '打开');
+    expect(standaloneLinks).toEqual(['独立评审会']);
+    expect(screen.queryByText('周期会议', { selector: 'span' })).toBeNull();
   });
 });
