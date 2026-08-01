@@ -184,8 +184,12 @@ export function ProjectListPage() {
               onDelete={setDeleteTarget}
               participantNames={participantsByProject[project.id] ?? []}
               draggable={savedOrder.mode !== 'dynamic' && !reorderDisabled}
-              onDragStart={() => setDraggedId(project.id)}
-              onDragOver={(event) => event.preventDefault()}
+              onDragStart={() => {
+                setDraggedId(project.id);
+              }}
+              onDragOver={(event) => {
+                event.preventDefault();
+              }}
               onDrop={() => {
                 if (draggedId !== null && draggedId !== project.id) {
                   savedOrder.moveBefore(draggedId, project.id);
@@ -197,8 +201,12 @@ export function ProjectListPage() {
                   <ReorderHandle
                     label={project.name}
                     disabled={reorderDisabled}
-                    onMoveUp={() => savedOrder.move(project.id, -1)}
-                    onMoveDown={() => savedOrder.move(project.id, 1)}
+                    onMoveUp={() => {
+                      savedOrder.move(project.id, -1);
+                    }}
+                    onMoveDown={() => {
+                      savedOrder.move(project.id, 1);
+                    }}
                   />
                 )
               }

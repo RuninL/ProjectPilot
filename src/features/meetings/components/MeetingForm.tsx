@@ -204,7 +204,12 @@ export function MeetingForm({
 
           <div className="grid gap-1.5">
             <Label htmlFor="meeting-attendees">参与者</Label>
-            <input id="meeting-attendees" type="hidden" {...register('attendees')} />
+            <Textarea
+              id="meeting-attendees"
+              className="sr-only"
+              rows={1}
+              {...register('attendees')}
+            />
             <MeetingParticipantSelector
               selectedNames={attendeeNames}
               onChange={(names) => {

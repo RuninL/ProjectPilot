@@ -3,16 +3,9 @@ import { executeBatch } from '@/lib/commands';
 import { nowIso } from '@/lib/date';
 import { AppError } from '@/lib/errors';
 import { newId } from '@/lib/uuid';
-import {
-  getRepositories,
-  type TaskChecklistRepository,
-  type TaskRepository,
-} from '@/repositories';
+import { getRepositories, type TaskChecklistRepository, type TaskRepository } from '@/repositories';
 import type { TaskChecklistItem } from '@/types';
-import {
-  taskChecklistItemInputSchema,
-  type TaskChecklistItemInput,
-} from './schemas';
+import { taskChecklistItemInputSchema, type TaskChecklistItemInput } from './schemas';
 
 export interface TaskChecklistServiceDeps {
   checklist: TaskChecklistRepository;
@@ -70,11 +63,7 @@ export function createTaskChecklistService(deps: TaskChecklistServiceDeps) {
       return requireItem(taskId, id);
     },
 
-    async setCompleted(
-      taskId: string,
-      id: string,
-      completed: boolean,
-    ): Promise<TaskChecklistItem> {
+    async setCompleted(taskId: string, id: string, completed: boolean): Promise<TaskChecklistItem> {
       const existing = await requireItem(taskId, id);
       const now = nowIso();
       await deps.checklist.update(

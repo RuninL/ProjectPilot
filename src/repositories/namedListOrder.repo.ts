@@ -6,10 +6,7 @@ import { parseOptional, parseRows } from './_shared';
 
 export function createNamedListOrderRepository(db: SqlExecutor) {
   return {
-    async findByContext(
-      context: NamedListOrderContext,
-      contextId = '',
-    ): Promise<NamedListOrder[]> {
+    async findByContext(context: NamedListOrderContext, contextId = ''): Promise<NamedListOrder[]> {
       return parseRows(
         namedListOrderRowSchema,
         await db.select(

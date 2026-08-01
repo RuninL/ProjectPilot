@@ -124,7 +124,12 @@ export function SavedOrderControls<T extends { id: string }>({
             )}
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setDialog(null)}>
+            <Button
+              variant="outline"
+              onClick={() => {
+                setDialog(null);
+              }}
+            >
               取消
             </Button>
             <Button disabled={name.trim() === ''} onClick={() => void submit()}>

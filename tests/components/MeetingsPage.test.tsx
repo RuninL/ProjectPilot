@@ -89,18 +89,24 @@ describe('MeetingsPage', () => {
     const repos = await getRepositories();
     await repos.projects.insert(makeProject({ id: 'p1', name: '内网门户重构' }));
     await repos.meetings.insert(
-      makeMeeting({ id: 'm1', project_id: 'p1', topic: '需求澄清', start_time: '09:30' }),
+      makeMeeting({
+        id: 'm1',
+        project_id: 'p1',
+        topic: '需求澄清',
+        date: '2099-07-14',
+        start_time: '09:30',
+      }),
     );
     await repos.meetings.insert(
-      makeMeeting({ id: 'm2', project_id: null, topic: '一对一', date: '2026-07-16' }),
+      makeMeeting({ id: 'm2', project_id: null, topic: '一对一', date: '2099-07-16' }),
     );
 
     renderPage();
 
     expect(await screen.findByRole('link', { name: '需求澄清' })).toBeInTheDocument();
     expect(screen.getByRole('link', { name: '一对一' })).toBeInTheDocument();
-    expect(screen.getByText('内网门户重构')).toBeInTheDocument();
-    expect(screen.getByText('独立会议')).toBeInTheDocument();
+    expect(screen.getAllByText('内网门户重构')).not.toHaveLength(0);
+    expect(screen.getAllByText('独立会议')).not.toHaveLength(0);
     expect(screen.getByText('09:30')).toBeInTheDocument();
   });
 
@@ -126,6 +132,7 @@ describe('MeetingsPage', () => {
     await user.type(screen.getByLabelText('参与者'), '张三\n李四，王五');
     await user.click(screen.getByRole('button', { name: '保存' }));
 
+    await user.click(screen.getByRole('button', { name: '全部' }));
     expect(await screen.findByRole('link', { name: '双周评审' })).toBeInTheDocument();
     expect(screen.queryByText('无法加载会议')).toBeNull();
 
@@ -140,7 +147,9 @@ describe('MeetingsPage', () => {
     useRealDb();
     const repos = await getRepositories();
     await repos.projects.insert(makeProject({ id: 'p1', name: '内网门户重构' }));
-    await repos.meetings.insert(makeMeeting({ id: 'm1', project_id: 'p1', topic: '需求澄清' }));
+    await repos.meetings.insert(
+      makeMeeting({ id: 'm1', project_id: 'p1', topic: '需求澄清', date: '2099-07-14' }),
+    );
     await repos.actionItems.insert(makeActionItem({ id: 'a1', meeting_id: 'm1' }));
     await repos.actionItems.insert(makeActionItem({ id: 'a2', meeting_id: 'm1' }));
 
@@ -169,7 +178,9 @@ describe('MeetingsPage', () => {
     useRealDb();
     const repos = await getRepositories();
     await repos.projects.insert(makeProject({ id: 'p1', name: '内网门户重构' }));
-    await repos.meetings.insert(makeMeeting({ id: 'm1', project_id: 'p1', topic: '需求澄清' }));
+    await repos.meetings.insert(
+      makeMeeting({ id: 'm1', project_id: 'p1', topic: '需求澄清', date: '2099-07-14' }),
+    );
     await repos.actionItems.insert(makeActionItem({ id: 'a1', meeting_id: 'm1' }));
 
     renderPage();

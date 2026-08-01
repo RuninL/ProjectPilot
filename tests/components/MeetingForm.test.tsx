@@ -79,6 +79,7 @@ describe('MeetingForm', () => {
         notes: '',
         decisions: '',
         risks: '',
+        meeting_url: null,
       });
     });
     expect(onClose).toHaveBeenCalledTimes(1);

@@ -157,7 +157,9 @@ export function MeetingDetailPage() {
                   setActionError(null);
                   void getMeetingService()
                     .then((service) => service.openMeetingUrl(meeting.id))
-                    .catch((caught: unknown) => { setActionError(toAppError(caught).message); });
+                    .catch((caught: unknown) => {
+                      setActionError(toAppError(caught).message);
+                    });
                 }}
               >
                 <ExternalLink className="h-4 w-4" aria-hidden />
@@ -166,9 +168,9 @@ export function MeetingDetailPage() {
               <Button
                 variant="outline"
                 onClick={() => {
-                  void navigator.clipboard
-                    .writeText(meeting.meeting_url ?? '')
-                    .catch(() => { setActionError('无法复制会议链接'); });
+                  void navigator.clipboard.writeText(meeting.meeting_url ?? '').catch(() => {
+                    setActionError('无法复制会议链接');
+                  });
                 }}
               >
                 <Copy className="h-4 w-4" aria-hidden />

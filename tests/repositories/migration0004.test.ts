@@ -93,6 +93,7 @@ describe('migration 0004 — additive only', () => {
       'start_time',
       'source_rule_id',
       'source_occurrence_date',
+      'meeting_url',
     ]);
   });
 

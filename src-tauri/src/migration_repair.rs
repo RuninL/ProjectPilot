@@ -41,10 +41,7 @@ const CURRENT_MIGRATIONS: &[(i64, &str)] = &[
         11,
         include_str!("../migrations/0011_recurrence_exceptions_reschedule.sql"),
     ),
-    (
-        12,
-        include_str!("../migrations/0012_v13_productivity.sql"),
-    ),
+    (12, include_str!("../migrations/0012_v13_productivity.sql")),
 ];
 
 #[derive(Debug, Serialize)]

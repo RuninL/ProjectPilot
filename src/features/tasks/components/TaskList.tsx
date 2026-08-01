@@ -43,7 +43,9 @@ export function TaskList({
           onDragStart: () => {
             draggedId = task.id;
           },
-          onDragOver: (event: React.DragEvent<HTMLLIElement>) => event.preventDefault(),
+          onDragOver: (event: React.DragEvent<HTMLLIElement>) => {
+            event.preventDefault();
+          },
           onDrop: () => {
             if (draggedId !== null && draggedId !== task.id) onMoveBefore(draggedId, task.id);
             draggedId = null;
@@ -52,8 +54,12 @@ export function TaskList({
             <ReorderHandle
               label={task.title}
               disabled={reorderDisabled}
-              onMoveUp={() => onMove(task.id, -1)}
-              onMoveDown={() => onMove(task.id, 1)}
+              onMoveUp={() => {
+                onMove(task.id, -1);
+              }}
+              onMoveDown={() => {
+                onMove(task.id, 1);
+              }}
             />
           ),
         }

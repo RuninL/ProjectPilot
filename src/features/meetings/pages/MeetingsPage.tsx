@@ -279,18 +279,24 @@ export function MeetingsPage() {
                 setRange(value);
                 void getMeetingService()
                   .then((service) => service.setListRange(value))
-                  .catch(() => { setActionError('无法保存会议列表偏好'); });
+                  .catch(() => {
+                    setActionError('无法保存会议列表偏好');
+                  });
                 if (value === 'future' || value === 'today') {
                   setTimeSort('time_asc');
                   void getMeetingService()
                     .then((service) => service.setListTimeSort('time_asc'))
-                    .catch(() => { setActionError('无法保存会议列表偏好'); });
+                    .catch(() => {
+                      setActionError('无法保存会议列表偏好');
+                    });
                 }
                 if (value === 'past') {
                   setTimeSort('time_desc');
                   void getMeetingService()
                     .then((service) => service.setListTimeSort('time_desc'))
-                    .catch(() => { setActionError('无法保存会议列表偏好'); });
+                    .catch(() => {
+                      setActionError('无法保存会议列表偏好');
+                    });
                 }
               }}
             >
@@ -303,13 +309,17 @@ export function MeetingsPage() {
             aria-label="搜索会议名称"
             placeholder="搜索会议名称"
             value={search}
-            onChange={(event) => { setSearch(event.target.value); }}
+            onChange={(event) => {
+              setSearch(event.target.value);
+            }}
           />
           <select
-            aria-label="所属项目"
+            aria-label="筛选所属项目"
             className="h-10 rounded-md border border-input bg-background px-3 text-sm"
             value={projectId}
-            onChange={(event) => { setProjectId(event.target.value); }}
+            onChange={(event) => {
+              setProjectId(event.target.value);
+            }}
           >
             <option value="all">全部项目</option>
             {projectOptions.map((project) => (
@@ -322,7 +332,9 @@ export function MeetingsPage() {
             aria-label="会议类型"
             className="h-10 rounded-md border border-input bg-background px-3 text-sm"
             value={meetingKind}
-            onChange={(event) => { setMeetingKind(event.target.value as typeof meetingKind); }}
+            onChange={(event) => {
+              setMeetingKind(event.target.value as typeof meetingKind);
+            }}
           >
             <option value="all">全部类型</option>
             <option value="standalone">独立会议</option>
@@ -332,7 +344,9 @@ export function MeetingsPage() {
             aria-label="会议链接"
             className="h-10 rounded-md border border-input bg-background px-3 text-sm"
             value={linkFilter}
-            onChange={(event) => { setLinkFilter(event.target.value as typeof linkFilter); }}
+            onChange={(event) => {
+              setLinkFilter(event.target.value as typeof linkFilter);
+            }}
           >
             <option value="all">全部链接</option>
             <option value="with">有会议链接</option>
@@ -347,7 +361,9 @@ export function MeetingsPage() {
               setTimeSort(value);
               void getMeetingService()
                 .then((service) => service.setListTimeSort(value))
-                .catch(() => { setActionError('无法保存会议列表偏好'); });
+                .catch(() => {
+                  setActionError('无法保存会议列表偏好');
+                });
             }}
           >
             <option value="time_asc">实际会议时间正序</option>
@@ -412,8 +428,14 @@ export function MeetingsPage() {
 
       {filteredOccurrences.length === 0 ? (
         <EmptyState
-          title="没有符合条件的会议"
-          description="调整时间范围或筛选条件，也可以创建新会议。"
+          title={
+            meetings.length === 0 && rules.length === 0 ? '还没有会议记录' : '没有符合条件的会议'
+          }
+          description={
+            meetings.length === 0 && rules.length === 0
+              ? '新建会议后可以记录议程、纪要、决议与行动项。'
+              : '调整时间范围或筛选条件，也可以创建新会议。'
+          }
           action={
             <Button
               onClick={() => {
@@ -438,7 +460,9 @@ export function MeetingsPage() {
               <li
                 key={occurrence.id}
                 draggable={manual && !reorderDisabled}
-                onDragStart={() => { setDraggedId(occurrence.id); }}
+                onDragStart={() => {
+                  setDraggedId(occurrence.id);
+                }}
                 onDragOver={(event) => {
                   if (manual && !reorderDisabled) event.preventDefault();
                 }}
@@ -486,8 +510,12 @@ export function MeetingsPage() {
                     <ReorderHandle
                       label={occurrence.topic}
                       disabled={reorderDisabled}
-                      onMoveUp={() => { savedOrder.move(occurrence.id, -1); }}
-                      onMoveDown={() => { savedOrder.move(occurrence.id, 1); }}
+                      onMoveUp={() => {
+                        savedOrder.move(occurrence.id, -1);
+                      }}
+                      onMoveDown={() => {
+                        savedOrder.move(occurrence.id, 1);
+                      }}
                     />
                   )}
                   {meeting !== null && (
@@ -506,7 +534,9 @@ export function MeetingsPage() {
                             .then((service) =>
                               service.openMeetingUrlValue(occurrence.meeting_url ?? ''),
                             )
-                            .catch((caught: unknown) => { setActionError(toAppError(caught).message); });
+                            .catch((caught: unknown) => {
+                              setActionError(toAppError(caught).message);
+                            });
                         }}
                       >
                         <ExternalLink className="h-4 w-4" aria-hidden />
@@ -519,7 +549,9 @@ export function MeetingsPage() {
                         onClick={() => {
                           void navigator.clipboard
                             .writeText(occurrence.meeting_url ?? '')
-                            .catch(() => { setActionError('无法复制会议链接'); });
+                            .catch(() => {
+                              setActionError('无法复制会议链接');
+                            });
                         }}
                       >
                         <Copy className="h-4 w-4" aria-hidden />

@@ -121,18 +121,16 @@ describe('migration 0012', () => {
        VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
     );
     insert.run('o1', 'projects', '', '项目排序1', '["p1","p2"]', 1, NOW, NOW);
-    expect(() =>
-      insert.run('o2', 'unknown', '', '未知', '[]', 0, NOW, NOW),
-    ).toThrow(/CHECK/);
-    expect(() =>
-      insert.run('o3', 'projects', '', '坏 JSON', '{"id":"p1"}', 0, NOW, NOW),
-    ).toThrow(/CHECK/);
-    expect(() =>
-      insert.run('o4', 'projects', '', '项目排序1', '[]', 0, NOW, NOW),
-    ).toThrow(/UNIQUE/);
-    expect(() =>
-      insert.run('o5', 'projects', '', '另一个默认', '[]', 1, NOW, NOW),
-    ).toThrow(/UNIQUE/);
+    expect(() => insert.run('o2', 'unknown', '', '未知', '[]', 0, NOW, NOW)).toThrow(/CHECK/);
+    expect(() => insert.run('o3', 'projects', '', '坏 JSON', '{"id":"p1"}', 0, NOW, NOW)).toThrow(
+      /CHECK/,
+    );
+    expect(() => insert.run('o4', 'projects', '', '项目排序1', '[]', 0, NOW, NOW)).toThrow(
+      /UNIQUE/,
+    );
+    expect(() => insert.run('o5', 'projects', '', '另一个默认', '[]', 1, NOW, NOW)).toThrow(
+      /UNIQUE/,
+    );
     db.close();
   });
 
@@ -149,9 +147,9 @@ describe('migration 0012', () => {
     expect(db.prepare('SELECT progress FROM tasks WHERE id = ?').get('t')).toStrictEqual({
       progress: 60,
     });
-    expect(() =>
-      insert.run('too-much', 't', '过量', '2026-08-03T10:00:00Z', 41, NOW, NOW),
-    ).toThrow(/TASK_PROGRESS_EXCEEDS_100/);
+    expect(() => insert.run('too-much', 't', '过量', '2026-08-03T10:00:00Z', 41, NOW, NOW)).toThrow(
+      /TASK_PROGRESS_EXCEEDS_100/,
+    );
     db.prepare(
       'UPDATE task_progress_updates SET contribution_percent = ?, updated_at = ? WHERE id = ?',
     ).run(10, NOW, 'u2');
@@ -177,12 +175,12 @@ describe('migration 0012', () => {
     expect(() => insert.run('c0', 't', '待办', 1, null, NOW, NOW)).toThrow(/CHECK/);
     insert.run('c1', 't', '待办', 0, null, NOW, NOW);
     db.prepare('DELETE FROM tasks WHERE id = ?').run('t');
-    expect(
-      db.prepare('SELECT COUNT(*) AS count FROM task_checklist_items').get(),
-    ).toStrictEqual({ count: 0 });
-    expect(
-      db.prepare('SELECT COUNT(*) AS count FROM task_progress_updates').get(),
-    ).toStrictEqual({ count: 0 });
+    expect(db.prepare('SELECT COUNT(*) AS count FROM task_checklist_items').get()).toStrictEqual({
+      count: 0,
+    });
+    expect(db.prepare('SELECT COUNT(*) AS count FROM task_progress_updates').get()).toStrictEqual({
+      count: 0,
+    });
     db.close();
   });
 

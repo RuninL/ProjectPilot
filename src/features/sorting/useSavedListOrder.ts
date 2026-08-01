@@ -8,10 +8,7 @@ import type { NamedListOrderContext } from '@/types';
 
 type OrderMode = 'dynamic' | 'custom' | `saved:${string}`;
 
-function reconcileIds<T extends { id: string }>(
-  items: readonly T[],
-  orderedIds: readonly string[],
-): string[] {
+function reconcileIds(items: readonly { id: string }[], orderedIds: readonly string[]): string[] {
   const available = new Set(items.map((item) => item.id));
   return [
     ...orderedIds.filter((id) => available.has(id)),
@@ -29,6 +26,8 @@ export function useSavedListOrder<T extends { id: string }>(
   const [orderedIds, setOrderedIds] = useState<string[]>([]);
   const [error, setError] = useState<string | null>(null);
   const initializedContext = useRef('');
+  const itemsRef = useRef(items);
+  itemsRef.current = items;
 
   const reload = useCallback(async () => {
     const service = await getNamedListOrderService();
@@ -46,7 +45,7 @@ export function useSavedListOrder<T extends { id: string }>(
         setOrderedIds(initialOrder.ordered_ids);
       } else if (preferred === 'custom') {
         setMode('custom');
-        setOrderedIds(items.map((item) => item.id));
+        setOrderedIds(itemsRef.current.map((item) => item.id));
       }
     }
   }, [context, contextId]);
