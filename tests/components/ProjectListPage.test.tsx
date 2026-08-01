@@ -1,8 +1,9 @@
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { ProjectListPage } from '@/features/projects/pages/ProjectListPage';
+import type { BatchStatement } from '@/lib/commands';
 import { setDbForTesting, type SqlExecutor } from '@/lib/db';
 import { getRepositories } from '@/repositories';
 import { useProjectStore } from '@/stores/useProjectStore';
@@ -17,6 +18,20 @@ import { createTestDb, type TestDb } from '../helpers/testDb';
  */
 
 let db: TestDb | null = null;
+
+// Archiving a project is now an atomic batch (project + cascade task archive),
+// so the Rust command is routed to the same in-memory database.
+vi.mock('@tauri-apps/api/core', () => ({
+  invoke: (command: string, args?: { statements?: BatchStatement[] }) => {
+    if (command !== 'execute_batch') {
+      return Promise.reject(new Error(`unexpected command: ${command}`));
+    }
+    if (db === null || args?.statements === undefined) {
+      return Promise.reject(new Error('test database not installed'));
+    }
+    return Promise.resolve(db.runBatch(args.statements));
+  },
+}));
 
 function renderPage() {
   render(
@@ -201,5 +216,110 @@ describe('ProjectListPage', () => {
       expect(screen.queryByRole('dialog')).toBeNull();
     });
     expect(await repos.projects.findById('p1')).not.toBeNull();
+  });
+
+  it('restoring with 仅恢复项目 keeps project-archived tasks archived', async () => {
+    const user = userEvent.setup();
+    useRealDb();
+    const repos = await getRepositories();
+    await repos.projects.insert(
+      makeProject({
+        id: 'p1',
+        name: '已归档项目',
+        status: 'archived',
+        archived_at: '2026-07-01T00:00:00Z',
+      }),
+    );
+    await repos.tasks.insert(
+      makeTask({
+        id: 't1',
+        project_id: 'p1',
+        archived_at: '2026-07-01T00:00:00Z',
+        archived_source: 'project',
+      }),
+    );
+    useProjectStore.setState({
+      filters: {
+        search: '',
+        status: null,
+        scope: 'archived',
+        sort: 'updated_at',
+        participantIds: [],
+      },
+    });
+
+    renderPage();
+    await screen.findByRole('link', { name: '已归档项目' });
+
+    await user.click(screen.getByRole('button', { name: '已归档项目 的操作' }));
+    await user.click(await screen.findByRole('menuitem', { name: '恢复项目' }));
+
+    expect(await screen.findByText('是否同时恢复因该项目归档而自动归档的任务？')).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: '仅恢复项目' }));
+
+    await waitFor(async () => {
+      const project = await repos.projects.findById('p1');
+      expect(project?.archived_at).toBeNull();
+    });
+    const task = await repos.tasks.findById('t1');
+    expect(task?.archived_at).not.toBeNull();
+    expect(task?.archived_source).toBe('project');
+  });
+
+  it('restoring with 恢复项目和任务 restores only project-archived tasks', async () => {
+    const user = userEvent.setup();
+    useRealDb();
+    const repos = await getRepositories();
+    await repos.projects.insert(
+      makeProject({
+        id: 'p1',
+        name: '已归档项目',
+        status: 'archived',
+        archived_at: '2026-07-01T00:00:00Z',
+      }),
+    );
+    await repos.tasks.insert(
+      makeTask({
+        id: 't1',
+        project_id: 'p1',
+        archived_at: '2026-07-01T00:00:00Z',
+        archived_source: 'project',
+      }),
+    );
+    await repos.tasks.insert(
+      makeTask({
+        id: 't2',
+        project_id: 'p1',
+        archived_at: '2026-06-01T00:00:00Z',
+        archived_source: 'manual',
+      }),
+    );
+    useProjectStore.setState({
+      filters: {
+        search: '',
+        status: null,
+        scope: 'archived',
+        sort: 'updated_at',
+        participantIds: [],
+      },
+    });
+
+    renderPage();
+    await screen.findByRole('link', { name: '已归档项目' });
+
+    await user.click(screen.getByRole('button', { name: '已归档项目 的操作' }));
+    await user.click(await screen.findByRole('menuitem', { name: '恢复项目' }));
+    await user.click(await screen.findByRole('button', { name: '恢复项目和任务' }));
+
+    await waitFor(async () => {
+      const project = await repos.projects.findById('p1');
+      expect(project?.archived_at).toBeNull();
+    });
+    const auto = await repos.tasks.findById('t1');
+    expect(auto?.archived_at).toBeNull();
+    expect(auto?.archived_source).toBeNull();
+    const manual = await repos.tasks.findById('t2');
+    expect(manual?.archived_at).not.toBeNull();
+    expect(manual?.archived_source).toBe('manual');
   });
 });
