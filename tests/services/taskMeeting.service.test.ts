@@ -35,6 +35,8 @@ describe('taskMeeting.service', () => {
     await service.link('t1', 'm1');
     const links = await service.listByTask('t1');
     expect(links.map((link) => link.meeting_id)).toEqual(['m1']);
+    expect((await service.listMeetingsByTask('t1')).map((meeting) => meeting.id)).toEqual(['m1']);
+    expect((await service.listTasksByMeeting('m1')).map((task) => task.id)).toEqual(['t1']);
     expect(db.raw.prepare('SELECT COUNT(*) AS n FROM project_participants').get()).toEqual({
       n: 0,
     });

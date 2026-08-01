@@ -6,7 +6,7 @@ import {
   type TaskMeetingRepository,
   type TaskRepository,
 } from '@/repositories';
-import type { TaskMeeting } from '@/types';
+import type { Meeting, TaskMeeting, TaskWithProject } from '@/types';
 
 export interface TaskMeetingServiceDeps {
   taskMeetings: TaskMeetingRepository;
@@ -31,17 +31,27 @@ export function createTaskMeetingService(deps: TaskMeetingServiceDeps) {
       return deps.taskMeetings.findByTask(taskId);
     },
 
+    async listMeetingsByTask(taskId: string): Promise<Meeting[]> {
+      await requireTask(taskId);
+      return deps.taskMeetings.findMeetingsByTask(taskId);
+    },
+
+    async listTasksByMeeting(meetingId: string): Promise<TaskWithProject[]> {
+      if ((await deps.meetings.findById(meetingId)) === null) {
+        throw new AppError('not_found', '会议不存在或已被删除');
+      }
+      return deps.taskMeetings.findTasksByMeeting(meetingId);
+    },
+
     async link(taskId: string, meetingId: string): Promise<TaskMeeting> {
       await requireTask(taskId);
       if ((await deps.meetings.findById(meetingId)) === null) {
         throw new AppError('not_found', '会议不存在或已被删除');
       }
-      const existing = await deps.taskMeetings.findByTask(taskId);
-      if (existing.some((link) => link.meeting_id === meetingId)) {
+      const link: TaskMeeting = { task_id: taskId, meeting_id: meetingId, linked_at: nowIso() };
+      if (!(await deps.taskMeetings.insert(link))) {
         throw new AppError('validation', '该会议已与此任务关联');
       }
-      const link: TaskMeeting = { task_id: taskId, meeting_id: meetingId, linked_at: nowIso() };
-      await deps.taskMeetings.insert(link);
       return link;
     },
 
