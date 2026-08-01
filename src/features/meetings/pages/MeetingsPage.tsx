@@ -8,7 +8,11 @@ import { LoadingState } from '@/components/common/LoadingState';
 import { SampleBadge } from '@/components/common/SampleBadge';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 import { PageHeader } from '@/components/common/PageHeader';
+import { ReorderHandle } from '@/features/sorting/ReorderHandle';
+import { SavedOrderControls } from '@/features/sorting/SavedOrderControls';
+import { useSavedListOrder } from '@/features/sorting/useSavedListOrder';
 import {
   Dialog,
   DialogContent,
@@ -19,13 +23,20 @@ import {
 } from '@/components/ui/dialog';
 import { toAppError } from '@/lib/errors';
 import { todayHK } from '@/lib/date';
-import { expandRule } from '@/services/recurrence.service';
+import { getMeetingService } from '@/services/meeting.service';
+import { expandRule, getRecurrenceService } from '@/services/recurrence.service';
 import { useMeetingStore } from '@/stores/useMeetingStore';
 import { useProjectStore } from '@/stores/useProjectStore';
 import { useRecurrenceStore } from '@/stores/useRecurrenceStore';
-import type { Meeting, RecurrenceRule } from '@/types';
+import type { Meeting, RecurrenceException, RecurrenceRule } from '@/types';
 import type { RecurrenceRuleInput } from '@/services/schemas';
 import { MeetingForm } from '../components/MeetingForm';
+import {
+  buildMeetingOccurrences,
+  filterAndSortMeetingOccurrences,
+  type MeetingRange,
+  type MeetingTimeSort,
+} from '../meetingListModel';
 import { RecurrenceRuleForm } from '../components/RecurrenceRuleForm';
 
 interface PendingDelete {
@@ -81,12 +92,29 @@ export function MeetingsPage() {
     rule: RecurrenceRule;
     input: RecurrenceRuleInput;
   } | null>(null);
+  const [exceptionsByRule, setExceptionsByRule] = useState<
+    ReadonlyMap<string, readonly RecurrenceException[]>
+  >(new Map());
+  const [search, setSearch] = useState('');
+  const [projectId, setProjectId] = useState('all');
+  const [meetingKind, setMeetingKind] = useState<'all' | 'standalone' | 'recurring'>('all');
+  const [linkFilter, setLinkFilter] = useState<'all' | 'with' | 'without'>('all');
+  const [range, setRange] = useState<MeetingRange>('future');
+  const [timeSort, setTimeSort] = useState<MeetingTimeSort>('time_asc');
+  const [draggedId, setDraggedId] = useState<string | null>(null);
   const [searchParams] = useSearchParams();
 
   useEffect(() => {
     void loadMeetings();
     void loadOptions();
     void loadRules();
+    void getMeetingService()
+      .then((service) => service.getListPreferences())
+      .then((preferences) => {
+        setRange(preferences.range);
+        setTimeSort(preferences.timeSort);
+      })
+      .catch(() => undefined);
   }, [loadMeetings, loadOptions, loadRules]);
 
   useEffect(() => {
@@ -96,6 +124,63 @@ export function MeetingsPage() {
       setEditingRule(rule);
     }
   }, [rules, searchParams]);
+
+  useEffect(() => {
+    let active = true;
+    void getRecurrenceService()
+      .then(async (service) => {
+        const entries = await Promise.all(
+          rules.map(async (rule) => [rule.id, await service.listExceptions(rule.id)] as const),
+        );
+        if (active) setExceptionsByRule(new Map(entries));
+      })
+      .catch(() => {
+        if (active) setExceptionsByRule(new Map());
+      });
+    return () => {
+      active = false;
+    };
+  }, [rules]);
+
+  const filteredOccurrences = useMemo(() => {
+    const query = search.trim().toLocaleLowerCase('zh-CN');
+    return filterAndSortMeetingOccurrences(
+      buildMeetingOccurrences(meetings, rules, exceptionsByRule),
+      range,
+      timeSort,
+    ).filter(
+      (occurrence) =>
+        (query === '' || occurrence.topic.toLocaleLowerCase('zh-CN').includes(query)) &&
+        (projectId === 'all' || occurrence.project_id === projectId) &&
+        (meetingKind === 'all' ||
+          (meetingKind === 'recurring'
+            ? occurrence.source_rule_id !== null
+            : occurrence.source_rule_id === null)) &&
+        (linkFilter === 'all' ||
+          (linkFilter === 'with'
+            ? occurrence.meeting_url !== null
+            : occurrence.meeting_url === null)),
+    );
+  }, [
+    exceptionsByRule,
+    linkFilter,
+    meetingKind,
+    meetings,
+    projectId,
+    range,
+    rules,
+    search,
+    timeSort,
+  ]);
+  const savedOrder = useSavedListOrder('meetings', '', filteredOccurrences);
+  const reorderDisabled =
+    search.trim() !== '' ||
+    projectId !== 'all' ||
+    meetingKind !== 'all' ||
+    linkFilter !== 'all' ||
+    range !== 'all';
+  const reorderReason = reorderDisabled ? '清除搜索或筛选后可调整自定义顺序' : null;
+  const rulesById = useMemo(() => new Map(rules.map((rule) => [rule.id, rule])), [rules]);
 
   const projectName = useMemo(() => {
     const byId = new Map(projectOptions.map((project) => [project.id, project.name]));
@@ -176,6 +261,102 @@ export function MeetingsPage() {
         <p className="mb-4 text-sm text-destructive">{recurrenceError}</p>
       )}
 
+      <section className="mb-6 space-y-3 rounded-lg border bg-card p-4" aria-label="会议筛选">
+        <div className="flex flex-wrap gap-2" aria-label="会议时间范围">
+          {(
+            [
+              ['future', '未来'],
+              ['today', '今天'],
+              ['past', '过去'],
+              ['all', '全部'],
+            ] as const
+          ).map(([value, label]) => (
+            <Button
+              key={value}
+              size="sm"
+              variant={range === value ? 'default' : 'outline'}
+              onClick={() => {
+                setRange(value);
+                void getMeetingService()
+                  .then((service) => service.setListRange(value))
+                  .catch(() => setActionError('无法保存会议列表偏好'));
+                if (value === 'future' || value === 'today') {
+                  setTimeSort('time_asc');
+                  void getMeetingService()
+                    .then((service) => service.setListTimeSort('time_asc'))
+                    .catch(() => setActionError('无法保存会议列表偏好'));
+                }
+                if (value === 'past') {
+                  setTimeSort('time_desc');
+                  void getMeetingService()
+                    .then((service) => service.setListTimeSort('time_desc'))
+                    .catch(() => setActionError('无法保存会议列表偏好'));
+                }
+              }}
+            >
+              {label}
+            </Button>
+          ))}
+        </div>
+        <div className="grid gap-3 md:grid-cols-5">
+          <Input
+            aria-label="搜索会议名称"
+            placeholder="搜索会议名称"
+            value={search}
+            onChange={(event) => setSearch(event.target.value)}
+          />
+          <select
+            aria-label="所属项目"
+            className="h-10 rounded-md border border-input bg-background px-3 text-sm"
+            value={projectId}
+            onChange={(event) => setProjectId(event.target.value)}
+          >
+            <option value="all">全部项目</option>
+            {projectOptions.map((project) => (
+              <option key={project.id} value={project.id}>
+                {project.name}
+              </option>
+            ))}
+          </select>
+          <select
+            aria-label="会议类型"
+            className="h-10 rounded-md border border-input bg-background px-3 text-sm"
+            value={meetingKind}
+            onChange={(event) => setMeetingKind(event.target.value as typeof meetingKind)}
+          >
+            <option value="all">全部类型</option>
+            <option value="standalone">独立会议</option>
+            <option value="recurring">周期会议</option>
+          </select>
+          <select
+            aria-label="会议链接"
+            className="h-10 rounded-md border border-input bg-background px-3 text-sm"
+            value={linkFilter}
+            onChange={(event) => setLinkFilter(event.target.value as typeof linkFilter)}
+          >
+            <option value="all">全部链接</option>
+            <option value="with">有会议链接</option>
+            <option value="without">无会议链接</option>
+          </select>
+          <select
+            aria-label="会议时间排序"
+            className="h-10 rounded-md border border-input bg-background px-3 text-sm"
+            value={timeSort}
+            onChange={(event) => {
+              const value = event.target.value as MeetingTimeSort;
+              setTimeSort(value);
+              void getMeetingService()
+                .then((service) => service.setListTimeSort(value))
+                .catch(() => setActionError('无法保存会议列表偏好'));
+            }}
+          >
+            <option value="time_asc">实际会议时间正序</option>
+            <option value="time_desc">实际会议时间倒序</option>
+          </select>
+        </div>
+        <SavedOrderControls controller={savedOrder} disabledReason={reorderReason} />
+      </section>
+
       <section className="mb-6 rounded-lg border bg-card p-4" aria-label="周期会议规则">
         <div className="mb-3">
           <div>
@@ -229,10 +410,10 @@ export function MeetingsPage() {
         )}
       </section>
 
-      {meetings.length === 0 ? (
+      {filteredOccurrences.length === 0 ? (
         <EmptyState
-          title="还没有会议记录"
-          description="新建会议后可以记录议程、纪要、决议与行动项。"
+          title="没有符合条件的会议"
+          description="调整时间范围或筛选条件，也可以创建新会议。"
           action={
             <Button
               onClick={() => {
@@ -246,75 +427,107 @@ export function MeetingsPage() {
         />
       ) : (
         <ul className="divide-y rounded-lg border bg-card">
-          {[...meetings]
-            .sort(
-              (a, b) =>
-                a.date.localeCompare(b.date) ||
-                (a.start_time === null
-                  ? 1
-                  : b.start_time === null
-                    ? -1
-                    : a.start_time.localeCompare(b.start_time)) ||
-                a.topic.localeCompare(b.topic, 'zh-CN', { sensitivity: 'base' }),
-            )
-            .map((meeting) => (
+          {savedOrder.displayedItems.map((occurrence) => {
+            const meeting = occurrence.meeting;
+            const rule =
+              occurrence.source_rule_id === null
+                ? undefined
+                : rulesById.get(occurrence.source_rule_id);
+            const manual = savedOrder.mode !== 'dynamic';
+            return (
               <li
-                key={meeting.id}
+                key={occurrence.id}
+                draggable={manual && !reorderDisabled}
+                onDragStart={() => setDraggedId(occurrence.id)}
+                onDragOver={(event) => {
+                  if (manual && !reorderDisabled) event.preventDefault();
+                }}
+                onDrop={() => {
+                  if (draggedId !== null && draggedId !== occurrence.id) {
+                    savedOrder.moveBefore(draggedId, occurrence.id);
+                  }
+                  setDraggedId(null);
+                }}
                 className="flex flex-wrap items-center justify-between gap-3 p-4"
               >
                 <div className="min-w-0">
                   <div className="flex flex-wrap items-center gap-2">
-                    <Link
-                      to={`/meetings/${meeting.id}`}
-                      className="text-sm font-medium hover:underline"
-                    >
-                      {meeting.topic}
-                    </Link>
-                    <Badge variant="outline">{projectName(meeting.project_id)}</Badge>
-                    {meeting.is_sample === 1 && <SampleBadge />}
+                    {meeting === null ? (
+                      <span className="text-sm font-medium">{occurrence.topic}</span>
+                    ) : (
+                      <Link
+                        to={`/meetings/${meeting.id}`}
+                        className="text-sm font-medium hover:underline"
+                      >
+                        {occurrence.topic}
+                      </Link>
+                    )}
+                    <Badge variant="outline">{projectName(occurrence.project_id)}</Badge>
+                    {occurrence.source_rule_id !== null && (
+                      <Badge variant="secondary">周期会议</Badge>
+                    )}
+                    {meeting?.is_sample === 1 && <SampleBadge />}
                   </div>
                   <div className="mt-1 flex flex-wrap items-center gap-3 text-xs text-muted-foreground">
                     <span className="inline-flex items-center gap-1">
                       <CalendarDays className="h-3.5 w-3.5" aria-hidden />
-                      {meeting.date}
+                      {occurrence.date}
                     </span>
-                    {meeting.start_time !== null && (
+                    {occurrence.start_time !== null && (
                       <span className="inline-flex items-center gap-1">
                         <Clock className="h-3.5 w-3.5" aria-hidden />
-                        {meeting.start_time}
+                        {occurrence.start_time}
                       </span>
                     )}
                   </div>
                 </div>
                 <div className="flex shrink-0 items-center gap-1">
-                  <Button size="sm" variant="outline" asChild>
-                    <Link to={`/meetings/${meeting.id}`}>打开</Link>
-                  </Button>
+                  {manual && (
+                    <ReorderHandle
+                      label={occurrence.topic}
+                      disabled={reorderDisabled}
+                      onMoveUp={() => savedOrder.move(occurrence.id, -1)}
+                      onMoveDown={() => savedOrder.move(occurrence.id, 1)}
+                    />
+                  )}
+                  {meeting !== null && (
+                    <Button size="sm" variant="outline" asChild>
+                      <Link to={`/meetings/${meeting.id}`}>打开</Link>
+                    </Button>
+                  )}
                   <Button
                     size="sm"
                     variant="ghost"
-                    aria-label={`编辑会议：${meeting.topic}`}
+                    aria-label={`编辑会议：${occurrence.topic}`}
                     onClick={() => {
-                      setEditing(meeting);
-                      setFormOpen(true);
+                      if (meeting !== null) {
+                        setEditing(meeting);
+                        setFormOpen(true);
+                      } else if (rule !== undefined) {
+                        setEditingRule(rule);
+                        setRuleFormOpen(true);
+                      }
                     }}
                   >
                     <Pencil className="h-4 w-4" aria-hidden />
                   </Button>
-                  <Button
-                    size="sm"
-                    variant="ghost"
-                    aria-label={`删除会议：${meeting.topic}`}
-                    disabled={busy}
-                    onClick={() => {
-                      askDelete(meeting);
-                    }}
-                  >
-                    <Trash2 className="h-4 w-4" aria-hidden />
-                  </Button>
+                  {meeting !== null && (
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      aria-label={`删除会议：${meeting.topic}`}
+                      disabled={busy}
+                      onClick={() => {
+                        askDelete(meeting);
+                      }}
+                    >
+                      <Trash2 className="h-4 w-4" aria-hidden />
+                    </Button>
+                  )}
                 </div>
               </li>
-            ))}
+            );
+          })}
         </ul>
       )}
 

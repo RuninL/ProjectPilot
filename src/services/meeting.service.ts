@@ -1,7 +1,12 @@
 import { nowIso } from '@/lib/date';
 import { AppError } from '@/lib/errors';
 import { newId } from '@/lib/uuid';
-import type { ActionItemRepository, MeetingRepository, ProjectRepository } from '@/repositories';
+import type {
+  ActionItemRepository,
+  AppSettingRepository,
+  MeetingRepository,
+  ProjectRepository,
+} from '@/repositories';
 import { getRepositories } from '@/repositories';
 import type { Meeting } from '@/types';
 import { meetingInputSchema, type MeetingInput } from './schemas';
@@ -10,6 +15,7 @@ export interface MeetingServiceDeps {
   meetings: MeetingRepository;
   actionItems: ActionItemRepository;
   projects: ProjectRepository;
+  appSettings?: AppSettingRepository;
 }
 
 /**
@@ -63,6 +69,31 @@ export function createMeetingService(deps: MeetingServiceDeps) {
 
     async listByProject(projectId: string): Promise<Meeting[]> {
       return deps.meetings.findByProject(projectId);
+    },
+
+    async getListPreferences(): Promise<{
+      range: 'future' | 'today' | 'past' | 'all';
+      timeSort: 'time_asc' | 'time_desc';
+    }> {
+      const [range, timeSort] = await Promise.all([
+        deps.appSettings?.get('meetings:list_range'),
+        deps.appSettings?.get('meetings:time_sort'),
+      ]);
+      return {
+        range:
+          range?.value === 'today' || range?.value === 'past' || range?.value === 'all'
+            ? range.value
+            : 'future',
+        timeSort: timeSort?.value === 'time_desc' ? 'time_desc' : 'time_asc',
+      };
+    },
+
+    async setListRange(range: 'future' | 'today' | 'past' | 'all'): Promise<void> {
+      await deps.appSettings?.set('meetings:list_range', range, nowIso());
+    },
+
+    async setListTimeSort(timeSort: 'time_asc' | 'time_desc'): Promise<void> {
+      await deps.appSettings?.set('meetings:time_sort', timeSort, nowIso());
     },
 
     async getMeeting(id: string): Promise<Meeting> {
@@ -145,5 +176,6 @@ export async function getMeetingService(): Promise<MeetingService> {
     meetings: repos.meetings,
     actionItems: repos.actionItems,
     projects: repos.projects,
+    appSettings: repos.appSettings,
   });
 }

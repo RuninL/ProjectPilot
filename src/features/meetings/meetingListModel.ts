@@ -45,12 +45,10 @@ export function buildMeetingOccurrences(
   const materializedKeys = new Set(
     meetings
       .filter(
-        (meeting) =>
-          meeting.source_rule_id !== null && meeting.source_occurrence_date !== null,
+        (meeting) => meeting.source_rule_id !== null && meeting.source_occurrence_date !== null,
       )
       .map(
-        (meeting) =>
-          `${meeting.source_rule_id ?? ''}\u0000${meeting.source_occurrence_date ?? ''}`,
+        (meeting) => `${meeting.source_rule_id ?? ''}\u0000${meeting.source_occurrence_date ?? ''}`,
       ),
   );
   const stored: MeetingOccurrence[] = meetings.map((meeting) => ({
@@ -74,22 +72,18 @@ export function buildMeetingOccurrences(
       exceptionsByRule.get(rule.id) ?? [],
     ).occurrences;
     return occurrences
-      .filter(
-        (occurrence) => !materializedKeys.has(`${rule.id}\u0000${occurrence.occurrenceDate}`),
-      )
-      .map(
-        (occurrence): MeetingOccurrence => ({
-          id: `expected:${rule.id}:${occurrence.occurrenceDate}`,
-          project_id: rule.project_id,
-          topic: rule.title,
-          date: occurrence.date,
-          start_time: rule.time_of_day,
-          meeting_url: rule.meeting_url ?? null,
-          source_rule_id: rule.id,
-          source_occurrence_date: occurrence.occurrenceDate,
-          meeting: null,
-        }),
-      );
+      .filter((occurrence) => !materializedKeys.has(`${rule.id}\u0000${occurrence.occurrenceDate}`))
+      .map((occurrence): MeetingOccurrence => ({
+        id: `expected:${rule.id}:${occurrence.occurrenceDate}`,
+        project_id: rule.project_id,
+        topic: rule.title,
+        date: occurrence.date,
+        start_time: rule.time_of_day,
+        meeting_url: rule.meeting_url ?? null,
+        source_rule_id: rule.id,
+        source_occurrence_date: occurrence.occurrenceDate,
+        meeting: null,
+      }));
   });
   return [...stored, ...expected];
 }
@@ -112,9 +106,7 @@ export function filterAndSortMeetingOccurrences(
       if (occurrence.start_time === null) {
         return range === 'future' ? occurrence.date > now.date : occurrence.date < now.date;
       }
-      return range === 'future'
-        ? startKey(occurrence) > nowKey
-        : startKey(occurrence) < nowKey;
+      return range === 'future' ? startKey(occurrence) > nowKey : startKey(occurrence) < nowKey;
     })
     .sort((left, right) => {
       const comparison =

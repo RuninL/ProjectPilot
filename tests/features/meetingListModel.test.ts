@@ -76,14 +76,10 @@ describe('meeting range and actual-time sorting', () => {
       ),
     ).toEqual(['future', 'later']);
     expect(
-      filterAndSortMeetingOccurrences(occurrences, 'today', 'time_asc', now).map(
-        (item) => item.id,
-      ),
+      filterAndSortMeetingOccurrences(occurrences, 'today', 'time_asc', now).map((item) => item.id),
     ).toEqual(['past', 'future']);
     expect(
-      filterAndSortMeetingOccurrences(occurrences, 'past', 'time_desc', now).map(
-        (item) => item.id,
-      ),
+      filterAndSortMeetingOccurrences(occurrences, 'past', 'time_desc', now).map((item) => item.id),
     ).toEqual(['past']);
   });
 });

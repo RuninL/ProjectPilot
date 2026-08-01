@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import {
   createActionItemRepository,
+  createAppSettingRepository,
   createMeetingRepository,
   createProjectRepository,
 } from '@/repositories';
@@ -21,6 +22,7 @@ function buildService(current: TestDb): MeetingService {
     meetings: createMeetingRepository(current.executor),
     actionItems: createActionItemRepository(current.executor),
     projects: createProjectRepository(current.executor),
+    appSettings: createAppSettingRepository(current.executor),
   });
 }
 
@@ -48,6 +50,23 @@ beforeEach(async () => {
 
 afterEach(() => {
   db.close();
+});
+
+it('persists and validates meeting list preferences', async () => {
+  expect(await service.getListPreferences()).toEqual({
+    range: 'future',
+    timeSort: 'time_asc',
+  });
+
+  await service.setListRange('past');
+  await service.setListTimeSort('time_desc');
+  expect(await buildService(db).getListPreferences()).toEqual({
+    range: 'past',
+    timeSort: 'time_desc',
+  });
+
+  await createAppSettingRepository(db.executor).set('meetings:list_range', 'invalid', 'now');
+  expect((await service.getListPreferences()).range).toBe('future');
 });
 
 describe('createMeeting', () => {
