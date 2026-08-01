@@ -31,6 +31,7 @@ interface Values {
   end_date: string;
   time_of_day: string;
   note: string;
+  meeting_url: string;
 }
 
 function initial(rule: RecurrenceRule | null, defaultProjectId: string | null): Values {
@@ -44,6 +45,7 @@ function initial(rule: RecurrenceRule | null, defaultProjectId: string | null): 
     end_date: rule?.end_date ?? '',
     time_of_day: rule?.time_of_day ?? '',
     note: rule?.note ?? '',
+    meeting_url: rule?.meeting_url ?? '',
   };
 }
 
@@ -171,6 +173,18 @@ export function RecurrenceRuleForm({
             <Input id="recurrence-time" type="time" {...register('time_of_day')} />
             {errors.time_of_day && (
               <p className="text-sm text-destructive">{errors.time_of_day.message}</p>
+            )}
+          </div>
+          <div className="grid gap-1.5">
+            <Label htmlFor="recurrence-url">在线会议链接（可选，仅 HTTPS）</Label>
+            <Input
+              id="recurrence-url"
+              type="url"
+              placeholder="https://"
+              {...register('meeting_url')}
+            />
+            {errors.meeting_url && (
+              <p className="text-sm text-destructive">{errors.meeting_url.message}</p>
             )}
           </div>
           <div className="grid gap-1.5">

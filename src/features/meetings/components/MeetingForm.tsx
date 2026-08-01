@@ -17,6 +17,7 @@ import { toAppError } from '@/lib/errors';
 import { parseAttendees } from '@/services/meeting.service';
 import { meetingInputSchema, type MeetingInput } from '@/services/schemas';
 import type { Meeting, Project } from '@/types';
+import { MeetingParticipantSelector } from './MeetingParticipantSelector';
 
 /** Raw form state: every control is a string, exactly as the DOM produces it. */
 interface MeetingFormValues {
@@ -29,6 +30,7 @@ interface MeetingFormValues {
   notes: string;
   decisions: string;
   risks: string;
+  meeting_url: string;
 }
 
 const SELECT_CLASS =
@@ -46,6 +48,7 @@ function toFormValues(meeting: Meeting | null, defaultProjectId: string | null):
       notes: '',
       decisions: '',
       risks: '',
+      meeting_url: '',
     };
   }
   return {
@@ -59,6 +62,7 @@ function toFormValues(meeting: Meeting | null, defaultProjectId: string | null):
     notes: meeting.notes,
     decisions: meeting.decisions,
     risks: meeting.risks,
+    meeting_url: meeting.meeting_url ?? '',
   };
 }
 
@@ -93,6 +97,8 @@ export function MeetingForm({
     handleSubmit,
     reset,
     setError,
+    setValue,
+    watch,
     formState: { errors, isSubmitting },
   } = useForm<MeetingFormValues>({
     resolver: zodResolver(meetingInputSchema, undefined, { raw: true }),
@@ -113,6 +119,10 @@ export function MeetingForm({
       setError('root', { message: toAppError(caught).message });
     }
   });
+  const attendeeNames = watch('attendees')
+    .split(/[\n,，]/)
+    .map((name) => name.trim())
+    .filter((name, index, names) => name !== '' && names.indexOf(name) === index);
 
   return (
     <Dialog
@@ -180,12 +190,29 @@ export function MeetingForm({
           </div>
 
           <div className="grid gap-1.5">
+            <Label htmlFor="meeting-url">在线会议链接（可选，仅 HTTPS）</Label>
+            <Input
+              id="meeting-url"
+              type="url"
+              placeholder="https://"
+              {...register('meeting_url')}
+            />
+            {errors.meeting_url && (
+              <p className="text-sm text-destructive">{errors.meeting_url.message}</p>
+            )}
+          </div>
+
+          <div className="grid gap-1.5">
             <Label htmlFor="meeting-attendees">参与者</Label>
-            <Textarea
-              id="meeting-attendees"
-              rows={2}
-              placeholder="每行一个姓名，也可用逗号分隔"
-              {...register('attendees')}
+            <input id="meeting-attendees" type="hidden" {...register('attendees')} />
+            <MeetingParticipantSelector
+              selectedNames={attendeeNames}
+              onChange={(names) => {
+                setValue('attendees', names.join('\n'), {
+                  shouldDirty: true,
+                  shouldValidate: true,
+                });
+              }}
             />
             {errors.attendees && (
               <p className="text-sm text-destructive">{errors.attendees.message}</p>

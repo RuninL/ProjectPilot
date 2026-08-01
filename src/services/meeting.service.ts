@@ -1,5 +1,6 @@
+import { openUrl } from '@tauri-apps/plugin-opener';
 import { nowIso } from '@/lib/date';
-import { AppError } from '@/lib/errors';
+import { AppError, toAppError } from '@/lib/errors';
 import { newId } from '@/lib/uuid';
 import type {
   ActionItemRepository,
@@ -16,6 +17,7 @@ export interface MeetingServiceDeps {
   actionItems: ActionItemRepository;
   projects: ProjectRepository;
   appSettings?: AppSettingRepository;
+  openUrl: (url: string) => Promise<void>;
 }
 
 /**
@@ -55,11 +57,24 @@ export function createMeetingService(deps: MeetingServiceDeps) {
     if (projectId === null) {
       return null;
     }
+
     const project = await deps.projects.findById(projectId);
     if (project === null) {
       throw new AppError('validation', '所属项目不存在或已被删除');
     }
     return project.id;
+  }
+
+  async function openValidatedUrl(url: string | null): Promise<void> {
+    if (url === null || !/^https:\/\/[^/\s]+(?:[/?#][^\s]*)?$/i.test(url)) {
+      throw new AppError('validation', '会议没有可打开的 HTTPS 链接');
+    }
+    try {
+      await deps.openUrl(url);
+    } catch (caught) {
+      const error = toAppError(caught);
+      throw new AppError(error.kind, `无法打开会议链接：${error.message}`, { cause: caught });
+    }
   }
 
   return {
@@ -98,6 +113,15 @@ export function createMeetingService(deps: MeetingServiceDeps) {
 
     async getMeeting(id: string): Promise<Meeting> {
       return requireMeeting(id);
+    },
+
+    async openMeetingUrl(id: string): Promise<void> {
+      const meeting = await requireMeeting(id);
+      await openValidatedUrl(meeting.meeting_url ?? null);
+    },
+
+    async openMeetingUrlValue(url: string): Promise<void> {
+      await openValidatedUrl(url);
     },
 
     async createMeeting(input: MeetingInput): Promise<Meeting> {
@@ -177,5 +201,6 @@ export async function getMeetingService(): Promise<MeetingService> {
     actionItems: repos.actionItems,
     projects: repos.projects,
     appSettings: repos.appSettings,
+    openUrl,
   });
 }

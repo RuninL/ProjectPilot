@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { vi } from 'vitest';
 import {
   createActionItemRepository,
   createAppSettingRepository,
@@ -16,6 +17,7 @@ import { createTestDb, type TestDb } from '../helpers/testDb';
 
 let db: TestDb;
 let service: MeetingService;
+const openUrl = vi.fn<(url: string) => Promise<void>>();
 
 function buildService(current: TestDb): MeetingService {
   return createMeetingService({
@@ -23,6 +25,7 @@ function buildService(current: TestDb): MeetingService {
     actionItems: createActionItemRepository(current.executor),
     projects: createProjectRepository(current.executor),
     appSettings: createAppSettingRepository(current.executor),
+    openUrl,
   });
 }
 
@@ -43,6 +46,8 @@ function input(overrides: Partial<Record<keyof MeetingInput, unknown>> = {}): Me
 }
 
 beforeEach(async () => {
+  openUrl.mockReset();
+  openUrl.mockResolvedValue();
   db = createTestDb();
   service = buildService(db);
   await createProjectRepository(db.executor).insert(makeProject({ id: 'p1' }));
@@ -78,6 +83,23 @@ describe('createMeeting', () => {
     expect(meeting.start_time).toBeNull();
     expect(meeting.is_sample).toBe(0);
     expect(await service.getMeeting(meeting.id)).toStrictEqual(meeting);
+  });
+
+  describe('openMeetingUrl', () => {
+    it('opens only a stored HTTPS meeting URL', async () => {
+      const meeting = await service.createMeeting(
+        input({ meeting_url: ' https://meet.example/a ' }),
+      );
+      await service.openMeetingUrl(meeting.id);
+      expect(openUrl).toHaveBeenCalledWith('https://meet.example/a');
+    });
+
+    it('rejects meetings without an HTTPS URL', async () => {
+      const meeting = await service.createMeeting(input());
+      await expect(service.openMeetingUrl(meeting.id)).rejects.toThrow(
+        '会议没有可打开的 HTTPS 链接',
+      );
+    });
   });
 
   it('persists a standalone meeting with no project', async () => {
