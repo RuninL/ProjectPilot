@@ -1,17 +1,13 @@
 import { ArrowDown, ArrowUp, GripVertical } from 'lucide-react';
-import type { DragEventHandler } from 'react';
 import { Button } from '@/components/ui/button';
+import type { DragHandleProps } from './useDragReorder';
 
 interface ReorderHandleProps {
   label: string;
   disabled: boolean;
   onMoveUp: () => void;
   onMoveDown: () => void;
-  dragHandleProps?: {
-    draggable: boolean;
-    onDragStart: DragEventHandler<HTMLElement>;
-    onDragEnd: DragEventHandler<HTMLElement>;
-  };
+  dragHandleProps?: DragHandleProps;
 }
 
 export function ReorderHandle({

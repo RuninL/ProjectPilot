@@ -1,6 +1,6 @@
 import { ArchiveRestore, Archive, MoreHorizontal, Pencil, Trash2 } from 'lucide-react';
 import { Link } from 'react-router-dom';
-import type { DragEventHandler, ReactNode } from 'react';
+import type { ReactNode } from 'react';
 import { SampleBadge } from '@/components/common/SampleBadge';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -15,6 +15,7 @@ import { formatDisplay } from '@/lib/date';
 import { cn } from '@/lib/cn';
 import { PROJECT_STATUS_LABELS } from '@/lib/labels';
 import { formatProgress, type ProjectProgress } from '@/services/projectProgress';
+import type { DropTargetProps } from '@/features/sorting/useDragReorder';
 import type { Project } from '@/types';
 
 interface ProjectListItemProps {
@@ -26,9 +27,9 @@ interface ProjectListItemProps {
   onDelete: (project: Project) => void;
   participantNames?: readonly string[];
   reorderHandle?: ReactNode;
-  onDragOver?: DragEventHandler<HTMLLIElement>;
-  onDrop?: DragEventHandler<HTMLLIElement>;
+  dropTargetProps?: DropTargetProps;
   isDropTarget?: boolean;
+  isDragSource?: boolean;
 }
 
 /** One row of the project list: identity, dates, completion rate and actions. */
@@ -41,9 +42,9 @@ export function ProjectListItem({
   onDelete,
   participantNames = [],
   reorderHandle,
-  onDragOver,
-  onDrop,
+  dropTargetProps,
   isDropTarget = false,
+  isDragSource = false,
 }: ProjectListItemProps) {
   const archived = project.archived_at !== null;
   const rate = progress ?? { total: 0, done: 0, percent: 0 };
@@ -53,9 +54,9 @@ export function ProjectListItem({
       className={cn(
         'flex items-center gap-4 rounded-lg border bg-card p-4',
         isDropTarget && 'border-primary ring-1 ring-primary',
+        isDragSource && 'opacity-60',
       )}
-      onDragOver={onDragOver}
-      onDrop={onDrop}
+      {...dropTargetProps}
     >
       {reorderHandle}
       <span

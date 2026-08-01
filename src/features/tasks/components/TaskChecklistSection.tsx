@@ -72,7 +72,7 @@ export function TaskChecklistSection({ taskId }: { taskId: string }) {
               {...dragReorder.dropProps(item.id)}
               className={`flex items-center gap-2 rounded-md border p-2 ${
                 dragReorder.dropTargetId === item.id ? 'border-primary ring-1 ring-primary' : ''
-              }`}
+              } ${dragReorder.activeId === item.id ? 'opacity-60' : ''}`}
             >
               {savedOrder.mode !== 'dynamic' && (
                 <ReorderHandle

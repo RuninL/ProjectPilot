@@ -65,25 +65,18 @@ describe('MeetingsPage', () => {
     await user.click(screen.getByRole('button', { name: '全部' }));
     await user.selectOptions(screen.getByLabelText('自定义排序'), 'custom');
 
-    const values = new Map<string, string>();
-    const dataTransfer = {
-      dropEffect: 'none',
-      effectAllowed: 'uninitialized',
-      setData: (type: string, value: string) => values.set(type, value),
-      getData: (type: string) => values.get(type) ?? '',
-    };
     const handle = screen.getByLabelText('拖动排序 第一场');
     const target = screen.getByRole('link', { name: '第三场' }).closest('li');
     if (target === null) throw new Error('第三场会议行应存在');
-    expect(handle).toHaveAttribute('draggable', 'true');
+    // Rows never start a drag themselves; only the handle is armed.
     expect(screen.getByRole('link', { name: '第一场' }).closest('li')).not.toHaveAttribute(
-      'draggable',
+      'data-drag-handle',
     );
 
-    fireEvent.dragStart(handle, { dataTransfer });
-    fireEvent.dragOver(target, { dataTransfer });
+    fireEvent.pointerDown(handle, { button: 0, pointerId: 1, clientX: 5, clientY: 5 });
+    fireEvent.pointerMove(target, { pointerId: 1, clientX: 5, clientY: 120 });
     expect(target).toHaveClass('ring-primary');
-    fireEvent.drop(target, { dataTransfer });
+    fireEvent.pointerUp(target, { pointerId: 1, clientX: 5, clientY: 120 });
 
     expect(
       screen

@@ -61,7 +61,7 @@ export function TaskResourcesSection({ task, projectTasks }: Props) {
               {...dragReorder.dropProps(link.id)}
               className={`flex items-center justify-between rounded-md border p-3 ${
                 dragReorder.dropTargetId === link.id ? 'border-primary ring-1 ring-primary' : ''
-              }`}
+              } ${dragReorder.activeId === link.id ? 'opacity-60' : ''}`}
             >
               <div>
                 <p className="font-medium">{link.label}</p>

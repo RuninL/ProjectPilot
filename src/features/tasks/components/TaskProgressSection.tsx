@@ -129,7 +129,7 @@ export function TaskProgressSection({ taskId, onChanged }: Props) {
               {...dragReorder.dropProps(update.id)}
               className={`rounded-md border p-3 ${
                 dragReorder.dropTargetId === update.id ? 'border-primary ring-1 ring-primary' : ''
-              }`}
+              } ${dragReorder.activeId === update.id ? 'opacity-60' : ''}`}
             >
               <div className="flex items-start justify-between gap-3">
                 <div>

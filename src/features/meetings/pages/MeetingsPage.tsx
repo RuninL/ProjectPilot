@@ -395,7 +395,7 @@ export function MeetingsPage() {
                   seriesDrag.dropTargetId === rule.id
                     ? 'border-primary ring-1 ring-inset ring-primary'
                     : ''
-                }`}
+                } ${seriesDrag.activeId === rule.id ? 'opacity-60' : ''}`}
               >
                 <div className="flex min-w-0 items-center gap-2">
                   {manualMode && (
@@ -487,7 +487,7 @@ export function MeetingsPage() {
                   dragReorder.dropTargetId === occurrence.id
                     ? 'border-primary ring-1 ring-inset ring-primary'
                     : ''
-                }`}
+                } ${dragReorder.activeId === occurrence.id ? 'opacity-60' : ''}`}
               >
                 <div className="min-w-0">
                   <div className="flex flex-wrap items-center gap-2">

@@ -1,6 +1,6 @@
 import { Archive, ArchiveRestore, MoreHorizontal, Pencil, Trash2 } from 'lucide-react';
 import { Link } from 'react-router-dom';
-import type { DragEventHandler, ReactNode } from 'react';
+import type { ReactNode } from 'react';
 import { SampleBadge } from '@/components/common/SampleBadge';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -19,6 +19,7 @@ import {
   TASK_STATUS_LABELS,
   TASK_STATUS_VARIANTS,
 } from '@/lib/labels';
+import type { DropTargetProps } from '@/features/sorting/useDragReorder';
 import type { TaskWithProject } from '@/types';
 
 interface TaskRowProps {
@@ -34,9 +35,9 @@ interface TaskRowProps {
   onRestore?: (task: TaskWithProject) => void;
   participantNames?: readonly string[];
   reorderHandle?: ReactNode;
-  onDragOver?: DragEventHandler<HTMLLIElement>;
-  onDrop?: DragEventHandler<HTMLLIElement>;
+  dropTargetProps?: DropTargetProps;
   isDropTarget?: boolean;
+  isDragSource?: boolean;
 }
 
 /** One task row: selection, identity, status/priority, due date and actions. */
@@ -52,9 +53,9 @@ export function TaskRow({
   onRestore,
   participantNames = [],
   reorderHandle,
-  onDragOver,
-  onDrop,
+  dropTargetProps,
   isDropTarget = false,
+  isDragSource = false,
 }: TaskRowProps) {
   const overdue = isOverdue(task.due_date, task.status);
 
@@ -64,9 +65,9 @@ export function TaskRow({
         'flex items-center gap-3 rounded-lg border bg-card px-4 py-3',
         nested && 'ml-8',
         isDropTarget && 'border-primary ring-1 ring-primary',
+        isDragSource && 'opacity-60',
       )}
-      onDragOver={onDragOver}
-      onDrop={onDrop}
+      {...dropTargetProps}
     >
       {reorderHandle}
       <Checkbox

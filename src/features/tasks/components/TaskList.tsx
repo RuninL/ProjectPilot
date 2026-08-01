@@ -42,8 +42,9 @@ export function TaskList({
   const reorderProps = (task: TaskWithProject) =>
     reorderEnabled
       ? {
-          ...dragReorder.dropProps(task.id),
+          dropTargetProps: dragReorder.dropProps(task.id),
           isDropTarget: dragReorder.dropTargetId === task.id,
+          isDragSource: dragReorder.activeId === task.id,
           reorderHandle: (
             <ReorderHandle
               label={task.title}

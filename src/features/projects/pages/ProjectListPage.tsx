@@ -184,8 +184,9 @@ export function ProjectListPage() {
               onRestore={setRestoreTarget}
               onDelete={setDeleteTarget}
               participantNames={participantsByProject[project.id] ?? []}
-              {...dragReorder.dropProps(project.id)}
+              dropTargetProps={dragReorder.dropProps(project.id)}
               isDropTarget={dragReorder.dropTargetId === project.id}
+              isDragSource={dragReorder.activeId === project.id}
               reorderHandle={
                 savedOrder.mode === 'dynamic' ? undefined : (
                   <ReorderHandle
