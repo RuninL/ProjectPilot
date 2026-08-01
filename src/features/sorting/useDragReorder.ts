@@ -156,7 +156,7 @@ export function useDragReorder(
 
     const start = (id: string, event: ReactPointerEvent<HTMLElement>) => {
       if (disabledRef.current || sessionRef.current !== null) return;
-      if (event.button !== 0 && event.pointerType === 'mouse') return;
+      if (event.button !== 0) return;
       const listeners = {
         move: handleMove,
         up: handleUp,
