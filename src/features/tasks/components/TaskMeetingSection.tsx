@@ -14,8 +14,17 @@ interface Props {
 }
 
 function meetingLabel(meeting: Meeting): string {
+  if (meeting.source_rule_id !== null && meeting.source_occurrence_date === null) {
+    return `[周期系列] ${meeting.topic}`;
+  }
   const time = meeting.start_time === null ? '' : ` ${meeting.start_time}`;
   return `${meeting.date}${time} · ${meeting.topic}`;
+}
+
+function meetingHref(meeting: Meeting): string {
+  return meeting.source_rule_id !== null && meeting.source_occurrence_date === null
+    ? `/meetings?series=${encodeURIComponent(meeting.source_rule_id)}`
+    : `/meetings/${meeting.id}`;
 }
 
 export function TaskMeetingSection({ taskId }: Props) {
@@ -119,7 +128,7 @@ export function TaskMeetingSection({ taskId }: Props) {
         <ul className="mt-2 space-y-1">
           {linked.map((meeting) => (
             <li key={meeting.id} className="flex items-center justify-between gap-2">
-              <Link to={`/meetings/${meeting.id}`} className="text-sm text-primary hover:underline">
+              <Link to={meetingHref(meeting)} className="text-sm text-primary hover:underline">
                 {meetingLabel(meeting)}
               </Link>
               <Button

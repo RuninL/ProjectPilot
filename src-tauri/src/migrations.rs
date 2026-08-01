@@ -94,5 +94,11 @@ pub fn migrations() -> Vec<Migration> {
             sql: include_str!("../migrations/0015_task_meetings.sql"),
             kind: MigrationKind::Up,
         },
+        Migration {
+            version: 16,
+            description: "stable meeting anchors for recurring series associations",
+            sql: include_str!("../migrations/0016_recurrence_meeting_anchors.sql"),
+            kind: MigrationKind::Up,
+        },
     ]
 }

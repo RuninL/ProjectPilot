@@ -670,9 +670,9 @@ export function MeetingsPage() {
         open={ruleFormOpen}
         rule={editingRule}
         projects={projectOptions}
-        onSubmit={async (input) => {
+        onSubmit={async (input, taskIds) => {
           if (editingRule === null) {
-            await createRule(input);
+            await createRule(input, taskIds);
           } else {
             setPendingRuleUpdate({ rule: editingRule, input });
           }

@@ -1,7 +1,8 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import type { BatchStatement } from '@/lib/commands';
 import { MeetingsPage } from '@/features/meetings/pages/MeetingsPage';
 import { setDbForTesting, type SqlExecutor } from '@/lib/db';
 import { getRepositories } from '@/repositories';
@@ -19,6 +20,15 @@ import type { RecurrenceRule } from '@/types';
  */
 
 let db: TestDb | null = null;
+
+vi.mock('@tauri-apps/api/core', () => ({
+  invoke: (command: string, args?: { statements?: BatchStatement[] }) => {
+    if (command !== 'execute_batch' || db === null || args?.statements === undefined) {
+      return Promise.reject(new Error(`unexpected command: ${command}`));
+    }
+    return Promise.resolve(db.runBatch(args.statements));
+  },
+}));
 
 function renderPage() {
   render(

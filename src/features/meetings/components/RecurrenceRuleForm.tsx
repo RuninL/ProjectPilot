@@ -1,5 +1,5 @@
 import { zodResolver } from '@hookform/resolvers/zod';
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { Button } from '@/components/ui/button';
 import {
@@ -14,8 +14,10 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { toAppError } from '@/lib/errors';
+import { getRecurrenceService } from '@/services/recurrence.service';
 import { recurrenceRuleInputSchema, type RecurrenceRuleInput } from '@/services/schemas';
 import type { Project, RecurrenceRule } from '@/types';
+import { MeetingTaskSelector } from './MeetingTaskSelector';
 
 const weekdays = ['周一', '周二', '周三', '周四', '周五', '周六', '周日'] as const;
 const SELECT_CLASS =
@@ -55,7 +57,7 @@ interface Props {
   projects: readonly Project[];
   defaultProjectId?: string | null;
   lockProject?: boolean;
-  onSubmit: (input: RecurrenceRuleInput) => Promise<void>;
+  onSubmit: (input: RecurrenceRuleInput, taskIds: readonly string[]) => Promise<void>;
   onClose: () => void;
 }
 
@@ -78,14 +80,35 @@ export function RecurrenceRuleForm({
     resolver: zodResolver(recurrenceRuleInputSchema, undefined, { raw: true }),
     defaultValues: initial(rule, defaultProjectId),
   });
+  const [selectedTaskIds, setSelectedTaskIds] = useState<readonly string[]>([]);
+  const [seriesMeetingId, setSeriesMeetingId] = useState<string | null | undefined>(null);
 
   useEffect(() => {
-    if (open) reset(initial(rule, defaultProjectId));
-  }, [defaultProjectId, open, reset, rule]);
+    if (!open) return;
+    reset(initial(rule, defaultProjectId));
+    setSelectedTaskIds([]);
+    if (rule === null) {
+      setSeriesMeetingId(null);
+      return;
+    }
+    let active = true;
+    setSeriesMeetingId(undefined);
+    void getRecurrenceService()
+      .then((service) => service.getMeetingSeriesAnchor(rule.id))
+      .then((meeting) => {
+        if (active) setSeriesMeetingId(meeting.id);
+      })
+      .catch((caught: unknown) => {
+        if (active) setError('root', { message: toAppError(caught).message });
+      });
+    return () => {
+      active = false;
+    };
+  }, [defaultProjectId, open, reset, rule, setError]);
 
   const submit = handleSubmit(async (values) => {
     try {
-      await onSubmit(recurrenceRuleInputSchema.parse(values));
+      await onSubmit(recurrenceRuleInputSchema.parse(values), selectedTaskIds);
       onClose();
     } catch (caught) {
       setError('root', { message: toAppError(caught).message });
@@ -113,6 +136,14 @@ export function RecurrenceRuleForm({
             <Input id="recurrence-topic" {...register('title')} />
             {errors.title && <p className="text-sm text-destructive">{errors.title.message}</p>}
           </div>
+          {seriesMeetingId !== undefined && (
+            <MeetingTaskSelector
+              meetingId={seriesMeetingId}
+              selectedTaskIds={selectedTaskIds}
+              onSelectedTaskIdsChange={setSelectedTaskIds}
+              context="series"
+            />
+          )}
           <div className="grid gap-1.5">
             <Label htmlFor="recurrence-project">所属项目</Label>
             <select

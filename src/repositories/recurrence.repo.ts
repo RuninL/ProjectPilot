@@ -4,6 +4,31 @@ import type { SqlExecutor } from '@/lib/db';
 import type { BatchStatement } from '@/lib/commands';
 import { buildUpdate, parseOptional, parseRows, runUpdate } from './_shared';
 
+const INSERT_RULE_SQL =
+  'INSERT INTO recurrence_rules (id, project_id, kind, title, byweekday, interval, start_date, end_date, time_of_day, duration_minutes, default_priority, note, is_active, is_sample, created_at, updated_at, meeting_url) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)';
+
+function ruleParams(rule: RecurrenceRule): unknown[] {
+  return [
+    rule.id,
+    rule.project_id,
+    rule.kind,
+    rule.title,
+    rule.byweekday,
+    rule.interval,
+    rule.start_date,
+    rule.end_date,
+    rule.time_of_day,
+    rule.duration_minutes,
+    rule.default_priority,
+    rule.note,
+    rule.is_active,
+    rule.is_sample,
+    rule.created_at,
+    rule.updated_at,
+    rule.meeting_url ?? null,
+  ];
+}
+
 const RULE_UPDATABLE = [
   'project_id',
   'kind',
@@ -55,31 +80,23 @@ export function createRecurrenceRepository(db: SqlExecutor) {
       );
     },
     async insert(rule: RecurrenceRule): Promise<void> {
-      await db.execute(
-        `INSERT INTO recurrence_rules (id, project_id, kind, title, byweekday, interval, start_date, end_date, time_of_day, duration_minutes, default_priority, note, is_active, is_sample, created_at, updated_at, meeting_url) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-        [
-          rule.id,
-          rule.project_id,
-          rule.kind,
-          rule.title,
-          rule.byweekday,
-          rule.interval,
-          rule.start_date,
-          rule.end_date,
-          rule.time_of_day,
-          rule.duration_minutes,
-          rule.default_priority,
-          rule.note,
-          rule.is_active,
-          rule.is_sample,
-          rule.created_at,
-          rule.updated_at,
-          rule.meeting_url ?? null,
-        ],
-      );
+      await db.execute(INSERT_RULE_SQL, ruleParams(rule));
+    },
+    buildInsert(rule: RecurrenceRule): BatchStatement {
+      return { sql: INSERT_RULE_SQL, params: ruleParams(rule) };
     },
     async update(id: string, patch: Partial<RecurrenceRule>, now: string): Promise<number> {
       return runUpdate(db, buildUpdate('recurrence_rules', RULE_UPDATABLE, patch, id, now));
+    },
+    buildUpdateStatement(
+      id: string,
+      patch: Partial<RecurrenceRule>,
+      now: string,
+    ): BatchStatement | null {
+      return buildUpdate('recurrence_rules', RULE_UPDATABLE, patch, id, now);
+    },
+    buildDeleteExceptions(ruleId: string): BatchStatement {
+      return { sql: 'DELETE FROM recurrence_exceptions WHERE rule_id = ?', params: [ruleId] };
     },
     async deleteById(id: string): Promise<number> {
       return (await db.execute('DELETE FROM recurrence_rules WHERE id = ?', [id])).rowsAffected;

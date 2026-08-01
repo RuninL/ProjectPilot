@@ -166,16 +166,20 @@ export function createMeetingService(deps: MeetingServiceDeps) {
         created_at: now,
         updated_at: now,
       };
-      await deps.runBatch([
-        deps.meetings.buildInsert(meeting),
-        ...uniqueTaskIds.map((taskId) =>
-          deps.taskMeetings.buildInsert({
-            task_id: taskId,
-            meeting_id: meeting.id,
-            linked_at: now,
-          }),
-        ),
-      ]);
+      if (uniqueTaskIds.length === 0) {
+        await deps.meetings.insert(meeting);
+      } else {
+        await deps.runBatch([
+          deps.meetings.buildInsert(meeting),
+          ...uniqueTaskIds.map((taskId) =>
+            deps.taskMeetings.buildInsert({
+              task_id: taskId,
+              meeting_id: meeting.id,
+              linked_at: now,
+            }),
+          ),
+        ]);
+      }
       return meeting;
     },
 

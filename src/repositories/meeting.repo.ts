@@ -66,7 +66,10 @@ export function createMeetingRepository(db: SqlExecutor) {
     /** Meetings whose date falls inside `[from, to]` — the calendar's month window. */
     async findByDateRange(from: string, to: string): Promise<Meeting[]> {
       const rows = await db.select(
-        'SELECT * FROM meetings WHERE date BETWEEN ? AND ? ORDER BY date ASC, start_time ASC',
+        `SELECT * FROM meetings
+          WHERE date BETWEEN ? AND ?
+            AND NOT (source_rule_id IS NOT NULL AND source_occurrence_date IS NULL)
+          ORDER BY date ASC, start_time ASC`,
         [from, to],
       );
       return parseRows(meetingRowSchema, rows);
@@ -74,6 +77,16 @@ export function createMeetingRepository(db: SqlExecutor) {
 
     async findById(id: string): Promise<Meeting | null> {
       const rows = await db.select('SELECT * FROM meetings WHERE id = ?', [id]);
+      return parseOptional(meetingRowSchema, rows);
+    },
+
+    async findSeriesAnchor(ruleId: string): Promise<Meeting | null> {
+      const rows = await db.select(
+        `SELECT * FROM meetings
+          WHERE source_rule_id = ? AND source_occurrence_date IS NULL
+          LIMIT 1`,
+        [ruleId],
+      );
       return parseOptional(meetingRowSchema, rows);
     },
 
@@ -87,6 +100,10 @@ export function createMeetingRepository(db: SqlExecutor) {
 
     async update(id: string, patch: Partial<Meeting>, now: string): Promise<number> {
       return runUpdate(db, buildUpdate('meetings', UPDATABLE, patch, id, now));
+    },
+
+    buildUpdateStatement(id: string, patch: Partial<Meeting>, now: string): BatchStatement | null {
+      return buildUpdate('meetings', UPDATABLE, patch, id, now);
     },
 
     async deleteById(id: string): Promise<number> {

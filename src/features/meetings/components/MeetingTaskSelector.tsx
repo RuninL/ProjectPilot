@@ -25,6 +25,7 @@ interface Props {
   meetingId: string | null;
   selectedTaskIds: readonly string[];
   onSelectedTaskIdsChange: (ids: readonly string[]) => void;
+  context?: 'meeting' | 'series';
 }
 
 function isActive(task: TaskWithProject): boolean {
@@ -40,6 +41,7 @@ export function MeetingTaskSelector({
   meetingId,
   selectedTaskIds,
   onSelectedTaskIdsChange,
+  context = 'meeting',
 }: Props) {
   const [tasks, setTasks] = useState<readonly TaskWithProject[]>([]);
   const [search, setSearch] = useState('');
@@ -125,9 +127,13 @@ export function MeetingTaskSelector({
       <div>
         <h3 className="text-sm font-medium">关联任务</h3>
         <p className="text-xs text-muted-foreground">
-          {meetingId === null
-            ? '将在会议创建成功时一并保存关联。'
-            : '关联变更会立即保存，不需要再次保存会议。'}
+          {context === 'series'
+            ? meetingId === null
+              ? '关联属于整个周期系列，不会为每次 occurrence 重复创建。'
+              : '关联作用于整个周期系列并立即保存，不会修改单次 occurrence。'
+            : meetingId === null
+              ? '将在会议创建成功时一并保存关联。'
+              : '关联变更会立即保存，不需要再次保存会议。'}
         </p>
       </div>
       {selectedTasks.length === 0 ? (

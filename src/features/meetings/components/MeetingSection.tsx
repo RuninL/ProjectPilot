@@ -73,7 +73,11 @@ export function MeetingSection({ project }: MeetingSectionProps) {
   const projectMeetings = useMemo(
     () =>
       meetings
-        .filter((meeting) => meeting.project_id === project.id)
+        .filter(
+          (meeting) =>
+            meeting.project_id === project.id &&
+            !(meeting.source_rule_id !== null && meeting.source_occurrence_date === null),
+        )
         .sort(
           (a, b) =>
             a.date.localeCompare(b.date) ||
@@ -297,8 +301,8 @@ export function MeetingSection({ project }: MeetingSectionProps) {
         projects={[project]}
         defaultProjectId={project.id}
         lockProject
-        onSubmit={async (input) => {
-          await createRule(input);
+        onSubmit={async (input, taskIds) => {
+          await createRule(input, taskIds);
           await loadMeetings();
           await loadRules();
           await refreshCalendar();
