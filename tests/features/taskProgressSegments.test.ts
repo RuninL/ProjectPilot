@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   progressUpdateElementId,
   sortProgressSegments,
-} from '@/features/tasks/components/TaskProgressSection';
+} from '@/features/tasks/taskProgressSegments';
 import type { TaskProgressUpdate } from '@/types';
 import { NOW } from '../helpers/testDb';
 

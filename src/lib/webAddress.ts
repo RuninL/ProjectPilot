@@ -13,12 +13,17 @@ const SCHEME_PATTERN = /^[a-z][a-z0-9+.-]*$/;
 const HOST_WITH_PORT_PATTERN =
   /^(?:localhost|(?:\d{1,3}\.){3}\d{1,3}|(?:[a-z0-9-]+\.)+[a-z0-9-]+):\d+(?:[/?#]|$)/i;
 
+function isControlOrSpace(character: string): boolean {
+  const codePoint = character.codePointAt(0) ?? 0;
+  return codePoint <= 0x20 || codePoint === 0x7f;
+}
+
 function normalizedScheme(value: string): string | null {
   const colon = value.indexOf(':');
   if (colon < 0) return null;
-  const candidate = value
-    .slice(0, colon)
-    .replace(/[\u0000-\u0020\u007f]+/g, '')
+  const candidate = Array.from(value.slice(0, colon))
+    .filter((character) => !isControlOrSpace(character))
+    .join('')
     .toLowerCase();
   return SCHEME_PATTERN.test(candidate) ? candidate : null;
 }
@@ -31,8 +36,7 @@ function explicitScheme(value: string): string | null {
 function isIpv4(hostname: string): boolean {
   const octets = hostname.split('.');
   return (
-    octets.length === 4 &&
-    octets.every((octet) => /^\d{1,3}$/.test(octet) && Number(octet) <= 255)
+    octets.length === 4 && octets.every((octet) => /^\d{1,3}$/.test(octet) && Number(octet) <= 255)
   );
 }
 
@@ -54,7 +58,7 @@ export function isSchemelessWebAddress(value: string): boolean {
   const cleaned = cleanWebAddress(value);
   if (
     cleaned === '' ||
-    /[\u0000-\u0020\u007f]/.test(cleaned) ||
+    Array.from(cleaned).some(isControlOrSpace) ||
     explicitScheme(cleaned) !== null
   ) {
     return false;

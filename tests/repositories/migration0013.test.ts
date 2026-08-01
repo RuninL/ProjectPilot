@@ -195,11 +195,11 @@ describe('migration 0013', () => {
       'INSERT INTO migration_0013_guard (result) VALUES (1);',
     );
 
-    expect(() =>
+    expect(() => {
       db.transaction(() => {
         db.exec(failingMigration);
-      })(),
-    ).toThrow(/CHECK/);
+      })();
+    }).toThrow(/CHECK/);
     expect(db.prepare('SELECT meeting_url FROM meetings WHERE id = ?').pluck().get('m')).toBe(
       'https://meet.example.com/original',
     );

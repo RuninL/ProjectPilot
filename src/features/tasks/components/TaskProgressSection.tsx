@@ -19,6 +19,7 @@ import { useSavedListOrder } from '@/features/sorting/useSavedListOrder';
 import { toAppError } from '@/lib/errors';
 import { getTaskProgressService } from '@/services/taskProgress.service';
 import type { TaskProgressUpdate } from '@/types';
+import { progressUpdateElementId, sortProgressSegments } from '../taskProgressSegments';
 
 interface Props {
   taskId: string;
@@ -29,21 +30,6 @@ function localDateTime(iso: string): string {
   const date = new Date(iso);
   const local = new Date(date.getTime() - date.getTimezoneOffset() * 60_000);
   return local.toISOString().slice(0, 16);
-}
-
-export function sortProgressSegments(updates: readonly TaskProgressUpdate[]): TaskProgressUpdate[] {
-  return [...updates]
-    .filter((update) => update.contribution_percent > 0)
-    .sort(
-      (left, right) =>
-        left.occurred_at.localeCompare(right.occurred_at) ||
-        left.created_at.localeCompare(right.created_at) ||
-        left.id.localeCompare(right.id),
-    );
-}
-
-export function progressUpdateElementId(id: string): string {
-  return `task-progress-update-${id}`;
 }
 
 export function TaskProgressSection({ taskId, onChanged }: Props) {

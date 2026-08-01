@@ -76,9 +76,7 @@ export function ProjectLinkForm({
   const linkType = watch('link_type');
   const targetLabel = linkType === 'url' ? 'URL 地址' : '本地文件或目录路径';
   const targetPlaceholder =
-    linkType === 'url'
-      ? '例如：www.example.com 或 https://example.com'
-      : 'C:\\项目资料\\方案.pdf';
+    linkType === 'url' ? '例如：www.example.com 或 https://example.com' : 'C:\\项目资料\\方案.pdf';
 
   const browseLocalPath = async (directory: boolean) => {
     try {

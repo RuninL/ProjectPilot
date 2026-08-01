@@ -158,17 +158,14 @@ describe('project link safe opening', () => {
     ['localhost:3000', 'http://localhost:3000'],
     ['127.0.0.1:5173', 'http://127.0.0.1:5173'],
     ['192.168.1.20:8080/dashboard', 'http://192.168.1.20:8080/dashboard'],
-  ])(
-    'opens allow-listed URL %s with the official opener dependency',
-    async (target, opened) => {
-      const link = await service.createProjectLink('p1', input({ target }));
+  ])('opens allow-listed URL %s with the official opener dependency', async (target, opened) => {
+    const link = await service.createProjectLink('p1', input({ target }));
 
-      await service.openProjectLink('p1', link.id);
+    await service.openProjectLink('p1', link.id);
 
-      expect(openUrl).toHaveBeenCalledWith(opened);
-      expect(link.target).toBe(target);
-    },
-  );
+    expect(openUrl).toHaveBeenCalledWith(opened);
+    expect(link.target).toBe(target);
+  });
 
   it('does not call the path opener when a local target does not exist', async () => {
     pathExists = vi.fn().mockResolvedValue(false);
