@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { emit } from '@tauri-apps/api/event';
 import { availableMonitors } from '@tauri-apps/api/window';
 import { Button } from '@/components/ui/button';
@@ -27,6 +27,7 @@ export function DesktopWorkspaceSettingsSection() {
   const [monitors, setMonitors] = useState<readonly MonitorOption[]>([]);
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const saveQueue = useRef<Promise<void>>(Promise.resolve());
 
   useEffect(() => {
     let disposed = false;
@@ -53,10 +54,16 @@ export function DesktopWorkspaceSettingsSection() {
   }, []);
 
   const persist = async (next: DesktopWorkspaceSettings) => {
-    await saveDesktopWorkspaceSettings(next);
     setSettings(next);
-    await emit('projectpilot:workspace-settings-changed', next);
-    setMessage('桌面工作区设置已保存。');
+    const operation = saveQueue.current
+      .catch(() => undefined)
+      .then(async () => {
+        await saveDesktopWorkspaceSettings(next);
+        await emit('projectpilot:workspace-settings-changed', next);
+        setMessage('桌面工作区设置已保存。');
+      });
+    saveQueue.current = operation;
+    await operation;
   };
 
   const changeMode = async (mode: DesktopWorkspaceSettings['mode']) => {
@@ -348,13 +355,17 @@ export function DesktopWorkspaceSettingsSection() {
         className="mt-3"
         variant="outline"
         onClick={() => {
-          void setDesktopWorkspaceMode('widget')
-            .then(() =>
-              persist({
+          void Promise.all([
+            setDesktopWorkspaceMode('widget'),
+            setDesktopWorkspaceLocked(false),
+            setDesktopWorkspaceClickThrough(false),
+          ])
+            .then(() => {
+              return persist({
                 ...DEFAULT_DESKTOP_WORKSPACE_SETTINGS,
                 mode: 'widget',
-              }),
-            )
+              });
+            })
             .catch((caught: unknown) => {
               setError(toAppError(caught).message);
             });

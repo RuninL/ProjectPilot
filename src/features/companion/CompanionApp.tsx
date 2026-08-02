@@ -561,13 +561,11 @@ export function CompanionApp() {
                 onChange={(event) => {
                   const checked = event.target.checked;
                   setShowCompleted(checked);
-                  void loadReminderSettings()
-                    .then((settings) =>
-                      saveReminderSettings({ ...settings, companionShowCompleted: checked }),
-                    )
-                    .catch((caught: unknown) => {
-                      setError(toAppError(caught).message);
-                    });
+                  const next = { ...workspaceSettings, showCompleted: checked };
+                  setWorkspaceSettings(next);
+                  void saveDesktopWorkspaceSettings(next).catch((caught: unknown) => {
+                    setError(toAppError(caught).message);
+                  });
                 }}
               />
               显示已完成

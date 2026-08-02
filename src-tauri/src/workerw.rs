@@ -117,7 +117,14 @@ mod platform {
                 SetWindowLongPtrW(child, GWL_STYLE, original_style);
                 return Err("WorkerW 附着失败，窗口已恢复。".to_string());
             }
-            SetWindowPos(
+            let attachment = Attachment {
+                child: child.0 as isize,
+                parent: original_parent,
+                worker: worker.0 as isize,
+                style: original_style,
+            };
+            *guard = Some(attachment);
+            if SetWindowPos(
                 child,
                 None,
                 0,
@@ -126,13 +133,15 @@ mod platform {
                 0,
                 SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER | SWP_NOOWNERZORDER | SWP_FRAMECHANGED,
             )
-            .map_err(|_| "WorkerW 附着后无法刷新窗口样式。")?;
-            *guard = Some(Attachment {
-                child: child.0 as isize,
-                parent: original_parent,
-                worker: worker.0 as isize,
-                style: original_style,
-            });
+            .is_err()
+            {
+                let restored = SetParent(child, original_parent.map(hwnd)).is_ok();
+                SetWindowLongPtrW(child, GWL_STYLE, original_style);
+                if restored {
+                    *guard = None;
+                }
+                return Err("WorkerW 附着后无法刷新窗口样式，已尝试恢复。".to_string());
+            }
         }
         Ok(())
     }
@@ -141,7 +150,7 @@ mod platform {
         let mut guard = ATTACHMENT
             .lock()
             .map_err(|_| "WorkerW 状态锁不可用。".to_string())?;
-        let Some(state) = guard.take() else {
+        let Some(state) = *guard else {
             return Ok(());
         };
         let child = hwnd(state.child);
@@ -149,6 +158,7 @@ mod platform {
         // original parent to the desktop top level is represented by None.
         unsafe {
             if !IsWindow(Some(child)).as_bool() {
+                *guard = None;
                 return Ok(());
             }
             let parent = state.parent.map(hwnd);
@@ -165,6 +175,7 @@ mod platform {
             )
             .map_err(|_| "分离 WorkerW 后无法恢复窗口样式。")?;
         }
+        *guard = None;
         Ok(())
     }
 }

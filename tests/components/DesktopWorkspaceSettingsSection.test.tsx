@@ -10,6 +10,8 @@ import {
 const mocks = vi.hoisted(() => ({
   emit: vi.fn().mockResolvedValue(undefined),
   setMode: vi.fn(),
+  setLocked: vi.fn().mockResolvedValue(undefined),
+  setClickThrough: vi.fn().mockResolvedValue(undefined),
   save: vi.fn().mockResolvedValue(undefined),
 }));
 
@@ -19,8 +21,8 @@ vi.mock('@tauri-apps/api/window', () => ({
 }));
 vi.mock('@/lib/commands', () => ({
   setDesktopWorkspaceMode: mocks.setMode,
-  setDesktopWorkspaceLocked: vi.fn().mockResolvedValue(undefined),
-  setDesktopWorkspaceClickThrough: vi.fn().mockResolvedValue(undefined),
+  setDesktopWorkspaceLocked: mocks.setLocked,
+  setDesktopWorkspaceClickThrough: mocks.setClickThrough,
   setLaunchAtLogin: vi.fn().mockResolvedValue(undefined),
   setMainCloseBehavior: vi.fn().mockResolvedValue(undefined),
 }));
@@ -71,5 +73,21 @@ describe('DesktopWorkspaceSettingsSection', () => {
       expect(mocks.save).toHaveBeenCalledWith(expect.objectContaining({ mode: 'widget' }));
     });
     expect(screen.getByRole('status')).toHaveTextContent('已回退桌面固定组件');
+  });
+
+  it('restores native lock and hit testing with the safe layout', async () => {
+    mocks.setMode.mockReset().mockResolvedValue(undefined);
+    mocks.setLocked.mockClear();
+    mocks.setClickThrough.mockClear();
+    const user = userEvent.setup();
+    render(<DesktopWorkspaceSettingsSection />);
+
+    await user.click(await screen.findByRole('button', { name: '恢复默认布局与安全交互' }));
+
+    await waitFor(() => {
+      expect(mocks.setMode).toHaveBeenCalledWith('widget');
+      expect(mocks.setLocked).toHaveBeenCalledWith(false);
+      expect(mocks.setClickThrough).toHaveBeenCalledWith(false);
+    });
   });
 });
