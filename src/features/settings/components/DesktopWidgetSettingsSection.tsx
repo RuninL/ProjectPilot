@@ -1,5 +1,4 @@
 import { useCallback, useEffect, useState } from 'react';
-import { listen } from '@tauri-apps/api/event';
 import { Button } from '@/components/ui/button';
 import {
   closeDesktopWidget,
@@ -12,6 +11,7 @@ import {
   type DesktopWidgetStatus,
 } from '@/lib/commands';
 import { toAppError } from '@/lib/errors';
+import { listenForDesktopWidgetState } from '@/features/settings/services/desktopWidgetEvents.service';
 
 const WIDGET_STATE_EVENT = 'projectpilot:desktop-widget-state';
 
@@ -67,12 +67,16 @@ export function DesktopWidgetSettingsSection() {
     refresh();
     let unlisten: (() => void) | null = null;
     let disposed = false;
-    void listen<DesktopWidgetStatus>(WIDGET_STATE_EVENT, (event) => {
-      setStatus(event.payload);
-    }).then((cleanup) => {
-      if (disposed) cleanup();
-      else unlisten = cleanup;
-    });
+    void listenForDesktopWidgetState((event) => {
+      if (!disposed) setStatus(event.payload);
+    })
+      .then((cleanup) => {
+        if (disposed) cleanup();
+        else unlisten = cleanup;
+      })
+      .catch((caught: unknown) => {
+        if (!disposed) setError(toAppError(caught).message);
+      });
     return () => {
       disposed = true;
       unlisten?.();
