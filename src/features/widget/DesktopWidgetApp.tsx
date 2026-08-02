@@ -7,7 +7,9 @@ import {
   getCurrentWindow,
   primaryMonitor,
 } from '@tauri-apps/api/window';
+import { Loader2, RefreshCw } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { ConfirmDialog } from '@/components/common/ConfirmDialog';
 import { todayHK } from '@/lib/date';
 import { toAppError } from '@/lib/errors';
 import { emitInvalidation, listenForInvalidation } from '@/lib/invalidation';
@@ -102,9 +104,14 @@ export function DesktopWidgetApp() {
   const [error, setError] = useState<string | null>(null);
   const [locked, setLocked] = useState(false);
   const [clickThrough, setClickThrough] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
+  const [pendingCompletion, setPendingCompletion] = useState<CompanionTodayItem | null>(null);
+  const [taskSubmitting, setTaskSubmitting] = useState(false);
   const settingsRef = useRef<DesktopWidgetSettings>(DEFAULT_DESKTOP_WIDGET_SETTINGS);
   const todayRequest = useRef(0);
   const agendaRequest = useRef(0);
+  const refreshRequest = useRef<Promise<void> | null>(null);
+  const taskSubmitInFlight = useRef(false);
 
   // The web layer must be transparent too: html/body/#root paint nothing.
   useEffect(() => {
@@ -112,20 +119,6 @@ export function DesktopWidgetApp() {
     return () => {
       document.documentElement.classList.remove('desktop-widget-window');
     };
-  }, []);
-
-  const reloadToday = useCallback(() => {
-    const request = ++todayRequest.current;
-    void loadCompanionToday()
-      .then((next) => {
-        if (request === todayRequest.current) {
-          setItems(sortCompanionItems(next));
-          setError(null);
-        }
-      })
-      .catch((caught: unknown) => {
-        if (request === todayRequest.current) setError(toAppError(caught).message);
-      });
   }, []);
 
   const reloadAgenda = useCallback((subView: WidgetCalendarView, businessToday: string) => {
@@ -145,10 +138,41 @@ export function DesktopWidgetApp() {
       });
   }, []);
 
+  const refreshAll = useCallback((): Promise<void> => {
+    if (refreshRequest.current !== null) return refreshRequest.current;
+    const businessToday = todayHK();
+    const todayId = ++todayRequest.current;
+    const agendaId = ++agendaRequest.current;
+    setRefreshing(true);
+    const request = Promise.all([
+      loadCompanionToday(businessToday),
+      loadWidgetAgenda(businessToday),
+    ])
+      .then(([nextItems, data]) => {
+        if (todayId !== todayRequest.current || agendaId !== agendaRequest.current) return;
+        setToday(businessToday);
+        setItems(sortCompanionItems(nextItems));
+        setAgenda(
+          buildWidgetAgenda(data, businessToday, calendarView === 'seven-day' ? undefined : 1),
+        );
+        setError(null);
+      })
+      .catch((caught: unknown) => {
+        setError(`刷新桌面小窗失败：${toAppError(caught).message}`);
+      })
+      .finally(() => {
+        if (refreshRequest.current === request) {
+          refreshRequest.current = null;
+          setRefreshing(false);
+        }
+      });
+    refreshRequest.current = request;
+    return request;
+  }, [calendarView]);
+
   const reload = useCallback(() => {
-    reloadToday();
-    reloadAgenda(calendarView, today);
-  }, [calendarView, reloadAgenda, reloadToday, today]);
+    void refreshAll();
+  }, [refreshAll]);
 
   const persistView = useCallback((next: Partial<DesktopWidgetSettings>) => {
     const merged = { ...settingsRef.current, ...next };
@@ -180,23 +204,43 @@ export function DesktopWidgetApp() {
     });
   }, []);
 
-  const toggleTask = useCallback(
+  const submitTaskStatus = useCallback(
     (item: CompanionTodayItem) => {
-      if (item.taskId === undefined) return;
+      if (item.taskId === undefined || taskSubmitInFlight.current) return;
+      taskSubmitInFlight.current = true;
+      setTaskSubmitting(true);
+      setError(null);
       const action =
         item.completed === true
           ? reopenCompanionTask(item.taskId)
           : completeCompanionTask(item.taskId);
       void action
-        .then(() => {
-          void emitInvalidation(['tasks']);
-          reload();
+        .then(async () => {
+          setPendingCompletion(null);
+          await emitInvalidation(['tasks']);
+          await refreshAll();
         })
         .catch((caught: unknown) => {
-          setError(toAppError(caught).message);
+          setError(`更新任务失败：${toAppError(caught).message}`);
+        })
+        .finally(() => {
+          taskSubmitInFlight.current = false;
+          setTaskSubmitting(false);
         });
     },
-    [reload],
+    [refreshAll],
+  );
+
+  const toggleTask = useCallback(
+    (item: CompanionTodayItem) => {
+      if (taskSubmitting) return;
+      if (item.completed === true) {
+        submitTaskStatus(item);
+      } else {
+        setPendingCompletion(item);
+      }
+    },
+    [submitTaskStatus, taskSubmitting],
   );
 
   // Initial load: restore last view + geometry, then fetch data.
@@ -214,8 +258,8 @@ export function DesktopWidgetApp() {
         setClickThrough(status.click_through);
       })
       .catch(() => undefined);
-    reloadToday();
-  }, [reloadToday]);
+    void refreshAll();
+  }, [refreshAll]);
 
   useEffect(() => {
     if (view === 'calendar') reloadAgenda(calendarView, today);
@@ -227,7 +271,7 @@ export function DesktopWidgetApp() {
       const next = todayHK();
       setToday((current) => {
         if (current !== next) {
-          reloadToday();
+          void refreshAll();
           return next;
         }
         return current;
@@ -236,7 +280,7 @@ export function DesktopWidgetApp() {
     return () => {
       window.clearInterval(timer);
     };
-  }, [reloadToday]);
+  }, [refreshAll]);
 
   // Stay in sync with the main window's data changes.
   useEffect(() => {
@@ -372,29 +416,45 @@ export function DesktopWidgetApp() {
           >
             ProjectPilot 小窗{locked ? ' · 已锁定' : ''}
           </span>
-          <div role="tablist" aria-label="小窗视图" className="flex gap-1">
+          <div className="flex gap-1">
             <Button
               size="sm"
-              role="tab"
-              aria-selected={view === 'today'}
-              variant={view === 'today' ? 'default' : 'outline'}
-              onClick={() => {
-                selectView('today');
-              }}
+              variant="outline"
+              aria-label="刷新"
+              title="刷新"
+              disabled={refreshing}
+              onClick={reload}
             >
-              今日任务
+              {refreshing ? (
+                <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
+              ) : (
+                <RefreshCw className="h-4 w-4" aria-hidden="true" />
+              )}
             </Button>
-            <Button
-              size="sm"
-              role="tab"
-              aria-selected={view === 'calendar'}
-              variant={view === 'calendar' ? 'default' : 'outline'}
-              onClick={() => {
-                selectView('calendar');
-              }}
-            >
-              日历
-            </Button>
+            <div role="tablist" aria-label="小窗视图" className="flex gap-1">
+              <Button
+                size="sm"
+                role="tab"
+                aria-selected={view === 'today'}
+                variant={view === 'today' ? 'default' : 'outline'}
+                onClick={() => {
+                  selectView('today');
+                }}
+              >
+                今日任务
+              </Button>
+              <Button
+                size="sm"
+                role="tab"
+                aria-selected={view === 'calendar'}
+                variant={view === 'calendar' ? 'default' : 'outline'}
+                onClick={() => {
+                  selectView('calendar');
+                }}
+              >
+                日历
+              </Button>
+            </div>
           </div>
         </header>
 
@@ -434,6 +494,7 @@ export function DesktopWidgetApp() {
                       type="checkbox"
                       aria-label={`完成 ${item.title}`}
                       checked={item.completed === true}
+                      disabled={taskSubmitting}
                       onChange={() => {
                         toggleTask(item);
                       }}
@@ -510,6 +571,19 @@ export function DesktopWidgetApp() {
           </section>
         )}
       </div>
+      <ConfirmDialog
+        open={pendingCompletion !== null}
+        title="完成任务"
+        description="确定将该任务标记为已完成吗？"
+        confirmLabel="确认"
+        busy={taskSubmitting}
+        onConfirm={() => {
+          if (pendingCompletion !== null) submitTaskStatus(pendingCompletion);
+        }}
+        onCancel={() => {
+          if (!taskSubmitting) setPendingCompletion(null);
+        }}
+      />
     </main>
   );
 }
