@@ -9,6 +9,10 @@
 
 ## Manual Windows 10/11 checklist
 
+Desktop-host checks for issue #15 are specified in
+[`windows-desktop-widget-host.md`](./windows-desktop-widget-host.md). They
+require an interactive Windows 10/11 session and are not claimed by Linux CI.
+
 - Verify a ProjectPilot-named native notification and its installed-package icon.
 - Grant and deny notification permission; test the notification button in Settings.
 - Verify a real timed-meeting reminder, date-only meeting summary, due-task reminder, and project/milestone lead reminder in the Asia/Hong_Kong business day.
@@ -28,3 +32,5 @@ Capture three screenshots: native notification, tray menu, and companion Today/C
 - Windows notification click deep links are not claimed until installed-package verification.
 - Cloud validation cannot establish final Windows toast identity, tray lifetime, monitor recovery, or idle CPU use.
 - Existing repository-wide Prettier failures are intentionally not mass-formatted in this change.
+- Issue #15 Windows desktop-host acceptance is pending an interactive Windows
+  10/11 run; Linux unit tests cannot validate Win+D or Explorer parenting.

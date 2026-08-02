@@ -1,13 +1,14 @@
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use tauri::menu::{Menu, MenuItem, PredefinedMenuItem};
 use tauri::tray::TrayIconBuilder;
 use tauri::{
     AppHandle, Emitter, Manager, WebviewUrl, WebviewWindow, WebviewWindowBuilder, WindowEvent,
 };
 
-/// The one and only desktop widget window label. WorkerW is fully disabled
-/// this round: nothing in this module (or anywhere on the runtime path)
-/// touches `crate::workerw`.
+use crate::workerw::{self, DesktopHostStatus, RecoveryBudget};
+
+/// The one and only desktop widget window label. The Windows desktop host
+/// adapter reparents this same HWND; it never creates another WebView.
 pub const WIDGET_LABEL: &str = "desktop-widget";
 const TRAY_ID: &str = "projectpilot-tray";
 const WIDGET_STATE_EVENT: &str = "projectpilot:desktop-widget-state";
@@ -15,6 +16,7 @@ const WIDGET_STATE_EVENT: &str = "projectpilot:desktop-widget-state";
 static EXIT_ON_MAIN_CLOSE: AtomicBool = AtomicBool::new(false);
 static WIDGET_LOCKED: AtomicBool = AtomicBool::new(false);
 static WIDGET_CLICK_THROUGH: AtomicBool = AtomicBool::new(false);
+static WIDGET_MONITOR_GENERATION: AtomicU64 = AtomicU64::new(0);
 
 /// Real (not persisted) widget window state, read from the live window.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, serde::Serialize)]
@@ -23,6 +25,7 @@ pub struct WidgetStatus {
     pub visible: bool,
     pub locked: bool,
     pub click_through: bool,
+    pub desktop_host: DesktopHostStatus,
 }
 
 fn widget_status_of(app: &AppHandle) -> WidgetStatus {
@@ -37,6 +40,7 @@ fn widget_status_of(app: &AppHandle) -> WidgetStatus {
         visible,
         locked: WIDGET_LOCKED.load(Ordering::Relaxed),
         click_through: WIDGET_CLICK_THROUGH.load(Ordering::Relaxed),
+        desktop_host: workerw::status(),
     }
 }
 
@@ -59,6 +63,56 @@ fn show_and_focus(window: &WebviewWindow) {
     let _ = window.set_focus();
 }
 
+fn attach_widget_host(window: &WebviewWindow) -> bool {
+    match workerw::attach(window) {
+        Ok(()) => true,
+        Err(error) => {
+            eprintln!("desktop-widget desktop host unavailable; using normal window: {error}");
+            false
+        }
+    }
+}
+
+/// Check the Explorer parent at a low frequency. Recovery uses exponential
+/// backoff and stops after three consecutive failures; it never shows a hidden
+/// widget and therefore cannot undo an explicit hide or close.
+fn monitor_widget_host(app: AppHandle, initial_failed: bool, generation: u64) {
+    std::thread::spawn(move || {
+        let mut budget = RecoveryBudget::from_initial_failure(initial_failed);
+        loop {
+            if WIDGET_MONITOR_GENERATION.load(Ordering::Acquire) != generation {
+                return;
+            }
+            let delay = if workerw::is_attached() {
+                30
+            } else {
+                budget.delay_seconds()
+            };
+            std::thread::sleep(std::time::Duration::from_secs(delay));
+            if WIDGET_MONITOR_GENERATION.load(Ordering::Acquire) != generation {
+                return;
+            }
+            let Some(window) = app.get_webview_window(WIDGET_LABEL) else {
+                return;
+            };
+            if !window.is_visible().unwrap_or(false) {
+                continue;
+            }
+            if workerw::is_attached() {
+                budget = RecoveryBudget::default();
+                continue;
+            }
+            let attached = attach_widget_host(&window);
+            broadcast_widget_state(&app);
+            if attached {
+                budget = RecoveryBudget::default();
+            } else if !budget.record_failure() {
+                return;
+            }
+        }
+    });
+}
+
 pub fn show_main(app: &AppHandle) {
     if let Some(window) = app.get_webview_window("main") {
         show_and_focus(&window);
@@ -70,6 +124,9 @@ pub fn show_main(app: &AppHandle) {
 /// failure so no blank window or ghost WebView is left behind.
 fn open_widget(app: &AppHandle) -> Result<(), String> {
     if let Some(window) = app.get_webview_window(WIDGET_LABEL) {
+        let host_attached = attach_widget_host(&window);
+        let generation = WIDGET_MONITOR_GENERATION.fetch_add(1, Ordering::AcqRel) + 1;
+        monitor_widget_host(app.clone(), !host_attached, generation);
         window
             .show()
             .map_err(|error| format!("无法显示桌面小窗：{error}"))?;
@@ -102,14 +159,21 @@ fn open_widget(app: &AppHandle) -> Result<(), String> {
     };
     WIDGET_LOCKED.store(false, Ordering::Relaxed);
     WIDGET_CLICK_THROUGH.store(false, Ordering::Relaxed);
+    let host_attached = attach_widget_host(&window);
+    let monitor_generation = WIDGET_MONITOR_GENERATION.fetch_add(1, Ordering::AcqRel) + 1;
     let state_app = app.clone();
     // Close means close: the window is destroyed, the main app keeps running,
     // and reopening creates a fresh window.
     window.on_window_event(move |event| {
+        if matches!(event, WindowEvent::Destroyed) {
+            WIDGET_MONITOR_GENERATION.fetch_add(1, Ordering::AcqRel);
+            let _ = workerw::detach();
+        }
         if matches!(event, WindowEvent::Destroyed | WindowEvent::Focused(_)) {
             broadcast_widget_state(&state_app);
         }
     });
+    monitor_widget_host(app.clone(), !host_attached, monitor_generation);
     broadcast_widget_state(app);
     Ok(())
 }
@@ -118,6 +182,9 @@ fn show_widget(app: &AppHandle) -> Result<(), String> {
     let window = app
         .get_webview_window(WIDGET_LABEL)
         .ok_or_else(|| "桌面小窗尚未打开。".to_string())?;
+    let host_attached = attach_widget_host(&window);
+    let generation = WIDGET_MONITOR_GENERATION.fetch_add(1, Ordering::AcqRel) + 1;
+    monitor_widget_host(app.clone(), !host_attached, generation);
     window
         .show()
         .map_err(|error| format!("无法显示桌面小窗：{error}"))?;
@@ -138,6 +205,8 @@ fn hide_widget(app: &AppHandle) -> Result<(), String> {
 
 fn close_widget(app: &AppHandle) -> Result<(), String> {
     if let Some(window) = app.get_webview_window(WIDGET_LABEL) {
+        WIDGET_MONITOR_GENERATION.fetch_add(1, Ordering::AcqRel);
+        let _ = workerw::detach();
         window
             .destroy()
             .map_err(|error| format!("无法关闭桌面小窗：{error}"))?;
@@ -217,6 +286,33 @@ pub async fn set_desktop_widget_locked(app: AppHandle, locked: bool) -> Result<(
 #[tauri::command]
 pub async fn set_desktop_widget_click_through(app: AppHandle, enabled: bool) -> Result<(), String> {
     set_widget_click_through(&app, enabled)
+}
+
+#[derive(Clone, Copy, Debug, serde::Serialize)]
+pub struct ScreenPosition {
+    x: i32,
+    y: i32,
+}
+
+#[tauri::command]
+pub async fn desktop_widget_screen_position(app: AppHandle) -> Result<ScreenPosition, String> {
+    let window = app
+        .get_webview_window(WIDGET_LABEL)
+        .ok_or_else(|| "桌面小窗尚未打开。".to_string())?;
+    let (x, y) = workerw::screen_position(&window)?;
+    Ok(ScreenPosition { x, y })
+}
+
+#[tauri::command]
+pub async fn set_desktop_widget_screen_position(
+    app: AppHandle,
+    x: i32,
+    y: i32,
+) -> Result<(), String> {
+    let window = app
+        .get_webview_window(WIDGET_LABEL)
+        .ok_or_else(|| "桌面小窗尚未打开。".to_string())?;
+    workerw::set_screen_position(&window, x, y)
 }
 
 /// Restore and focus the one main window, then deliver a widget navigation
@@ -299,8 +395,8 @@ pub struct TrayEntry {
 
 /// Pure, testable tray menu layout. Invalid commands for the current widget
 /// state are omitted (not merely disabled) and groups are separated by
-/// separators. There is no WorkerW, no month calendar, no view switching and
-/// no duplicated open/hide entry.
+/// separators. The desktop host is an invisible implementation detail: there
+/// is no mode selector, month calendar, or duplicated open/hide entry.
 pub fn tray_menu_spec(status: WidgetStatus) -> Vec<Option<TrayEntry>> {
     let mut entries: Vec<Option<TrayEntry>> = vec![Some(TrayEntry {
         id: "open",
@@ -475,6 +571,7 @@ mod tests {
             visible,
             locked,
             click_through,
+            desktop_host: DesktopHostStatus::Attached,
         }
     }
 
@@ -495,6 +592,7 @@ mod tests {
         assert_async_unit(desktop_widget_status);
         assert_async_bool(set_desktop_widget_locked);
         assert_async_bool(set_desktop_widget_click_through);
+        assert_async_unit(desktop_widget_screen_position);
     }
 
     #[test]

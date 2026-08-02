@@ -13,6 +13,8 @@ const mocks = vi.hoisted(() => ({
   emitInvalidation: vi.fn(),
   listenForInvalidation: vi.fn(),
   desktopWidgetStatus: vi.fn(),
+  desktopWidgetScreenPosition: vi.fn(),
+  setDesktopWidgetScreenPosition: vi.fn(),
   navigateFromDesktopWidget: vi.fn(),
   loadDesktopWidgetSettings: vi.fn(),
   saveDesktopWidgetSettings: vi.fn(),
@@ -58,6 +60,8 @@ vi.mock('@tauri-apps/api/window', () => ({
 
 vi.mock('@/lib/commands', () => ({
   desktopWidgetStatus: mocks.desktopWidgetStatus,
+  desktopWidgetScreenPosition: mocks.desktopWidgetScreenPosition,
+  setDesktopWidgetScreenPosition: mocks.setDesktopWidgetScreenPosition,
   navigateFromDesktopWidget: mocks.navigateFromDesktopWidget,
 }));
 
@@ -144,7 +148,10 @@ describe('DesktopWidgetApp task confirmation and refresh', () => {
       visible: true,
       locked: true,
       click_through: true,
+      desktop_host: 'attached',
     });
+    mocks.desktopWidgetScreenPosition.mockResolvedValue({ x: 10, y: 20 });
+    mocks.setDesktopWidgetScreenPosition.mockResolvedValue(undefined);
     mocks.navigateFromDesktopWidget.mockResolvedValue(undefined);
     mocks.loadDesktopWidgetSettings.mockResolvedValue({
       lastView: 'today',
@@ -171,6 +178,22 @@ describe('DesktopWidgetApp task confirmation and refresh', () => {
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
     expect(screen.getByRole('checkbox', { name: `完成 ${pending.title}` })).not.toBeChecked();
     expect(mocks.completeCompanionTask).not.toHaveBeenCalled();
+  });
+
+  it('clearly marks the normal-window fallback when desktop hosting fails', async () => {
+    mocks.desktopWidgetStatus.mockResolvedValueOnce({
+      exists: true,
+      visible: true,
+      locked: false,
+      click_through: false,
+      desktop_host: 'degraded',
+    });
+
+    await renderLoaded();
+
+    expect(screen.getByText(/桌面宿主不可用/)).toHaveTextContent(
+      '桌面宿主不可用，当前为普通小窗；显示桌面时会暂时隐藏。',
+    );
   });
 
   it('confirms once, then runs the shared full refresh', async () => {

@@ -12,7 +12,13 @@ vi.mock('@/lib/commands', () => ({
   openDataDir: vi.fn().mockResolvedValue(undefined),
   desktopWidgetStatus: vi
     .fn()
-    .mockResolvedValue({ exists: false, visible: false, locked: false, click_through: false }),
+    .mockResolvedValue({
+      exists: false,
+      visible: false,
+      locked: false,
+      click_through: false,
+      desktop_host: 'unsupported',
+    }),
   openDesktopWidget: vi.fn().mockResolvedValue(undefined),
   showDesktopWidget: vi.fn().mockResolvedValue(undefined),
   hideDesktopWidget: vi.fn().mockResolvedValue(undefined),

@@ -88,6 +88,12 @@ export interface DesktopWidgetStatus {
   visible: boolean;
   locked: boolean;
   click_through: boolean;
+  desktop_host: 'unsupported' | 'disabled' | 'attached' | 'degraded';
+}
+
+export interface ScreenPosition {
+  x: number;
+  y: number;
 }
 
 /** Create the desktop widget window if missing, otherwise show it. */
@@ -144,6 +150,23 @@ export async function setDesktopWidgetLocked(locked: boolean): Promise<void> {
 export async function setDesktopWidgetClickThrough(enabled: boolean): Promise<void> {
   try {
     await measuredInvoke('set_desktop_widget_click_through', { enabled });
+  } catch (error) {
+    throw toAppError(error);
+  }
+}
+
+/** Physical screen coordinates, independent of the temporary WorkerW parent. */
+export async function desktopWidgetScreenPosition(): Promise<ScreenPosition> {
+  try {
+    return await measuredInvoke<ScreenPosition>('desktop_widget_screen_position');
+  } catch (error) {
+    throw toAppError(error);
+  }
+}
+
+export async function setDesktopWidgetScreenPosition(x: number, y: number): Promise<void> {
+  try {
+    await measuredInvoke('set_desktop_widget_screen_position', { x, y });
   } catch (error) {
     throw toAppError(error);
   }
