@@ -10,11 +10,15 @@ describe('listenForDesktopWidgetState', () => {
     mocks.listen.mockImplementation(() => {
       throw new Error('bridge unavailable');
     });
-    await expect(listenForDesktopWidgetState(() => undefined)).rejects.toThrow('bridge unavailable');
+    await expect(listenForDesktopWidgetState(() => undefined)).rejects.toThrow(
+      'bridge unavailable',
+    );
   });
 
   it('propagates a rejected subscription', async () => {
     mocks.listen.mockRejectedValue(new Error('subscription rejected'));
-    await expect(listenForDesktopWidgetState(() => undefined)).rejects.toThrow('subscription rejected');
+    await expect(listenForDesktopWidgetState(() => undefined)).rejects.toThrow(
+      'subscription rejected',
+    );
   });
 });

@@ -58,20 +58,22 @@ function taskBars(data: CalendarData): WidgetCalendarBar[] {
     const range = taskRange(task);
     if (range === null || task.archived_at !== null) return [];
     const color = safeCalendarColor(task.project_color);
-    return [{
-      id: task.id,
-      type: 'task' as const,
-      title: task.title || '未命名任务',
-      date: range.start,
-      start: range.start,
-      end: range.end,
-      color,
-      textColor: readableBarTextColor(color),
-      typeLabel: '任务',
-      navigationTarget: `/tasks/${encodeURIComponent(task.id)}`,
-      statusLabel: TASK_STATUS_LABELS[task.status],
-      done: task.status === 'done',
-    }];
+    return [
+      {
+        id: task.id,
+        type: 'task' as const,
+        title: task.title || '未命名任务',
+        date: range.start,
+        start: range.start,
+        end: range.end,
+        color,
+        textColor: readableBarTextColor(color),
+        typeLabel: '任务',
+        navigationTarget: `/tasks/${encodeURIComponent(task.id)}`,
+        statusLabel: TASK_STATUS_LABELS[task.status],
+        done: task.status === 'done',
+      },
+    ];
   });
 }
 

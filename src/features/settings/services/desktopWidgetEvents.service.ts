@@ -11,7 +11,9 @@ export async function listenForDesktopWidgetState(
   handler: (event: Event<DesktopWidgetStatus>) => void,
 ): Promise<UnlistenFn> {
   try {
-    return await Promise.resolve().then(() => listen<DesktopWidgetStatus>(WIDGET_STATE_EVENT, handler));
+    return await Promise.resolve().then(() =>
+      listen<DesktopWidgetStatus>(WIDGET_STATE_EVENT, handler),
+    );
   } catch (error) {
     console.error('Unable to subscribe to desktop widget state.', error);
     throw error;

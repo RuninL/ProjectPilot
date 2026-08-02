@@ -94,9 +94,10 @@ describe('SettingsPage 数据管理', () => {
     expect(await screen.findByText('所选文件不是有效的 SQLite 数据库')).toBeInTheDocument();
   });
 
-  it('渲染关于区域', () => {
+  it('渲染关于区域', async () => {
     render(<SettingsPage />);
 
+    expect(await screen.findByRole('button', { name: '打开桌面小窗' })).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: '关于' })).toBeInTheDocument();
     expect(screen.getByText('ProjectPilot')).toBeInTheDocument();
     expect(screen.getByText('v1.1.0')).toBeInTheDocument();

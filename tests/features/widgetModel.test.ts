@@ -15,7 +15,13 @@ function task(overrides: Partial<TaskWithProject> = {}): TaskWithProject {
 }
 
 function data(overrides: Partial<CalendarData> = {}): CalendarData {
-  return { tasks: [], meetings: [], milestones: [], projects: [makeProject({ id: 'p1' })], ...overrides };
+  return {
+    tasks: [],
+    meetings: [],
+    milestones: [],
+    projects: [makeProject({ id: 'p1' })],
+    ...overrides,
+  };
 }
 
 describe('widget calendar model', () => {
@@ -30,7 +36,9 @@ describe('widget calendar model', () => {
       data({ tasks: [task({ id: 'task', start_date: '2026-08-01', due_date: '2026-08-04' })] }),
       '2026-08-02',
     );
-    expect(agenda.slice(0, 3).every((day) => day.bars.filter((bar) => bar.id === 'task').length === 1)).toBe(true);
+    expect(
+      agenda.slice(0, 3).every((day) => day.bars.filter((bar) => bar.id === 'task').length === 1),
+    ).toBe(true);
     expect(agenda[3]?.bars).toHaveLength(0);
   });
 

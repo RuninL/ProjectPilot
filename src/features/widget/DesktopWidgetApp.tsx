@@ -59,7 +59,8 @@ function TaskBar({ bar, onOpen }: { bar: WidgetCalendarBar; onOpen: (target: str
         onOpen(bar.navigationTarget);
       }}
     >
-      <span className="mr-1">{bar.typeLabel}</span>{status}
+      <span className="mr-1">{bar.typeLabel}</span>
+      {status}
       {bar.done ? <s>{bar.title}</s> : bar.title}
     </button>
   );
@@ -174,10 +175,9 @@ export function DesktopWidgetApp() {
 
   /** Focus the existing main window (never create a second one) and navigate. */
   const openMain = useCallback((target: string) => {
-    void navigateFromDesktopWidget(target)
-      .catch((caught: unknown) => {
-        setError(toAppError(caught).message);
-      });
+    void navigateFromDesktopWidget(target).catch((caught: unknown) => {
+      setError(toAppError(caught).message);
+    });
   }, []);
 
   const toggleTask = useCallback(
@@ -363,9 +363,7 @@ export function DesktopWidgetApp() {
       <div className="flex min-h-0 flex-1 flex-col rounded-lg border border-border/60 bg-background/85 shadow-sm">
         {/* Native Tauri drag region; disabled while the position is locked.
             Buttons and content below never trigger a window drag. */}
-        <header
-          className="flex items-center justify-between gap-2 border-b border-border/60 px-3 py-2"
-        >
+        <header className="flex items-center justify-between gap-2 border-b border-border/60 px-3 py-2">
           <span
             {...(!locked && !clickThrough ? { 'data-tauri-drag-region': true } : {})}
             className={`select-none text-sm font-semibold ${!locked && !clickThrough ? 'cursor-move' : ''}`}
