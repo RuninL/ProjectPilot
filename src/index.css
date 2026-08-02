@@ -117,4 +117,15 @@
       'Microsoft YaHei',
       sans-serif;
   }
+  /*
+   * Desktop widget window only: the native window is transparent, so the
+   * html/body/#root layers must paint nothing. The widget panel draws its
+   * own translucent background. Never applied to the main window, and the
+   * whole window never uses CSS opacity.
+   */
+  html.desktop-widget-window,
+  html.desktop-widget-window body,
+  html.desktop-widget-window #root {
+    background: transparent;
+  }
 }

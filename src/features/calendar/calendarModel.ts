@@ -272,7 +272,8 @@ function milestoneEntries(
   });
 }
 
-const TASK_STATUS_LABELS: Record<TaskWithProject['status'], string> = {
+/** Text labels so task status is never carried by colour alone. */
+export const TASK_STATUS_LABELS: Record<TaskWithProject['status'], string> = {
   todo: '待办',
   in_progress: '进行中',
   blocked: '受阻',

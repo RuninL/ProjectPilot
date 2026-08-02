@@ -19,7 +19,8 @@ import { loadThemePreference } from '@/features/settings/services/settingsPrefer
 import { useAppStore } from '@/stores/useAppStore';
 import { getCurrentWebviewWindow } from '@tauri-apps/api/webviewWindow';
 import { emit, listen } from '@tauri-apps/api/event';
-import { CompanionApp } from '@/features/companion/CompanionApp';
+import { DesktopWidgetApp } from '@/features/widget/DesktopWidgetApp';
+import { WidgetErrorBoundary } from '@/features/widget/WidgetErrorBoundary';
 import { addDays, todayHK } from '@/lib/date';
 import {
   loadReminderSettings,
@@ -27,16 +28,8 @@ import {
 } from '@/features/settings/services/reminderSettings.service';
 import { createReminderCoordinator } from '@/services/reminderCoordinator';
 import { scanAndNotifyReminders } from '@/services/reminderRuntime.service';
-import {
-  loadDesktopWorkspaceSettings,
-  saveDesktopWorkspaceSettings,
-} from '@/features/settings/services/desktopWorkspaceSettings.service';
-import {
-  setDesktopWorkspaceClickThrough,
-  setDesktopWorkspaceLocked,
-  setDesktopWorkspaceMode,
-  setMainCloseBehavior,
-} from '@/lib/commands';
+import { loadDesktopWorkspaceSettings } from '@/features/settings/services/desktopWorkspaceSettings.service';
+import { setMainCloseBehavior } from '@/lib/commands';
 
 /**
  * Initialize the database (runs migration 0001 + the foreign-keys assertion)
@@ -87,19 +80,11 @@ export function App() {
           applyThemeProfile(profile);
         }
         if (getCurrentWebviewWindow().label === 'main') {
+          // Legacy workspace settings only decide the main-close behaviour.
+          // The old widget/WorkerW mode is never auto-started: WorkerW's
+          // entry points and runtime path are fully disabled this round.
           const workspace = await loadDesktopWorkspaceSettings();
           await setMainCloseBehavior(workspace.mainCloseBehavior === 'exit');
-          if (workspace.mode !== 'off' && workspace.showAtLaunch) {
-            try {
-              await setDesktopWorkspaceMode(workspace.mode);
-            } catch (caught) {
-              if (!workspace.workerwFallback || workspace.mode !== 'workerw') throw caught;
-              await setDesktopWorkspaceMode('widget');
-              await saveDesktopWorkspaceSettings({ ...workspace, mode: 'widget' });
-            }
-            await setDesktopWorkspaceLocked(workspace.locked);
-            await setDesktopWorkspaceClickThrough(workspace.clickThrough);
-          }
         }
       } catch (caught) {
         if (!controller.signal.aborted) {
@@ -219,8 +204,10 @@ export function App() {
   if (!dbReady) {
     return <LoadingState label="正在初始化数据库…" />;
   }
-  return getCurrentWebviewWindow().label === 'companion' ? (
-    <CompanionApp />
+  return getCurrentWebviewWindow().label === 'desktop-widget' ? (
+    <WidgetErrorBoundary>
+      <DesktopWidgetApp />
+    </WidgetErrorBoundary>
   ) : (
     <>
       {startupRecoveryNotice !== null && (

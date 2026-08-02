@@ -83,27 +83,67 @@ export async function openLocalPath(path: string): Promise<void> {
   }
 }
 
-export type DesktopWorkspaceMode = 'off' | 'widget' | 'workerw';
+export interface DesktopWidgetStatus {
+  exists: boolean;
+  visible: boolean;
+  locked: boolean;
+  click_through: boolean;
+}
 
-export async function setDesktopWorkspaceMode(mode: DesktopWorkspaceMode): Promise<void> {
+/** Create the desktop widget window if missing, otherwise show it. */
+export async function openDesktopWidget(): Promise<void> {
   try {
-    await measuredInvoke('set_desktop_workspace_mode', { mode });
+    await measuredInvoke('open_desktop_widget');
   } catch (error) {
     throw toAppError(error);
   }
 }
 
-export async function setDesktopWorkspaceLocked(locked: boolean): Promise<void> {
+export async function showDesktopWidget(): Promise<void> {
   try {
-    await measuredInvoke('set_desktop_workspace_locked', { locked });
+    await measuredInvoke('show_desktop_widget');
   } catch (error) {
     throw toAppError(error);
   }
 }
 
-export async function setDesktopWorkspaceClickThrough(enabled: boolean): Promise<void> {
+export async function hideDesktopWidget(): Promise<void> {
   try {
-    await measuredInvoke('set_desktop_workspace_click_through', { enabled });
+    await measuredInvoke('hide_desktop_widget');
+  } catch (error) {
+    throw toAppError(error);
+  }
+}
+
+/** Destroy the widget window for real; the main app keeps running. */
+export async function closeDesktopWidget(): Promise<void> {
+  try {
+    await measuredInvoke('close_desktop_widget');
+  } catch (error) {
+    throw toAppError(error);
+  }
+}
+
+/** Live window state — never a persisted "running" flag. */
+export async function desktopWidgetStatus(): Promise<DesktopWidgetStatus> {
+  try {
+    return await measuredInvoke<DesktopWidgetStatus>('desktop_widget_status');
+  } catch (error) {
+    throw toAppError(error);
+  }
+}
+
+export async function setDesktopWidgetLocked(locked: boolean): Promise<void> {
+  try {
+    await measuredInvoke('set_desktop_widget_locked', { locked });
+  } catch (error) {
+    throw toAppError(error);
+  }
+}
+
+export async function setDesktopWidgetClickThrough(enabled: boolean): Promise<void> {
+  try {
+    await measuredInvoke('set_desktop_widget_click_through', { enabled });
   } catch (error) {
     throw toAppError(error);
   }
