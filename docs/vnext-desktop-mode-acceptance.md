@@ -6,14 +6,14 @@
 
 ## Implemented comparison
 
-| Area | Desktop fixed widget | WorkerW wallpaper layer |
-| --- | --- | --- |
-| React UI/data | Shared Today, seven-day and month workspace; shared repositories/services/events | Exactly the same window and React tree |
-| Native placement | Borderless transparent, taskbar-hidden, resizable Tauri window with always-on-bottom | Same HWND parented to Explorer WorkerW with original parent/style restoration |
-| Interaction | Full WebView interaction; optional independent click-through | Attempts full WebView interaction; Explorer icon-layer limitations require real-machine confirmation |
-| Recovery | Stable `companion` label prevents duplicates; safe display geometry; tray show/hide/interaction | Validates WorkerW parent every 30 seconds while visible and on visibility resume; bounded attach timeout and automatic fixed-widget fallback |
-| Exit | Hide-on-close; explicit tray exit releases process | Detaches and restores parent/style before explicit exit/mode switch |
-| Displays | One selected display; geometry is keyed by name and coordinates, with primary-display fallback | Same selection and geometry; WorkerW behavior per selected display is pending hands-on verification |
+| Area             | Desktop fixed widget                                                                            | WorkerW wallpaper layer                                                                                                                      |
+| ---------------- | ----------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------- |
+| React UI/data    | Shared Today, seven-day and month workspace; shared repositories/services/events                | Exactly the same window and React tree                                                                                                       |
+| Native placement | Borderless transparent, taskbar-hidden, resizable Tauri window with always-on-bottom            | Same HWND parented to Explorer WorkerW with original parent/style restoration                                                                |
+| Interaction      | Full WebView interaction; optional independent click-through                                    | Attempts full WebView interaction; Explorer icon-layer limitations require real-machine confirmation                                         |
+| Recovery         | Stable `companion` label prevents duplicates; safe display geometry; tray show/hide/interaction | Validates WorkerW parent every 30 seconds while visible and on visibility resume; bounded attach timeout and automatic fixed-widget fallback |
+| Exit             | Hide-on-close; explicit tray exit releases process                                              | Detaches and restores parent/style before explicit exit/mode switch                                                                          |
+| Displays         | One selected display; geometry is keyed by name and coordinates, with primary-display fallback  | Same selection and geometry; WorkerW behavior per selected display is pending hands-on verification                                          |
 
 No administrator rights, DLL injection, global input hook, Explorer modification,
 remote page, shell replacement, wallpaper-file change, or wildcard capability is
@@ -63,14 +63,14 @@ layout/DPI, power source and result:
 Use the same data set for both modes (record project/task/meeting/recurrence
 counts). Measure after five idle minutes and once during each action.
 
-| Metric | Fixed widget | WorkerW | Environment/result |
-| --- | --- | --- | --- |
-| Idle CPU / GPU | Not measured in Linux sandbox | Not measured in Linux sandbox | Windows Task Manager + WebView2 process list |
-| Working set / WebView count | Not measured | Not measured | Record main hidden and visible |
-| First show / view switch | Not measured | Not measured | Performance marks/DevTools |
-| Refresh / month render | Not measured | Not measured | Small and large data sets |
-| Attach / Explorer recovery | N/A | Not measured | Record median and worst observed |
-| Full-screen/battery idle | Not measured | Not measured | Verify no animation loop/high-frequency DB polling |
+| Metric                      | Fixed widget                  | WorkerW                       | Environment/result                                 |
+| --------------------------- | ----------------------------- | ----------------------------- | -------------------------------------------------- |
+| Idle CPU / GPU              | Not measured in Linux sandbox | Not measured in Linux sandbox | Windows Task Manager + WebView2 process list       |
+| Working set / WebView count | Not measured                  | Not measured                  | Record main hidden and visible                     |
+| First show / view switch    | Not measured                  | Not measured                  | Performance marks/DevTools                         |
+| Refresh / month render      | Not measured                  | Not measured                  | Small and large data sets                          |
+| Attach / Explorer recovery  | N/A                           | Not measured                  | Record median and worst observed                   |
+| Full-screen/battery idle    | Not measured                  | Not measured                  | Verify no animation loop/high-frequency DB polling |
 
 ## User decision
 
