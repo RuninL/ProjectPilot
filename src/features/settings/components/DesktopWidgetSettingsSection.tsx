@@ -15,6 +15,27 @@ import { toAppError } from '@/lib/errors';
 
 const WIDGET_STATE_EVENT = 'projectpilot:desktop-widget-state';
 
+/** How long a status query may take before the UI reports failure instead of
+ * loading forever. Widget state must never block the settings page. */
+export const WIDGET_STATUS_TIMEOUT_MS = 5000;
+
+function statusWithTimeout(): Promise<DesktopWidgetStatus> {
+  return new Promise<DesktopWidgetStatus>((resolve, reject) => {
+    const timer = setTimeout(() => {
+      reject(new Error('读取桌面小窗状态超时，主程序不受影响，可点击“重新读取”重试。'));
+    }, WIDGET_STATUS_TIMEOUT_MS);
+    desktopWidgetStatus()
+      .then((next) => {
+        clearTimeout(timer);
+        resolve(next);
+      })
+      .catch((caught: unknown) => {
+        clearTimeout(timer);
+        reject(caught instanceof Error ? caught : new Error(String(caught)));
+      });
+  });
+}
+
 /**
  * The 桌面小窗 settings area. There is no mode selector any more — WorkerW is
  * fully disabled — and the shown state always derives from the real window
@@ -28,7 +49,7 @@ export function DesktopWidgetSettingsSection() {
   const [copied, setCopied] = useState(false);
 
   const refresh = useCallback(() => {
-    void desktopWidgetStatus()
+    void statusWithTimeout()
       .then((next) => {
         setStatus(next);
       })
@@ -36,6 +57,11 @@ export function DesktopWidgetSettingsSection() {
         setError(toAppError(caught).message);
       });
   }, []);
+
+  const retryStatus = useCallback(() => {
+    setError(null);
+    refresh();
+  }, [refresh]);
 
   useEffect(() => {
     refresh();
@@ -106,7 +132,9 @@ export function DesktopWidgetSettingsSection() {
 
   const stateLabel =
     status === null
-      ? '正在读取状态…'
+      ? error === null
+        ? '正在读取状态…'
+        : '状态读取失败'
       : starting
         ? '启动中…'
         : !status.exists
@@ -133,8 +161,8 @@ export function DesktopWidgetSettingsSection() {
         <div className="mt-2 text-sm text-destructive" role="alert">
           {error}
           <span className="ml-2 inline-flex gap-2">
-            <Button size="sm" variant="outline" onClick={open}>
-              重试
+            <Button size="sm" variant="outline" onClick={status === null ? retryStatus : open}>
+              {status === null ? '重新读取' : '重试'}
             </Button>
             <Button size="sm" variant="outline" onClick={copyDiagnostics}>
               {copied ? '已复制' : '复制诊断信息'}

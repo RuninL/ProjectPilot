@@ -95,16 +95,20 @@ export function App() {
       // Seeding is awaited before the app renders so the Dashboard cannot read
       // the database mid-seed, but a seed failure must not block startup. The
       // shared promise is what keeps StrictMode's second mount from seeding a
-      // duplicate — abort only gates the state updates below.
-      try {
-        if (recoveredDatabase) {
-          await skipSampleDataForMigrationRecovery();
-        } else {
-          await ensureSampleDataSeeded();
-        }
-      } catch (caught) {
-        if (!controller.signal.aborted) {
-          setGlobalError(toAppError(caught));
+      // duplicate — abort only gates the state updates below. The desktop
+      // widget webview never seeds: bootstrap (sample data, reminder
+      // scheduler, workspace settings) belongs to the main window only.
+      if (getCurrentWebviewWindow().label === 'main') {
+        try {
+          if (recoveredDatabase) {
+            await skipSampleDataForMigrationRecovery();
+          } else {
+            await ensureSampleDataSeeded();
+          }
+        } catch (caught) {
+          if (!controller.signal.aborted) {
+            setGlobalError(toAppError(caught));
+          }
         }
       }
       if (!controller.signal.aborted) {

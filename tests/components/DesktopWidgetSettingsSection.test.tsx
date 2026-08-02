@@ -1,7 +1,10 @@
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { DesktopWidgetSettingsSection } from '@/features/settings/components/DesktopWidgetSettingsSection';
+import {
+  DesktopWidgetSettingsSection,
+  WIDGET_STATUS_TIMEOUT_MS,
+} from '@/features/settings/components/DesktopWidgetSettingsSection';
 
 const mocks = vi.hoisted(() => ({
   listen: vi.fn().mockResolvedValue(() => undefined),
@@ -131,6 +134,25 @@ describe('DesktopWidgetSettingsSection', () => {
     await waitFor(() => {
       expect(screen.getByRole('status')).toHaveTextContent('正在显示');
     });
+  });
+
+  it('状态查询永久挂起时超时报错，不再永久“正在读取状态…”，重新读取可恢复', async () => {
+    vi.useFakeTimers();
+    mocks.status.mockImplementation(() => new Promise(() => undefined));
+    render(<DesktopWidgetSettingsSection />);
+    expect(screen.getByRole('status')).toHaveTextContent('正在读取状态…');
+    await vi.advanceTimersByTimeAsync(WIDGET_STATUS_TIMEOUT_MS + 1);
+    vi.useRealTimers();
+    expect(screen.getByRole('status')).toHaveTextContent('状态读取失败');
+    expect(screen.getByRole('alert')).toHaveTextContent('读取桌面小窗状态超时');
+    // Recovery: the command answers again and one click restores the state.
+    mocks.status.mockResolvedValue(statusOf({ exists: true, visible: true }));
+    const user = userEvent.setup();
+    await user.click(screen.getByRole('button', { name: '重新读取' }));
+    await waitFor(() => {
+      expect(screen.getByRole('status')).toHaveTextContent('正在显示');
+    });
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
   });
 
   it('运行状态来自真实窗口事件而非持久化标记', async () => {

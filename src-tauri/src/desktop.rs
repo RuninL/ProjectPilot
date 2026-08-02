@@ -42,10 +42,16 @@ fn widget_status_of(app: &AppHandle) -> WidgetStatus {
 
 /// Notify every webview (settings page) and refresh the tray after any
 /// widget state change, so UI state always derives from the real window.
+/// The tray rebuild is dispatched to the main thread asynchronously so the
+/// caller (an async command on the runtime thread pool, or a window event
+/// callback) never blocks on menu construction.
 fn broadcast_widget_state(app: &AppHandle) {
     let status = widget_status_of(app);
     let _ = app.emit(WIDGET_STATE_EVENT, status);
-    refresh_tray(app);
+    let tray_app = app.clone();
+    let _ = app.run_on_main_thread(move || {
+        refresh_tray(&tray_app);
+    });
 }
 
 fn show_and_focus(window: &WebviewWindow) {
@@ -108,37 +114,29 @@ fn open_widget(app: &AppHandle) -> Result<(), String> {
     Ok(())
 }
 
-#[tauri::command]
-pub fn open_desktop_widget(app: AppHandle) -> Result<(), String> {
-    open_widget(&app)
-}
-
-#[tauri::command]
-pub fn show_desktop_widget(app: AppHandle) -> Result<(), String> {
+fn show_widget(app: &AppHandle) -> Result<(), String> {
     let window = app
         .get_webview_window(WIDGET_LABEL)
         .ok_or_else(|| "桌面小窗尚未打开。".to_string())?;
     window
         .show()
         .map_err(|error| format!("无法显示桌面小窗：{error}"))?;
-    broadcast_widget_state(&app);
+    broadcast_widget_state(app);
     Ok(())
 }
 
-#[tauri::command]
-pub fn hide_desktop_widget(app: AppHandle) -> Result<(), String> {
+fn hide_widget(app: &AppHandle) -> Result<(), String> {
     let window = app
         .get_webview_window(WIDGET_LABEL)
         .ok_or_else(|| "桌面小窗尚未打开。".to_string())?;
     window
         .hide()
         .map_err(|error| format!("无法隐藏桌面小窗：{error}"))?;
-    broadcast_widget_state(&app);
+    broadcast_widget_state(app);
     Ok(())
 }
 
-#[tauri::command]
-pub fn close_desktop_widget(app: AppHandle) -> Result<(), String> {
+fn close_widget(app: &AppHandle) -> Result<(), String> {
     if let Some(window) = app.get_webview_window(WIDGET_LABEL) {
         window
             .destroy()
@@ -146,19 +144,11 @@ pub fn close_desktop_widget(app: AppHandle) -> Result<(), String> {
     }
     WIDGET_LOCKED.store(false, Ordering::Relaxed);
     WIDGET_CLICK_THROUGH.store(false, Ordering::Relaxed);
-    broadcast_widget_state(&app);
+    broadcast_widget_state(app);
     Ok(())
 }
 
-#[tauri::command]
-pub fn desktop_widget_status(app: AppHandle) -> WidgetStatus {
-    widget_status_of(&app)
-}
-
-/// Locking only disables move/resize; the content stays interactive.
-/// Dragging is blocked on the web side (the drag region is disabled).
-#[tauri::command]
-pub fn set_desktop_widget_locked(app: AppHandle, locked: bool) -> Result<(), String> {
+fn set_widget_locked(app: &AppHandle, locked: bool) -> Result<(), String> {
     let window = app
         .get_webview_window(WIDGET_LABEL)
         .ok_or_else(|| "桌面小窗尚未打开。".to_string())?;
@@ -166,12 +156,11 @@ pub fn set_desktop_widget_locked(app: AppHandle, locked: bool) -> Result<(), Str
         .set_resizable(!locked)
         .map_err(|error| format!("无法更新桌面小窗锁定状态：{error}"))?;
     WIDGET_LOCKED.store(locked, Ordering::Relaxed);
-    broadcast_widget_state(&app);
+    broadcast_widget_state(app);
     Ok(())
 }
 
-#[tauri::command]
-pub fn set_desktop_widget_click_through(app: AppHandle, enabled: bool) -> Result<(), String> {
+fn set_widget_click_through(app: &AppHandle, enabled: bool) -> Result<(), String> {
     let window = app
         .get_webview_window(WIDGET_LABEL)
         .ok_or_else(|| "桌面小窗尚未打开。".to_string())?;
@@ -179,8 +168,55 @@ pub fn set_desktop_widget_click_through(app: AppHandle, enabled: bool) -> Result
         .set_ignore_cursor_events(enabled)
         .map_err(|error| format!("无法更新桌面小窗点击穿透：{error}"))?;
     WIDGET_CLICK_THROUGH.store(enabled, Ordering::Relaxed);
-    broadcast_widget_state(&app);
+    broadcast_widget_state(app);
     Ok(())
+}
+
+// Every command below is `async` on purpose and must stay `async`.
+//
+// Synchronous Tauri commands run on the main (event-loop) thread. Creating a
+// WebView window — or any blocking window operation — from a synchronous
+// command deadlocks the Windows event loop (documented Tauri/wry limitation):
+// the command blocks the event loop while the window builder waits for that
+// same event loop. Once deadlocked, *all* IPC stops, so every page in the
+// main window loads forever. `async` commands run on the runtime thread pool
+// instead, leaving the event loop free. See `commands_do_not_run_on_the_main_thread`.
+
+#[tauri::command]
+pub async fn open_desktop_widget(app: AppHandle) -> Result<(), String> {
+    open_widget(&app)
+}
+
+#[tauri::command]
+pub async fn show_desktop_widget(app: AppHandle) -> Result<(), String> {
+    show_widget(&app)
+}
+
+#[tauri::command]
+pub async fn hide_desktop_widget(app: AppHandle) -> Result<(), String> {
+    hide_widget(&app)
+}
+
+#[tauri::command]
+pub async fn close_desktop_widget(app: AppHandle) -> Result<(), String> {
+    close_widget(&app)
+}
+
+#[tauri::command]
+pub async fn desktop_widget_status(app: AppHandle) -> WidgetStatus {
+    widget_status_of(&app)
+}
+
+/// Locking only disables move/resize; the content stays interactive.
+/// Dragging is blocked on the web side (the drag region is disabled).
+#[tauri::command]
+pub async fn set_desktop_widget_locked(app: AppHandle, locked: bool) -> Result<(), String> {
+    set_widget_locked(&app, locked)
+}
+
+#[tauri::command]
+pub async fn set_desktop_widget_click_through(app: AppHandle, enabled: bool) -> Result<(), String> {
+    set_widget_click_through(&app, enabled)
 }
 
 #[tauri::command]
@@ -335,22 +371,22 @@ fn handle_tray_command(app: &AppHandle, id: &str) {
             let _ = open_widget(app);
         }
         "widget-hide" => {
-            let _ = hide_desktop_widget(app.clone());
+            let _ = hide_widget(app);
         }
         "widget-close" => {
-            let _ = close_desktop_widget(app.clone());
+            let _ = close_widget(app);
         }
         "widget-lock" => {
-            let _ = set_desktop_widget_locked(app.clone(), true);
+            let _ = set_widget_locked(app, true);
         }
         "widget-unlock" => {
-            let _ = set_desktop_widget_locked(app.clone(), false);
+            let _ = set_widget_locked(app, false);
         }
         "widget-click-through-on" => {
-            let _ = set_desktop_widget_click_through(app.clone(), true);
+            let _ = set_widget_click_through(app, true);
         }
         "widget-click-through-off" => {
-            let _ = set_desktop_widget_click_through(app.clone(), false);
+            let _ = set_widget_click_through(app, false);
         }
         "pause" | "settings" => {
             show_main(app);
@@ -410,6 +446,25 @@ mod tests {
             locked,
             click_through,
         }
+    }
+
+    /// Regression guard for the global-loading deadlock: every widget command
+    /// must be `async` so it runs on the runtime thread pool instead of the
+    /// main thread. A synchronous command creating (or blocking on) a window
+    /// deadlocks the Windows event loop and freezes all IPC — every page in
+    /// the main window then loads forever. This asserts, at compile time, that
+    /// each command handler returns a `Future`.
+    #[test]
+    fn commands_do_not_run_on_the_main_thread() {
+        fn assert_async_unit<Fut: std::future::Future>(_: fn(AppHandle) -> Fut) {}
+        fn assert_async_bool<Fut: std::future::Future>(_: fn(AppHandle, bool) -> Fut) {}
+        assert_async_unit(open_desktop_widget);
+        assert_async_unit(show_desktop_widget);
+        assert_async_unit(hide_desktop_widget);
+        assert_async_unit(close_desktop_widget);
+        assert_async_unit(desktop_widget_status);
+        assert_async_bool(set_desktop_widget_locked);
+        assert_async_bool(set_desktop_widget_click_through);
     }
 
     #[test]
