@@ -97,8 +97,8 @@ mod platform {
     };
     use windows::Win32::Graphics::Gdi::ScreenToClient;
     use windows::Win32::UI::WindowsAndMessaging::{
-        EnumWindows, FindWindowExW, FindWindowW, GetParent, GetWindowLongPtrW, GetWindowRect,
-        IsWindow, SendMessageTimeoutW, SetWindowLongPtrW, SetWindowPos, GWL_STYLE,
+        EnumWindows, FindWindowExW, FindWindowW, GetAncestor, GetWindowLongPtrW, GetWindowRect,
+        IsWindow, SendMessageTimeoutW, SetWindowLongPtrW, SetWindowPos, GA_PARENT, GWL_STYLE,
         SEND_MESSAGE_TIMEOUT_FLAGS, SMTO_ABORTIFHUNG, SWP_FRAMECHANGED, SWP_NOOWNERZORDER,
         SWP_NOSIZE, SWP_NOZORDER, WINDOW_STYLE, WS_CHILD, WS_POPUP,
     };
@@ -124,6 +124,11 @@ mod platform {
 
     fn raw(value: HWND) -> isize {
         value.0 as isize
+    }
+
+    fn parent_of(child: HWND) -> Option<HWND> {
+        let parent = unsafe { GetAncestor(child, GA_PARENT) };
+        (!parent.is_invalid()).then_some(parent)
     }
 
     fn choose_host(candidates: &[HostCandidate]) -> Option<isize> {
@@ -203,7 +208,7 @@ mod platform {
             SetLastError(WIN32_ERROR(0));
             let _previous = set_parent_raw(child, parent.unwrap_or_default());
             let error = GetLastError();
-            let actual = GetParent(child).ok();
+            let actual = parent_of(child);
             if error.0 != 0 || actual != parent {
                 return Err(format!("SetParent 失败（错误 {}）。", error.0));
             }
@@ -248,7 +253,7 @@ mod platform {
             return Err("桌面小窗窗口句柄已失效。".to_string());
         }
         let worker = locate_worker()?;
-        let original_parent = unsafe { GetParent(child) }.ok();
+        let original_parent = parent_of(child);
         let original_style = unsafe { GetWindowLongPtrW(child, GWL_STYLE) };
         let origin = window_origin(child)?;
         let child_style = WINDOW_STYLE(original_style as u32);
@@ -294,11 +299,8 @@ mod platform {
     pub fn is_valid(attachment: Attachment) -> bool {
         let child = hwnd(attachment.child);
         let worker = hwnd(attachment.worker);
-        unsafe {
-            IsWindow(Some(child)).as_bool()
-                && IsWindow(Some(worker)).as_bool()
-                && GetParent(child).ok() == Some(worker)
-        }
+        (unsafe { IsWindow(Some(child)).as_bool() && IsWindow(Some(worker)).as_bool() })
+            && parent_of(child) == Some(worker)
     }
 
     pub fn detach(attachment: Attachment) -> Result<(), String> {
@@ -308,8 +310,12 @@ mod platform {
         }
         let origin = window_origin(child)?;
         let parent = attachment.parent.map(hwnd);
-        set_parent_checked(child, parent)?;
         set_style_checked(child, attachment.style)?;
+        if let Err(error) = set_parent_checked(child, parent) {
+            let child_style = WINDOW_STYLE(attachment.style as u32);
+            let _ = set_style_checked(child, ((child_style & !WS_POPUP) | WS_CHILD).0 as isize);
+            return Err(error);
+        }
         let restored_origin = point_for_parent(parent, origin)?;
         unsafe {
             SetWindowPos(
@@ -333,7 +339,7 @@ mod platform {
 
     pub fn set_screen_position(window: &WebviewWindow, x: i32, y: i32) -> Result<(), String> {
         let child = window.hwnd().map_err(|_| "无法取得桌面小窗窗口句柄。")?;
-        let parent = unsafe { GetParent(child) }.ok();
+        let parent = parent_of(child);
         let point = point_for_parent(parent, POINT { x, y })?;
         unsafe {
             SetWindowPos(
