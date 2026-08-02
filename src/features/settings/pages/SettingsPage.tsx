@@ -30,6 +30,7 @@ import {
 import { saveThemePreference } from '../services/settingsPreference.service';
 import { ReminderSettingsSection } from '../components/ReminderSettingsSection';
 import { ThemeEditor } from '../components/ThemeEditor';
+import { DesktopWorkspaceSettingsSection } from '../components/DesktopWorkspaceSettingsSection';
 import { loadThemeProfileBundle, saveThemeProfileBundle } from '../services/themeProfile.service';
 import { applyThemeProfile } from '../theme/themeProfile';
 
@@ -289,6 +290,7 @@ export function SettingsPage() {
         </select>
       </section>
       <ThemeEditor theme={theme} onThemeChange={setTheme} />
+      <DesktopWorkspaceSettingsSection />
       <ReminderSettingsSection />
 
       <section id="data-management" className="mb-6 rounded-lg border bg-card p-4">

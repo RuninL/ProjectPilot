@@ -6,6 +6,7 @@ mod desktop;
 mod error;
 mod migrations;
 mod project_links;
+mod workerw;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
@@ -34,6 +35,11 @@ pub fn run() {
             backup::restore_database,
             project_links::local_path_exists,
             project_links::open_local_path,
+            desktop::set_desktop_workspace_mode,
+            desktop::set_desktop_workspace_locked,
+            desktop::set_desktop_workspace_click_through,
+            desktop::set_main_close_behavior,
+            desktop::set_launch_at_login,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

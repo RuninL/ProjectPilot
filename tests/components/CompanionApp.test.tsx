@@ -34,7 +34,9 @@ vi.mock('@tauri-apps/api/webviewWindow', () => ({
 }));
 
 vi.mock('@tauri-apps/api/window', () => ({
+  availableMonitors: vi.fn().mockResolvedValue([]),
   currentMonitor: vi.fn().mockResolvedValue(null),
+  primaryMonitor: vi.fn().mockResolvedValue(null),
   getCurrentWindow: vi.fn(() => ({
     onMoved: vi.fn().mockResolvedValue(() => undefined),
     onResized: vi.fn().mockResolvedValue(() => undefined),
@@ -49,6 +51,10 @@ vi.mock('@tauri-apps/api/window', () => ({
 vi.mock('@/lib/invalidation', () => ({
   emitInvalidation: mocks.emitInvalidation,
   listenForInvalidation: vi.fn().mockResolvedValue(() => undefined),
+}));
+
+vi.mock('@/lib/commands', () => ({
+  setDesktopWorkspaceMode: vi.fn().mockResolvedValue(undefined),
 }));
 
 vi.mock('@/lib/theme', () => ({ applyTheme: vi.fn() }));
@@ -67,6 +73,54 @@ vi.mock('@/services/companion.service', () => ({
 vi.mock('@/features/settings/services/reminderSettings.service', () => ({
   loadReminderSettings: mocks.loadReminderSettings,
   saveReminderSettings: mocks.saveReminderSettings,
+}));
+
+vi.mock('@/features/settings/services/desktopWorkspaceSettings.service', () => ({
+  DEFAULT_DESKTOP_WORKSPACE_SETTINGS: {
+    mode: 'off',
+    defaultView: 'today',
+    monitorId: null,
+    layouts: {},
+    scale: 1,
+    opacity: 0.92,
+    blur: false,
+    locked: false,
+    clickThrough: false,
+    interactionShortcut: 'Ctrl+Alt+I',
+    showCompleted: true,
+    projectFilter: null,
+    showMeetings: true,
+    showRecurringMeetings: true,
+    launchAtLogin: false,
+    showAtLaunch: false,
+    mainCloseBehavior: 'hide',
+    fullscreenBehavior: 'reduce',
+    batteryBehavior: 'reduce',
+    workerwFallback: true,
+  },
+  loadDesktopWorkspaceSettings: vi.fn().mockResolvedValue({
+    mode: 'off',
+    defaultView: 'today',
+    monitorId: null,
+    layouts: {},
+    scale: 1,
+    opacity: 0.92,
+    blur: false,
+    locked: false,
+    clickThrough: false,
+    interactionShortcut: 'Ctrl+Alt+I',
+    showCompleted: true,
+    projectFilter: null,
+    showMeetings: true,
+    showRecurringMeetings: true,
+    launchAtLogin: false,
+    showAtLaunch: false,
+    mainCloseBehavior: 'hide',
+    fullscreenBehavior: 'reduce',
+    batteryBehavior: 'reduce',
+    workerwFallback: true,
+  }),
+  saveDesktopWorkspaceSettings: vi.fn().mockResolvedValue(undefined),
 }));
 
 describe('CompanionApp', () => {

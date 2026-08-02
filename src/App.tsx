@@ -27,6 +27,16 @@ import {
 } from '@/features/settings/services/reminderSettings.service';
 import { createReminderCoordinator } from '@/services/reminderCoordinator';
 import { scanAndNotifyReminders } from '@/services/reminderRuntime.service';
+import {
+  loadDesktopWorkspaceSettings,
+  saveDesktopWorkspaceSettings,
+} from '@/features/settings/services/desktopWorkspaceSettings.service';
+import {
+  setDesktopWorkspaceClickThrough,
+  setDesktopWorkspaceLocked,
+  setDesktopWorkspaceMode,
+  setMainCloseBehavior,
+} from '@/lib/commands';
 
 /**
  * Initialize the database (runs migration 0001 + the foreign-keys assertion)
@@ -75,6 +85,21 @@ export function App() {
         if (profile !== null && !controller.signal.aborted) {
           setTheme(profile.baseTheme);
           applyThemeProfile(profile);
+        }
+        if (getCurrentWebviewWindow().label === 'main') {
+          const workspace = await loadDesktopWorkspaceSettings();
+          await setMainCloseBehavior(workspace.mainCloseBehavior === 'exit');
+          if (workspace.mode !== 'off' && workspace.showAtLaunch) {
+            try {
+              await setDesktopWorkspaceMode(workspace.mode);
+            } catch (caught) {
+              if (!workspace.workerwFallback || workspace.mode !== 'workerw') throw caught;
+              await setDesktopWorkspaceMode('widget');
+              await saveDesktopWorkspaceSettings({ ...workspace, mode: 'widget' });
+            }
+            await setDesktopWorkspaceLocked(workspace.locked);
+            await setDesktopWorkspaceClickThrough(workspace.clickThrough);
+          }
         }
       } catch (caught) {
         if (!controller.signal.aborted) {

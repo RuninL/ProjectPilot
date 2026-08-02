@@ -82,3 +82,45 @@ export async function openLocalPath(path: string): Promise<void> {
     throw toAppError(error);
   }
 }
+
+export type DesktopWorkspaceMode = 'off' | 'widget' | 'workerw';
+
+export async function setDesktopWorkspaceMode(mode: DesktopWorkspaceMode): Promise<void> {
+  try {
+    await measuredInvoke('set_desktop_workspace_mode', { mode });
+  } catch (error) {
+    throw toAppError(error);
+  }
+}
+
+export async function setDesktopWorkspaceLocked(locked: boolean): Promise<void> {
+  try {
+    await measuredInvoke('set_desktop_workspace_locked', { locked });
+  } catch (error) {
+    throw toAppError(error);
+  }
+}
+
+export async function setDesktopWorkspaceClickThrough(enabled: boolean): Promise<void> {
+  try {
+    await measuredInvoke('set_desktop_workspace_click_through', { enabled });
+  } catch (error) {
+    throw toAppError(error);
+  }
+}
+
+export async function setMainCloseBehavior(exit: boolean): Promise<void> {
+  try {
+    await measuredInvoke('set_main_close_behavior', { exit });
+  } catch (error) {
+    throw toAppError(error);
+  }
+}
+
+export async function setLaunchAtLogin(enabled: boolean): Promise<void> {
+  try {
+    await measuredInvoke('set_launch_at_login', { enabled });
+  } catch (error) {
+    throw toAppError(error);
+  }
+}

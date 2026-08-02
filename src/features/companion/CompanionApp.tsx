@@ -2,7 +2,12 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { emit, listen } from '@tauri-apps/api/event';
 import { PhysicalPosition, PhysicalSize } from '@tauri-apps/api/dpi';
 import { WebviewWindow } from '@tauri-apps/api/webviewWindow';
-import { currentMonitor, getCurrentWindow } from '@tauri-apps/api/window';
+import {
+  availableMonitors,
+  currentMonitor,
+  getCurrentWindow,
+  primaryMonitor,
+} from '@tauri-apps/api/window';
 import { Button } from '@/components/ui/button';
 import {
   Dialog,
@@ -37,11 +42,22 @@ import {
   loadReminderSettings,
   saveReminderSettings,
 } from '@/features/settings/services/reminderSettings.service';
+import {
+  DEFAULT_DESKTOP_WORKSPACE_SETTINGS,
+  loadDesktopWorkspaceSettings,
+  saveDesktopWorkspaceSettings,
+  type DesktopWorkspaceSettings,
+} from '@/features/settings/services/desktopWorkspaceSettings.service';
+import { setDesktopWorkspaceMode } from '@/lib/commands';
 import { sortCompanionItems } from './companionModel';
 import { safeCompanionGeometry } from './windowGeometry';
 
 const CALENDAR_CACHE_LIMIT = 3;
 const CALENDAR_LOAD_DEBOUNCE_MS = 80;
+
+function monitorId(monitor: { name: string | null; position: { x: number; y: number } }): string {
+  return `${monitor.name ?? '显示器'}:${String(monitor.position.x)}:${String(monitor.position.y)}`;
+}
 
 function cacheMonth(cache: Map<string, CompactCalendarMonth>, month: CompactCalendarMonth): void {
   cache.delete(month.month);
@@ -74,6 +90,9 @@ export function CompanionApp() {
   const [projectOptions, setProjectOptions] = useState<readonly { id: string; name: string }[]>([]);
   const [isCreating, setIsCreating] = useState(false);
   const [showCompleted, setShowCompleted] = useState(true);
+  const [workspaceSettings, setWorkspaceSettings] = useState<DesktopWorkspaceSettings>(
+    DEFAULT_DESKTOP_WORKSPACE_SETTINGS,
+  );
   const calendarCache = useRef(new Map<string, CompactCalendarMonth>());
   const calendarRequest = useRef(0);
   const calendarLoadTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -95,6 +114,15 @@ export function CompanionApp() {
     setError(null);
     void loadCompanionWeek(start)
       .then(setWeek)
+      .catch((caught: unknown) => {
+        setError(toAppError(caught).message);
+      });
+  }, []);
+
+  const selectView = useCallback((next: 'today' | 'sevenDays' | 'calendar') => {
+    setView(next);
+    void loadReminderSettings()
+      .then((settings) => saveReminderSettings({ ...settings, companionView: next }))
       .catch((caught: unknown) => {
         setError(toAppError(caught).message);
       });
@@ -188,15 +216,92 @@ export function CompanionApp() {
 
   useEffect(() => {
     reload();
-    void loadReminderSettings().then((settings) => {
-      setView(settings.companionView);
-      setShowCompleted(settings.companionShowCompleted);
-    });
+    void Promise.all([loadReminderSettings(), loadDesktopWorkspaceSettings()]).then(
+      ([reminders, workspace]) => {
+        setView(reminders.companionView);
+        setShowCompleted(workspace.showCompleted);
+        setWorkspaceSettings(workspace);
+      },
+    );
     void loadCompanionProjectOptions().then((projects) => {
       setProjectOptions(projects);
       setQuickProjectId(projects[0]?.id ?? '');
     });
   }, [reload]);
+
+  useEffect(() => {
+    let commandCleanup: (() => void) | null = null;
+    let settingsCleanup: (() => void) | null = null;
+    let disposed = false;
+    void Promise.all([
+      listen<string>('projectpilot:workspace-command', (event) => {
+        if (event.payload === 'workspace-today') selectView('today');
+        else if (event.payload === 'workspace-week') selectView('sevenDays');
+        else if (event.payload === 'workspace-calendar') selectView('calendar');
+        else if (event.payload === 'workspace-refresh') {
+          reload();
+          reloadWeek(weekStart);
+          if (view === 'calendar') reloadCalendar(month);
+        }
+      }),
+      listen<DesktopWorkspaceSettings>('projectpilot:workspace-settings-changed', (event) => {
+        setWorkspaceSettings(event.payload);
+        setShowCompleted(event.payload.showCompleted);
+      }),
+    ]).then(([nextCommandCleanup, nextSettingsCleanup]) => {
+      if (disposed) {
+        nextCommandCleanup();
+        nextSettingsCleanup();
+      } else {
+        commandCleanup = nextCommandCleanup;
+        settingsCleanup = nextSettingsCleanup;
+      }
+    });
+    return () => {
+      disposed = true;
+      commandCleanup?.();
+      settingsCleanup?.();
+    };
+  }, [month, reload, reloadCalendar, reloadWeek, selectView, view, weekStart]);
+
+  useEffect(() => {
+    if (workspaceSettings.mode !== 'workerw') return;
+    let disposed = false;
+    const recover = () => {
+      if (document.hidden) return;
+      void setDesktopWorkspaceMode('workerw').catch((caught: unknown) => {
+        if (disposed) return;
+        if (!workspaceSettings.workerwFallback) {
+          setError(toAppError(caught).message);
+          return;
+        }
+        void setDesktopWorkspaceMode('widget')
+          .then(() => {
+            const fallback = { ...workspaceSettings, mode: 'widget' as const };
+            setWorkspaceSettings(fallback);
+            return saveDesktopWorkspaceSettings(fallback);
+          })
+          .catch((fallbackError: unknown) => {
+            setError(toAppError(fallbackError).message);
+          });
+      });
+    };
+    const onVisible = () => {
+      if (!document.hidden) {
+        recover();
+        reload();
+        reloadWeek(weekStart);
+        if (view === 'calendar') reloadCalendar(month);
+      }
+    };
+    document.addEventListener('visibilitychange', onVisible);
+    const timer = window.setInterval(recover, 30_000);
+    return () => {
+      disposed = true;
+      window.clearInterval(timer);
+      document.removeEventListener('visibilitychange', onVisible);
+    };
+  }, [month, reload, reloadCalendar, reloadWeek, view, weekStart, workspaceSettings]);
 
   useEffect(
     () => () => {
@@ -223,33 +328,63 @@ export function CompanionApp() {
     const persist = () => {
       if (timer !== null) clearTimeout(timer);
       timer = setTimeout(() => {
-        void Promise.all([window.outerPosition(), window.outerSize(), loadReminderSettings()])
-          .then(([position, size, settings]) =>
-            saveReminderSettings({
+        void Promise.all([
+          window.outerPosition(),
+          window.outerSize(),
+          loadReminderSettings(),
+          loadDesktopWorkspaceSettings(),
+          currentMonitor(),
+        ])
+          .then(([position, size, settings, desktopSettings, monitor]) => {
+            const geometry = {
+              x: position.x,
+              y: position.y,
+              width: size.width,
+              height: size.height,
+            };
+            const saveReminder = saveReminderSettings({
               ...settings,
-              companionGeometry: {
-                x: position.x,
-                y: position.y,
-                width: size.width,
-                height: size.height,
-              },
-            }),
-          )
+              companionGeometry: geometry,
+            });
+            const saveDesktop =
+              monitor === null
+                ? Promise.resolve()
+                : saveDesktopWorkspaceSettings({
+                    ...desktopSettings,
+                    monitorId: monitorId(monitor),
+                    layouts: {
+                      ...desktopSettings.layouts,
+                      [monitorId(monitor)]: geometry,
+                    },
+                  });
+            return Promise.all([saveReminder, saveDesktop]);
+          })
           .catch((caught: unknown) => {
             if (!disposed) setError(toAppError(caught).message);
           });
       }, 500);
     };
-    void Promise.all([loadReminderSettings(), currentMonitor()])
-      .then(async ([settings, monitor]) => {
+    void Promise.all([
+      loadReminderSettings(),
+      loadDesktopWorkspaceSettings(),
+      availableMonitors(),
+      primaryMonitor(),
+    ])
+      .then(async ([settings, desktopSettings, monitors, primary]) => {
         await window.setAlwaysOnTop(settings.companionAlwaysOnTop);
+        const monitor =
+          monitors.find((candidate) => monitorId(candidate) === desktopSettings.monitorId) ??
+          primary;
         if (monitor !== null) {
-          const geometry = safeCompanionGeometry(settings.companionGeometry, {
-            x: monitor.workArea.position.x,
-            y: monitor.workArea.position.y,
-            width: monitor.workArea.size.width,
-            height: monitor.workArea.size.height,
-          });
+          const geometry = safeCompanionGeometry(
+            desktopSettings.layouts[monitorId(monitor)] ?? settings.companionGeometry,
+            {
+              x: monitor.workArea.position.x,
+              y: monitor.workArea.position.y,
+              width: monitor.workArea.size.width,
+              height: monitor.workArea.size.height,
+            },
+          );
           await window.setSize(new PhysicalSize(geometry.width, geometry.height));
           await window.setPosition(new PhysicalPosition(geometry.x, geometry.y));
         }
@@ -309,15 +444,6 @@ export function CompanionApp() {
     };
   }, []);
 
-  const selectView = (next: 'today' | 'sevenDays' | 'calendar') => {
-    setView(next);
-    void loadReminderSettings()
-      .then((settings) => saveReminderSettings({ ...settings, companionView: next }))
-      .catch((caught: unknown) => {
-        setError(toAppError(caught).message);
-      });
-  };
-
   const changeMonth = (delta: number) => {
     const nextMonth = shiftMonth(month, delta);
     setMonth(nextMonth);
@@ -334,9 +460,25 @@ export function CompanionApp() {
   const overdueCount = items?.filter((item) => item.kind === 'overdue-task').length ?? 0;
   const todayTaskCount = items?.filter((item) => item.kind === 'today-task').length ?? 0;
   const visibleItems = items?.filter((item) => showCompleted || item.completed !== true) ?? null;
+  const displayItems =
+    visibleItems?.filter(
+      (item) =>
+        item.kind !== 'meeting' ||
+        (workspaceSettings.showMeetings &&
+          (workspaceSettings.showRecurringMeetings || !item.subtitle.endsWith('周期'))),
+    ) ?? null;
 
   return (
-    <main className="min-h-screen overflow-x-hidden bg-background p-4 text-foreground">
+    <main
+      className="min-h-screen overflow-x-hidden bg-background p-4 text-foreground"
+      style={{
+        zoom: workspaceSettings.scale,
+        backgroundColor: `color-mix(in srgb, var(--semantic-desktop-background, hsl(var(--background))) ${String(
+          Math.round(workspaceSettings.opacity * 100),
+        )}%, transparent)`,
+        backdropFilter: workspaceSettings.blur ? 'blur(14px)' : undefined,
+      }}
+    >
       <header className="flex items-center justify-between gap-2">
         <div>
           <h1 className="text-lg font-semibold">ProjectPilot</h1>
@@ -446,12 +588,12 @@ export function CompanionApp() {
               </Button>
             </div>
           )}
-          {visibleItems !== null && visibleItems.length === 0 && (
+          {displayItems !== null && displayItems.length === 0 && (
             <p className="mt-2 text-sm text-muted-foreground">今天暂无日程。</p>
           )}
-          {visibleItems !== null && (
+          {displayItems !== null && (
             <ul className="mt-2 space-y-2">
-              {visibleItems.map((item) => (
+              {displayItems.map((item) => (
                 <li
                   key={`${item.kind}:${item.id}`}
                   className="flex items-center justify-between gap-2 rounded border p-2 text-sm"
@@ -561,34 +703,47 @@ export function CompanionApp() {
                   >
                     {day.date}
                   </button>
-                  {day.entries.length === 0 ? (
+                  {day.entries.filter(
+                    (entry) =>
+                      entry.kind !== 'meeting' ||
+                      (workspaceSettings.showMeetings &&
+                        (workspaceSettings.showRecurringMeetings || entry.recurrence === null)),
+                  ).length === 0 ? (
                     <p className="text-sm text-muted-foreground">暂无安排</p>
                   ) : (
                     <ul className="mt-1 space-y-1 text-sm">
-                      {day.entries.map((entry) => (
-                        <li key={entry.key} className="flex items-center justify-between gap-2">
-                          <span>
-                            <strong>{entry.kindLabel}</strong> {entry.title}
-                            {entry.recurrence === null ? '' : ' · 周期'}
-                          </span>
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            onClick={() => {
-                              openMain(
-                                entry.kind === 'task'
-                                  ? `/tasks/${entry.sourceId}`
-                                  : entry.kind === 'meeting' &&
-                                      !entry.sourceId.startsWith('expected:')
-                                    ? `/meetings/${entry.sourceId}`
-                                    : 'dashboard',
-                              );
-                            }}
-                          >
-                            打开
-                          </Button>
-                        </li>
-                      ))}
+                      {day.entries
+                        .filter(
+                          (entry) =>
+                            entry.kind !== 'meeting' ||
+                            (workspaceSettings.showMeetings &&
+                              (workspaceSettings.showRecurringMeetings ||
+                                entry.recurrence === null)),
+                        )
+                        .map((entry) => (
+                          <li key={entry.key} className="flex items-center justify-between gap-2">
+                            <span>
+                              <strong>{entry.kindLabel}</strong> {entry.title}
+                              {entry.recurrence === null ? '' : ' · 周期'}
+                            </span>
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() => {
+                                openMain(
+                                  entry.kind === 'task'
+                                    ? `/tasks/${entry.sourceId}`
+                                    : entry.kind === 'meeting' &&
+                                        !entry.sourceId.startsWith('expected:')
+                                      ? `/meetings/${entry.sourceId}`
+                                      : 'dashboard',
+                                );
+                              }}
+                            >
+                              打开
+                            </Button>
+                          </li>
+                        ))}
                     </ul>
                   )}
                 </section>
@@ -666,32 +821,46 @@ export function CompanionApp() {
               {calendarLoading && (
                 <p className="mt-2 text-xs text-muted-foreground">正在更新日历…</p>
               )}
-              {selectedEntries === undefined || selectedEntries.length === 0 ? (
+              {selectedEntries === undefined ||
+              selectedEntries.filter(
+                (entry) =>
+                  entry.kind !== 'meeting' ||
+                  (workspaceSettings.showMeetings &&
+                    (workspaceSettings.showRecurringMeetings || entry.recurrence === null)),
+              ).length === 0 ? (
                 <p className="mt-3 text-sm text-muted-foreground">所选日期暂无日程。</p>
               ) : (
                 <ul className="mt-3 space-y-1 text-sm">
-                  {selectedEntries.map((entry) => (
-                    <li key={entry.key} className="flex items-center justify-between gap-2">
-                      <span>
-                        <span className="font-medium">{entry.kindLabel}</span> {entry.title}
-                      </span>
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        onClick={() => {
-                          openMain(
-                            entry.kind === 'task'
-                              ? `/tasks/${entry.sourceId}`
-                              : entry.kind === 'meeting' && !entry.sourceId.startsWith('expected:')
-                                ? `/meetings/${entry.sourceId}`
-                                : 'dashboard',
-                          );
-                        }}
-                      >
-                        打开
-                      </Button>
-                    </li>
-                  ))}
+                  {selectedEntries
+                    .filter(
+                      (entry) =>
+                        entry.kind !== 'meeting' ||
+                        (workspaceSettings.showMeetings &&
+                          (workspaceSettings.showRecurringMeetings || entry.recurrence === null)),
+                    )
+                    .map((entry) => (
+                      <li key={entry.key} className="flex items-center justify-between gap-2">
+                        <span>
+                          <span className="font-medium">{entry.kindLabel}</span> {entry.title}
+                        </span>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => {
+                            openMain(
+                              entry.kind === 'task'
+                                ? `/tasks/${entry.sourceId}`
+                                : entry.kind === 'meeting' &&
+                                    !entry.sourceId.startsWith('expected:')
+                                  ? `/meetings/${entry.sourceId}`
+                                  : 'dashboard',
+                            );
+                          }}
+                        >
+                          打开
+                        </Button>
+                      </li>
+                    ))}
                 </ul>
               )}
             </>
