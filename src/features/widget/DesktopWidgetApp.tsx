@@ -108,6 +108,7 @@ export function DesktopWidgetApp() {
   const [pendingCompletion, setPendingCompletion] = useState<CompanionTodayItem | null>(null);
   const [taskSubmitting, setTaskSubmitting] = useState(false);
   const settingsRef = useRef<DesktopWidgetSettings>(DEFAULT_DESKTOP_WIDGET_SETTINGS);
+  const calendarViewRef = useRef<WidgetCalendarView>('today');
   const todayRequest = useRef(0);
   const agendaRequest = useRef(0);
   const refreshRequest = useRef<Promise<void> | null>(null);
@@ -153,7 +154,11 @@ export function DesktopWidgetApp() {
         setToday(businessToday);
         setItems(sortCompanionItems(nextItems));
         setAgenda(
-          buildWidgetAgenda(data, businessToday, calendarView === 'seven-day' ? undefined : 1),
+          buildWidgetAgenda(
+            data,
+            businessToday,
+            calendarViewRef.current === 'seven-day' ? undefined : 1,
+          ),
         );
         setError(null);
       })
@@ -168,7 +173,7 @@ export function DesktopWidgetApp() {
       });
     refreshRequest.current = request;
     return request;
-  }, [calendarView]);
+  }, []);
 
   const reload = useCallback(() => {
     void refreshAll();
@@ -190,6 +195,7 @@ export function DesktopWidgetApp() {
 
   const selectCalendarView = useCallback(
     (next: WidgetCalendarView) => {
+      calendarViewRef.current = next;
       setCalendarView(next);
       persistView({ calendarView: next });
       reloadAgenda(next, today);
@@ -221,6 +227,7 @@ export function DesktopWidgetApp() {
           await refreshAll();
         })
         .catch((caught: unknown) => {
+          setPendingCompletion(null);
           setError(`更新任务失败：${toAppError(caught).message}`);
         })
         .finally(() => {
@@ -249,6 +256,7 @@ export function DesktopWidgetApp() {
       .then((settings) => {
         settingsRef.current = settings;
         setView(settings.lastView);
+        calendarViewRef.current = settings.calendarView;
         setCalendarView(settings.calendarView);
       })
       .catch(() => undefined);
