@@ -27,7 +27,8 @@ export const reminderSettingsSchema = z
     pausedUntil: z.string().datetime().nullable().default(null),
     closeToTray: z.boolean().default(true),
     companionAlwaysOnTop: z.boolean().default(false),
-    companionView: z.enum(['today', 'calendar']).default('today'),
+    companionView: z.enum(['today', 'sevenDays', 'calendar']).default('today'),
+    companionShowCompleted: z.boolean().default(true),
     companionGeometry: z
       .object({
         x: z.number(),

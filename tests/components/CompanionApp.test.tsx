@@ -6,7 +6,11 @@ const mocks = vi.hoisted(() => ({
   completeCompanionTask: vi.fn<() => Promise<void>>(),
   emitInvalidation: vi.fn<() => Promise<void>>(),
   getCalendarService: vi.fn(),
+  createCompanionTask: vi.fn(),
+  loadCompanionProjectOptions: vi.fn(),
   loadCompanionToday: vi.fn(),
+  loadCompanionWeek: vi.fn(),
+  reopenCompanionTask: vi.fn(),
   loadReminderSettings: vi.fn(),
   saveReminderSettings: vi.fn<() => Promise<void>>(),
 }));
@@ -53,7 +57,11 @@ vi.mock('@/services/calendar.service', () => ({ getCalendarService: mocks.getCal
 
 vi.mock('@/services/companion.service', () => ({
   completeCompanionTask: mocks.completeCompanionTask,
+  createCompanionTask: mocks.createCompanionTask,
+  loadCompanionProjectOptions: mocks.loadCompanionProjectOptions,
   loadCompanionToday: mocks.loadCompanionToday,
+  loadCompanionWeek: mocks.loadCompanionWeek,
+  reopenCompanionTask: mocks.reopenCompanionTask,
 }));
 
 vi.mock('@/features/settings/services/reminderSettings.service', () => ({
@@ -77,11 +85,18 @@ describe('CompanionApp', () => {
         taskId: 'task-1',
       },
     ]);
+    mocks.loadCompanionProjectOptions.mockReset();
+    mocks.loadCompanionProjectOptions.mockResolvedValue([]);
+    mocks.loadCompanionWeek.mockReset();
+    mocks.loadCompanionWeek.mockResolvedValue([]);
+    mocks.createCompanionTask.mockReset();
+    mocks.createCompanionTask.mockResolvedValue('task-new');
     mocks.loadReminderSettings.mockReset();
     mocks.loadReminderSettings.mockResolvedValue({
       companionAlwaysOnTop: false,
       companionGeometry: null,
       companionView: 'today',
+      companionShowCompleted: true,
     });
     mocks.saveReminderSettings.mockReset();
     mocks.saveReminderSettings.mockResolvedValue(undefined);
@@ -102,5 +117,54 @@ describe('CompanionApp', () => {
     await waitFor(() => {
       expect(mocks.completeCompanionTask).toHaveBeenCalledWith('task-1');
     });
+  });
+
+  it('shows the shared seven-day calendar entries', async () => {
+    mocks.loadCompanionWeek.mockResolvedValue([
+      {
+        date: '2026-08-02',
+        entries: [
+          {
+            key: 'meeting:meeting-1',
+            kind: 'meeting',
+            sourceId: 'meeting-1',
+            date: '2026-08-02',
+            title: '周会',
+            kindLabel: '会议',
+            detail: '09:00',
+            href: '/meetings/meeting-1',
+            color: null,
+            recurrence: null,
+          },
+        ],
+      },
+    ]);
+    const user = userEvent.setup();
+    render(<CompanionApp />);
+
+    await user.click(screen.getByRole('tab', { name: '七天' }));
+    expect(await screen.findByText('周会')).toBeInTheDocument();
+    expect(mocks.loadCompanionWeek).toHaveBeenCalledTimes(1);
+  });
+
+  it('creates a quick task through the task service facade and keeps necessary fields', async () => {
+    mocks.loadCompanionProjectOptions.mockResolvedValue([{ id: 'project-1', name: '项目一' }]);
+    const user = userEvent.setup();
+    render(<CompanionApp />);
+
+    await user.click(screen.getByRole('button', { name: '快速新建任务' }));
+    await user.type(screen.getByLabelText('名称'), '桌面任务');
+    await user.click(screen.getByRole('button', { name: '创建' }));
+
+    await waitFor(() => {
+      expect(mocks.createCompanionTask).toHaveBeenCalledWith(
+        expect.objectContaining({
+          title: '桌面任务',
+          projectId: 'project-1',
+          priority: 'medium',
+        }),
+      );
+    });
+    expect(mocks.emitInvalidation).toHaveBeenCalledWith(['tasks']);
   });
 });

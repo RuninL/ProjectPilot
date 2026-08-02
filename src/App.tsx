@@ -163,6 +163,14 @@ export function App() {
     void listen<{ target?: string }>('projectpilot:navigate', (event) => {
       const target = event.payload.target;
       if (target === 'dashboard') void router.navigate('/');
+      else if (
+        typeof target === 'string' &&
+        (/^\/tasks\/[a-zA-Z0-9-]+$/.test(target) ||
+          /^\/meetings\/[a-zA-Z0-9-]+$/.test(target) ||
+          target === '/settings')
+      ) {
+        void router.navigate(target);
+      }
     }).then((cleanup) => {
       unlisten = cleanup;
     });

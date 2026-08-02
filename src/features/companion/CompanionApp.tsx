@@ -12,7 +12,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
-import { formatMonthLabel, todayHK } from '@/lib/date';
+import { addDays, formatMonthLabel, todayHK } from '@/lib/date';
 import {
   shiftMonth,
   WEEKDAY_LABELS,
@@ -24,9 +24,15 @@ import { applyTheme, type Theme } from '@/lib/theme';
 import { getCalendarService } from '@/services/calendar.service';
 import {
   completeCompanionTask,
+  createCompanionTask,
+  loadCompanionProjectOptions,
   loadCompanionToday,
+  loadCompanionWeek,
+  reopenCompanionTask,
+  type CompanionDay,
   type CompanionTodayItem,
 } from '@/services/companion.service';
+import type { TaskPriority } from '@/types';
 import {
   loadReminderSettings,
   saveReminderSettings,
@@ -48,7 +54,7 @@ function cacheMonth(cache: Map<string, CompactCalendarMonth>, month: CompactCale
 }
 
 export function CompanionApp() {
-  const [view, setView] = useState<'today' | 'calendar'>('today');
+  const [view, setView] = useState<'today' | 'sevenDays' | 'calendar'>('today');
   const [items, setItems] = useState<CompanionTodayItem[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [calendar, setCalendar] = useState<CompactCalendarMonth | null>(null);
@@ -57,6 +63,17 @@ export function CompanionApp() {
   const [selectedDate, setSelectedDate] = useState(todayHK());
   const [pendingTask, setPendingTask] = useState<CompanionTodayItem | null>(null);
   const [isCompleting, setIsCompleting] = useState(false);
+  const [weekStart, setWeekStart] = useState(todayHK());
+  const [week, setWeek] = useState<CompanionDay[] | null>(null);
+  const [quickOpen, setQuickOpen] = useState(false);
+  const [quickTitle, setQuickTitle] = useState('');
+  const [quickDate, setQuickDate] = useState(todayHK());
+  const [quickProjectId, setQuickProjectId] = useState('');
+  const [quickPriority, setQuickPriority] = useState<TaskPriority>('medium');
+  const [quickDescription, setQuickDescription] = useState('');
+  const [projectOptions, setProjectOptions] = useState<readonly { id: string; name: string }[]>([]);
+  const [isCreating, setIsCreating] = useState(false);
+  const [showCompleted, setShowCompleted] = useState(true);
   const calendarCache = useRef(new Map<string, CompactCalendarMonth>());
   const calendarRequest = useRef(0);
   const calendarLoadTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -71,6 +88,15 @@ export function CompanionApp() {
       })
       .catch((caught: unknown) => {
         if (request === todayRequest.current) setError(toAppError(caught).message);
+      });
+  }, []);
+
+  const reloadWeek = useCallback((start: string) => {
+    setError(null);
+    void loadCompanionWeek(start)
+      .then(setWeek)
+      .catch((caught: unknown) => {
+        setError(toAppError(caught).message);
       });
   }, []);
 
@@ -103,16 +129,43 @@ export function CompanionApp() {
     }, CALENDAR_LOAD_DEBOUNCE_MS);
   }, []);
 
-  const openMain = () => {
+  const openMain = (target = 'dashboard') => {
     void WebviewWindow.getByLabel('main')
       .then(async (window) => {
         if (window === null) throw new Error('主窗口当前不可用。');
         await window.show();
         await window.setFocus();
-        await emit('projectpilot:navigate', { target: 'dashboard' });
+        await emit('projectpilot:navigate', { target });
       })
       .catch((caught: unknown) => {
         setError(toAppError(caught).message);
+      });
+  };
+
+  const createQuickTask = () => {
+    if (isCreating || quickProjectId === '') return;
+    setIsCreating(true);
+    setError(null);
+    void createCompanionTask({
+      title: quickTitle,
+      date: quickDate,
+      projectId: quickProjectId,
+      priority: quickPriority,
+      description: quickDescription,
+    })
+      .then(() => {
+        setQuickOpen(false);
+        setQuickTitle('');
+        setQuickDescription('');
+        void emitInvalidation(['tasks']);
+        reload();
+        reloadWeek(weekStart);
+      })
+      .catch((caught: unknown) => {
+        setError(toAppError(caught).message);
+      })
+      .finally(() => {
+        setIsCreating(false);
       });
   };
 
@@ -137,6 +190,11 @@ export function CompanionApp() {
     reload();
     void loadReminderSettings().then((settings) => {
       setView(settings.companionView);
+      setShowCompleted(settings.companionShowCompleted);
+    });
+    void loadCompanionProjectOptions().then((projects) => {
+      setProjectOptions(projects);
+      setQuickProjectId(projects[0]?.id ?? '');
     });
   }, [reload]);
 
@@ -151,6 +209,10 @@ export function CompanionApp() {
   useEffect(() => {
     if (view === 'calendar') reloadCalendar(month);
   }, [month, reloadCalendar, view]);
+
+  useEffect(() => {
+    if (view === 'sevenDays') reloadWeek(weekStart);
+  }, [reloadWeek, view, weekStart]);
 
   useEffect(() => {
     const window = getCurrentWindow();
@@ -220,6 +282,7 @@ export function CompanionApp() {
     void listenForInvalidation(() => {
       calendarCache.current.clear();
       reload();
+      reloadWeek(weekStart);
       if (view === 'calendar') reloadCalendar(month);
     }).then((cleanup) => {
       if (disposed) cleanup();
@@ -229,7 +292,7 @@ export function CompanionApp() {
       disposed = true;
       unlisten?.();
     };
-  }, [month, reload, reloadCalendar, view]);
+  }, [month, reload, reloadCalendar, reloadWeek, view, weekStart]);
 
   useEffect(() => {
     let unlisten: (() => void) | null = null;
@@ -246,7 +309,7 @@ export function CompanionApp() {
     };
   }, []);
 
-  const selectView = (next: 'today' | 'calendar') => {
+  const selectView = (next: 'today' | 'sevenDays' | 'calendar') => {
     setView(next);
     void loadReminderSettings()
       .then((settings) => saveReminderSettings({ ...settings, companionView: next }))
@@ -270,6 +333,7 @@ export function CompanionApp() {
   const nextMeeting = items?.find((item) => item.kind === 'meeting');
   const overdueCount = items?.filter((item) => item.kind === 'overdue-task').length ?? 0;
   const todayTaskCount = items?.filter((item) => item.kind === 'today-task').length ?? 0;
+  const visibleItems = items?.filter((item) => showCompleted || item.completed !== true) ?? null;
 
   return (
     <main className="min-h-screen overflow-x-hidden bg-background p-4 text-foreground">
@@ -278,12 +342,35 @@ export function CompanionApp() {
           <h1 className="text-lg font-semibold">ProjectPilot</h1>
           <p className="text-sm text-muted-foreground">桌面小窗</p>
         </div>
-        <Button size="sm" variant="outline" aria-label="打开主窗口" onClick={openMain}>
-          打开主窗口
-        </Button>
+        <div className="flex gap-2">
+          <Button size="sm" variant="outline" onClick={reload}>
+            刷新
+          </Button>
+          <Button
+            size="sm"
+            variant="outline"
+            aria-label="打开主窗口"
+            onClick={() => {
+              openMain();
+            }}
+          >
+            打开主窗口
+          </Button>
+        </div>
       </header>
 
       <div className="mt-4 flex gap-2" role="tablist" aria-label="桌面小窗视图">
+        <Button
+          size="sm"
+          role="tab"
+          aria-selected={view === 'sevenDays'}
+          variant={view === 'sevenDays' ? 'default' : 'outline'}
+          onClick={() => {
+            selectView('sevenDays');
+          }}
+        >
+          七天
+        </Button>
         <Button
           size="sm"
           role="tab"
@@ -308,9 +395,42 @@ export function CompanionApp() {
         </Button>
       </div>
 
+      <Button
+        className="mt-3"
+        size="sm"
+        onClick={() => {
+          setQuickDate(
+            view === 'calendar' ? selectedDate : view === 'sevenDays' ? weekStart : todayHK(),
+          );
+          setQuickOpen(true);
+        }}
+      >
+        快速新建任务
+      </Button>
+
       {view === 'today' ? (
         <section className="mt-4 rounded-lg border p-4" role="tabpanel">
-          <h2 className="font-medium">今日</h2>
+          <div className="flex items-center justify-between gap-2">
+            <h2 className="font-medium">今日</h2>
+            <label className="flex items-center gap-1 text-xs">
+              <input
+                type="checkbox"
+                checked={showCompleted}
+                onChange={(event) => {
+                  const checked = event.target.checked;
+                  setShowCompleted(checked);
+                  void loadReminderSettings()
+                    .then((settings) =>
+                      saveReminderSettings({ ...settings, companionShowCompleted: checked }),
+                    )
+                    .catch((caught: unknown) => {
+                      setError(toAppError(caught).message);
+                    });
+                }}
+              />
+              显示已完成
+            </label>
+          </div>
           <p className="mt-1 text-sm text-muted-foreground">
             {todayHK()} · {todayTaskCount} 项今日 due · {overdueCount} 项逾期
             {nextMeeting === undefined ? '' : ` · 下一场：${nextMeeting.title}`}
@@ -326,12 +446,12 @@ export function CompanionApp() {
               </Button>
             </div>
           )}
-          {items !== null && items.length === 0 && (
+          {visibleItems !== null && visibleItems.length === 0 && (
             <p className="mt-2 text-sm text-muted-foreground">今天暂无日程。</p>
           )}
-          {items !== null && (
+          {visibleItems !== null && (
             <ul className="mt-2 space-y-2">
-              {items.map((item) => (
+              {visibleItems.map((item) => (
                 <li
                   key={`${item.kind}:${item.id}`}
                   className="flex items-center justify-between gap-2 rounded border p-2 text-sm"
@@ -340,20 +460,140 @@ export function CompanionApp() {
                     <strong>{item.title}</strong>
                     <span className="block text-muted-foreground">{item.subtitle}</span>
                   </span>
-                  {item.taskId !== undefined && (
+                  <span className="flex gap-1">
                     <Button
                       size="sm"
                       variant="outline"
                       onClick={() => {
-                        setPendingTask(item);
+                        openMain(
+                          item.taskId !== undefined
+                            ? `/tasks/${item.taskId}`
+                            : item.kind === 'meeting'
+                              ? `/meetings/${item.id}`
+                              : 'dashboard',
+                        );
                       }}
                     >
-                      完成
+                      打开
                     </Button>
-                  )}
+                    {item.taskId !== undefined && item.completed !== true && (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => {
+                          setPendingTask(item);
+                        }}
+                      >
+                        完成
+                      </Button>
+                    )}
+                    {item.taskId !== undefined && item.completed === true && (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => {
+                          void reopenCompanionTask(item.taskId ?? '')
+                            .then(() => {
+                              void emitInvalidation(['tasks']);
+                              reload();
+                            })
+                            .catch((caught: unknown) => {
+                              setError(toAppError(caught).message);
+                            });
+                        }}
+                      >
+                        取消完成
+                      </Button>
+                    )}
+                  </span>
                 </li>
               ))}
             </ul>
+          )}
+        </section>
+      ) : view === 'sevenDays' ? (
+        <section className="mt-4 rounded-lg border p-4" role="tabpanel">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => {
+                setWeekStart(addDays(weekStart, -7));
+              }}
+            >
+              上一周
+            </Button>
+            <h2 className="font-medium">
+              {weekStart} 至 {addDays(weekStart, 6)}
+            </h2>
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => {
+                setWeekStart(addDays(weekStart, 7));
+              }}
+            >
+              下一周
+            </Button>
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => {
+                setWeekStart(todayHK());
+              }}
+            >
+              返回今天
+            </Button>
+          </div>
+          {week === null ? (
+            <p className="mt-3 text-sm text-muted-foreground">正在加载未来七天…</p>
+          ) : (
+            <div className="mt-3 space-y-3">
+              {week.map((day) => (
+                <section key={day.date} className="rounded border p-2">
+                  <button
+                    type="button"
+                    className="font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                    onClick={() => {
+                      setQuickDate(day.date);
+                      setQuickOpen(true);
+                    }}
+                  >
+                    {day.date}
+                  </button>
+                  {day.entries.length === 0 ? (
+                    <p className="text-sm text-muted-foreground">暂无安排</p>
+                  ) : (
+                    <ul className="mt-1 space-y-1 text-sm">
+                      {day.entries.map((entry) => (
+                        <li key={entry.key} className="flex items-center justify-between gap-2">
+                          <span>
+                            <strong>{entry.kindLabel}</strong> {entry.title}
+                            {entry.recurrence === null ? '' : ' · 周期'}
+                          </span>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => {
+                              openMain(
+                                entry.kind === 'task'
+                                  ? `/tasks/${entry.sourceId}`
+                                  : entry.kind === 'meeting' &&
+                                      !entry.sourceId.startsWith('expected:')
+                                    ? `/meetings/${entry.sourceId}`
+                                    : 'dashboard',
+                              );
+                            }}
+                          >
+                            打开
+                          </Button>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </section>
+              ))}
+            </div>
           )}
         </section>
       ) : (
@@ -431,8 +671,25 @@ export function CompanionApp() {
               ) : (
                 <ul className="mt-3 space-y-1 text-sm">
                   {selectedEntries.map((entry) => (
-                    <li key={entry.key}>
-                      <span className="font-medium">{entry.kindLabel}</span> {entry.title}
+                    <li key={entry.key} className="flex items-center justify-between gap-2">
+                      <span>
+                        <span className="font-medium">{entry.kindLabel}</span> {entry.title}
+                      </span>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => {
+                          openMain(
+                            entry.kind === 'task'
+                              ? `/tasks/${entry.sourceId}`
+                              : entry.kind === 'meeting' && !entry.sourceId.startsWith('expected:')
+                                ? `/meetings/${entry.sourceId}`
+                                : 'dashboard',
+                          );
+                        }}
+                      >
+                        打开
+                      </Button>
                     </li>
                   ))}
                 </ul>
@@ -441,6 +698,106 @@ export function CompanionApp() {
           )}
         </section>
       )}
+
+      <Dialog
+        open={quickOpen}
+        onOpenChange={(open) => {
+          if (!isCreating) setQuickOpen(open);
+        }}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>快速新建任务</DialogTitle>
+            <DialogDescription>仅填写必要字段；复杂内容可在主程序中继续编辑。</DialogDescription>
+          </DialogHeader>
+          <div className="grid gap-3">
+            <label className="text-sm">
+              名称
+              <input
+                className="mt-1 block h-10 w-full rounded border bg-background px-3"
+                value={quickTitle}
+                maxLength={160}
+                onChange={(event) => {
+                  setQuickTitle(event.target.value);
+                }}
+              />
+            </label>
+            <label className="text-sm">
+              日期
+              <input
+                type="date"
+                className="mt-1 block h-10 w-full rounded border bg-background px-3"
+                value={quickDate}
+                onChange={(event) => {
+                  setQuickDate(event.target.value);
+                }}
+              />
+            </label>
+            <label className="text-sm">
+              所属项目
+              <select
+                className="mt-1 block h-10 w-full rounded border bg-background px-3"
+                value={quickProjectId}
+                onChange={(event) => {
+                  setQuickProjectId(event.target.value);
+                }}
+              >
+                <option value="">请选择项目</option>
+                {projectOptions.map((project) => (
+                  <option key={project.id} value={project.id}>
+                    {project.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="text-sm">
+              优先级
+              <select
+                className="mt-1 block h-10 w-full rounded border bg-background px-3"
+                value={quickPriority}
+                onChange={(event) => {
+                  setQuickPriority(event.target.value as TaskPriority);
+                }}
+              >
+                <option value="urgent">紧急</option>
+                <option value="high">高</option>
+                <option value="medium">中</option>
+                <option value="low">低</option>
+              </select>
+            </label>
+            <label className="text-sm">
+              简短说明（可选）
+              <textarea
+                className="mt-1 block min-h-20 w-full rounded border bg-background p-2"
+                value={quickDescription}
+                maxLength={2000}
+                onChange={(event) => {
+                  setQuickDescription(event.target.value);
+                }}
+              />
+            </label>
+          </div>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              disabled={isCreating}
+              onClick={() => {
+                setQuickOpen(false);
+              }}
+            >
+              取消
+            </Button>
+            <Button
+              disabled={
+                isCreating || quickTitle.trim() === '' || quickDate === '' || quickProjectId === ''
+              }
+              onClick={createQuickTask}
+            >
+              {isCreating ? '正在创建…' : '创建'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <Dialog
         open={pendingTask !== null}
