@@ -135,14 +135,16 @@ describe('DesktopWidgetSettingsSection', () => {
 
   it('运行状态来自真实窗口事件而非持久化标记', async () => {
     mocks.status.mockResolvedValue(statusOf({ exists: true, visible: true }));
-    let handler: ((event: { payload: unknown }) => void) | null = null;
-    mocks.listen.mockImplementation((event: string, callback: (e: { payload: unknown }) => void) => {
-      if (event === 'projectpilot:desktop-widget-state') handler = callback;
-      return Promise.resolve(() => undefined);
-    });
+    const handlers: ((event: { payload: unknown }) => void)[] = [];
+    mocks.listen.mockImplementation(
+      (event: string, callback: (e: { payload: unknown }) => void) => {
+        if (event === 'projectpilot:desktop-widget-state') handlers.push(callback);
+        return Promise.resolve(() => undefined);
+      },
+    );
     render(<DesktopWidgetSettingsSection />);
     await screen.findByRole('button', { name: '隐藏' });
-    handler?.({ payload: statusOf({ exists: false }) });
+    handlers[0]?.({ payload: statusOf({ exists: false }) });
     expect(await screen.findByRole('button', { name: '打开桌面小窗' })).toBeInTheDocument();
     expect(screen.getByRole('status')).toHaveTextContent('未运行');
   });

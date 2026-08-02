@@ -17,7 +17,7 @@ function makeWidgetTask(overrides: Partial<TaskWithProject> = {}): TaskWithProje
     project_color: '#2563eb',
     project_status: 'active',
     ...overrides,
-  } as TaskWithProject;
+  };
 }
 
 describe('sevenDayRange', () => {
@@ -85,7 +85,7 @@ describe('barsForDate', () => {
     expect(colored[0]?.color).toBe('#2563eb');
     expect(colored[0]?.textColor).not.toBe('');
     const fallback = barsForDate(
-      [makeWidgetTask({ project_color: null, due_date: '2026-08-02' })],
+      [makeWidgetTask({ project_color: '', due_date: '2026-08-02' })],
       '2026-08-02',
     );
     expect(fallback[0]?.color).toBe(DEFAULT_CALENDAR_BAR_COLOR);

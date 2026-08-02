@@ -9,7 +9,7 @@ mod project_links;
 // WorkerW is fully disabled this round: the module is kept only for source
 // isolation. Nothing may call into it — no entry point, no timer, no
 // auto-start and no health check.
-#[allow(dead_code)]
+#[allow(unused)]
 mod workerw;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]

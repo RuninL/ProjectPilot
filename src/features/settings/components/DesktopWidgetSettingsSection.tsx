@@ -121,7 +121,8 @@ export function DesktopWidgetSettingsSection() {
         桌面小窗
       </h2>
       <p className="mt-1 text-sm text-muted-foreground">
-        独立的无边框小窗，显示今日任务和日历（今天 / 近七天）。可拖动、调整大小、隐藏和真正关闭；关闭小窗不影响主程序。
+        独立的无边框小窗，显示今日任务和日历（今天 /
+        近七天）。可拖动、调整大小、隐藏和真正关闭；关闭小窗不影响主程序。
       </p>
       <p className="mt-2 text-sm" role="status">
         当前状态：<strong>{stateLabel}</strong>

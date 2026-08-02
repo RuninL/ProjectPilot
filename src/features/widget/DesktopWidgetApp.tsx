@@ -2,7 +2,12 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { emit, listen } from '@tauri-apps/api/event';
 import { PhysicalPosition, PhysicalSize } from '@tauri-apps/api/dpi';
 import { WebviewWindow } from '@tauri-apps/api/webviewWindow';
-import { availableMonitors, currentMonitor, getCurrentWindow, primaryMonitor } from '@tauri-apps/api/window';
+import {
+  availableMonitors,
+  currentMonitor,
+  getCurrentWindow,
+  primaryMonitor,
+} from '@tauri-apps/api/window';
 import { Button } from '@/components/ui/button';
 import { todayHK } from '@/lib/date';
 import { toAppError } from '@/lib/errors';
@@ -42,7 +47,13 @@ function monitorId(monitor: { name: string | null; position: { x: number; y: num
 /** One task colour bar: keyboard/mouse operable, never a drag region. */
 function TaskBar({ bar, onOpen }: { bar: WidgetTaskBar; onOpen: (taskId: string) => void }) {
   const range =
-    bar.isStart && bar.isEnd ? '' : bar.isStart ? '（开始）' : bar.isEnd ? '（截止）' : '（进行中）';
+    bar.isStart && bar.isEnd
+      ? ''
+      : bar.isStart
+        ? '（开始）'
+        : bar.isEnd
+          ? '（截止）'
+          : '（进行中）';
   const status = bar.statusLabel === null ? '' : `【${bar.statusLabel}】`;
   return (
     <button
@@ -60,13 +71,7 @@ function TaskBar({ bar, onOpen }: { bar: WidgetTaskBar; onOpen: (taskId: string)
   );
 }
 
-function AgendaDay({
-  day,
-  onOpen,
-}: {
-  day: WidgetCalendarDay;
-  onOpen: (taskId: string) => void;
-}) {
+function AgendaDay({ day, onOpen }: { day: WidgetCalendarDay; onOpen: (taskId: string) => void }) {
   return (
     <section className="rounded border border-border/60 p-2">
       <h3 className="text-xs font-medium">
@@ -400,7 +405,10 @@ export function DesktopWidgetApp() {
         </header>
 
         {error !== null && (
-          <div className="mx-3 mt-2 rounded border border-destructive/40 p-2 text-xs text-destructive" role="alert">
+          <div
+            className="mx-3 mt-2 rounded border border-destructive/40 p-2 text-xs text-destructive"
+            role="alert"
+          >
             {error}{' '}
             <Button size="sm" variant="outline" onClick={reload}>
               重试
@@ -409,7 +417,11 @@ export function DesktopWidgetApp() {
         )}
 
         {view === 'today' ? (
-          <section className="min-h-0 flex-1 overflow-y-auto p-3" role="tabpanel" aria-label="今日任务">
+          <section
+            className="min-h-0 flex-1 overflow-y-auto p-3"
+            role="tabpanel"
+            aria-label="今日任务"
+          >
             <p className="text-xs text-muted-foreground">{today} · 今日任务</p>
             {items === null && error === null && (
               <p className="mt-2 text-xs text-muted-foreground">正在加载今日任务…</p>
@@ -446,7 +458,10 @@ export function DesktopWidgetApp() {
                       <span className="ml-1 text-xs text-muted-foreground">{item.subtitle}</span>
                     </button>
                   ) : (
-                    <span className="min-w-0 flex-1 truncate" title={`${item.title} · ${item.subtitle}`}>
+                    <span
+                      className="min-w-0 flex-1 truncate"
+                      title={`${item.title} · ${item.subtitle}`}
+                    >
                       {item.title}
                       <span className="ml-1 text-xs text-muted-foreground">{item.subtitle}</span>
                     </span>
@@ -494,7 +509,9 @@ export function DesktopWidgetApp() {
               {agenda === null && error === null && (
                 <p className="text-xs text-muted-foreground">正在加载日历…</p>
               )}
-              {agenda?.map((day) => <AgendaDay key={day.date} day={day} onOpen={openTask} />)}
+              {agenda?.map((day) => (
+                <AgendaDay key={day.date} day={day} onOpen={openTask} />
+              ))}
             </div>
           </section>
         )}
