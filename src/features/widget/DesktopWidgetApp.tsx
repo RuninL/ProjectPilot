@@ -1,7 +1,6 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { emit, listen } from '@tauri-apps/api/event';
+import { type PointerEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { listen } from '@tauri-apps/api/event';
 import { PhysicalPosition, PhysicalSize } from '@tauri-apps/api/dpi';
-import { WebviewWindow } from '@tauri-apps/api/webviewWindow';
 import {
   availableMonitors,
   currentMonitor,
@@ -13,14 +12,18 @@ import { todayHK } from '@/lib/date';
 import { toAppError } from '@/lib/errors';
 import { emitInvalidation, listenForInvalidation } from '@/lib/invalidation';
 import { applyTheme, type Theme } from '@/lib/theme';
-import { desktopWidgetStatus, type DesktopWidgetStatus } from '@/lib/commands';
+import {
+  desktopWidgetStatus,
+  navigateFromDesktopWidget,
+  type DesktopWidgetStatus,
+} from '@/lib/commands';
 import {
   completeCompanionTask,
   loadCompanionToday,
   reopenCompanionTask,
   type CompanionTodayItem,
 } from '@/services/companion.service';
-import { loadWidgetSevenDayTasks, loadWidgetTodayTasks } from '@/services/widget.service';
+import { loadWidgetAgenda } from '@/services/widget.service';
 import {
   DEFAULT_DESKTOP_WIDGET_SETTINGS,
   loadDesktopWidgetSettings,
@@ -30,11 +33,10 @@ import {
 import { sortCompanionItems } from '@/features/companion/companionModel';
 import { safeCompanionGeometry } from '@/features/companion/windowGeometry';
 import {
-  buildSevenDayAgenda,
-  buildTodayAgenda,
+  buildWidgetAgenda,
   type WidgetCalendarDay,
   type WidgetCalendarView,
-  type WidgetTaskBar,
+  type WidgetCalendarBar,
   type WidgetView,
 } from './widgetModel';
 
@@ -45,33 +47,25 @@ function monitorId(monitor: { name: string | null; position: { x: number; y: num
 }
 
 /** One task colour bar: keyboard/mouse operable, never a drag region. */
-function TaskBar({ bar, onOpen }: { bar: WidgetTaskBar; onOpen: (taskId: string) => void }) {
-  const range =
-    bar.isStart && bar.isEnd
-      ? ''
-      : bar.isStart
-        ? '（开始）'
-        : bar.isEnd
-          ? '（截止）'
-          : '（进行中）';
+function TaskBar({ bar, onOpen }: { bar: WidgetCalendarBar; onOpen: (target: string) => void }) {
   const status = bar.statusLabel === null ? '' : `【${bar.statusLabel}】`;
   return (
     <button
       type="button"
-      title={`${status}${bar.title} · ${bar.projectName}${range}`}
+      title={`${bar.typeLabel} · ${status}${bar.title}`}
       className="block w-full truncate rounded px-2 py-1 text-left text-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
       style={{ backgroundColor: bar.color, color: bar.textColor }}
       onClick={() => {
-        onOpen(bar.taskId);
+        onOpen(bar.navigationTarget);
       }}
     >
-      {status}
+      <span className="mr-1">{bar.typeLabel}</span>{status}
       {bar.done ? <s>{bar.title}</s> : bar.title}
     </button>
   );
 }
 
-function AgendaDay({ day, onOpen }: { day: WidgetCalendarDay; onOpen: (taskId: string) => void }) {
+function AgendaDay({ day, onOpen }: { day: WidgetCalendarDay; onOpen: (target: string) => void }) {
   return (
     <section className="rounded border border-border/60 p-2">
       <h3 className="text-xs font-medium">
@@ -79,11 +73,11 @@ function AgendaDay({ day, onOpen }: { day: WidgetCalendarDay; onOpen: (taskId: s
         {day.isToday && <span className="ml-1 rounded bg-primary/15 px-1 text-primary">今天</span>}
       </h3>
       {day.bars.length === 0 ? (
-        <p className="mt-1 text-xs text-muted-foreground">暂无任务</p>
+        <p className="mt-1 text-xs text-muted-foreground">暂无计划</p>
       ) : (
         <ul className="mt-1 space-y-1">
           {day.bars.map((bar) => (
-            <li key={bar.taskId}>
+            <li key={`${bar.type}:${bar.id}`}>
               <TaskBar bar={bar} onOpen={onOpen} />
             </li>
           ))}
@@ -106,6 +100,7 @@ export function DesktopWidgetApp() {
   const [agenda, setAgenda] = useState<WidgetCalendarDay[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [locked, setLocked] = useState(false);
+  const [clickThrough, setClickThrough] = useState(false);
   const settingsRef = useRef<DesktopWidgetSettings>(DEFAULT_DESKTOP_WIDGET_SETTINGS);
   const todayRequest = useRef(0);
   const agendaRequest = useRef(0);
@@ -134,14 +129,9 @@ export function DesktopWidgetApp() {
 
   const reloadAgenda = useCallback((subView: WidgetCalendarView, businessToday: string) => {
     const request = ++agendaRequest.current;
-    const load =
-      subView === 'seven-day'
-        ? loadWidgetSevenDayTasks(businessToday).then((tasks) =>
-            buildSevenDayAgenda(tasks, businessToday),
-          )
-        : loadWidgetTodayTasks(businessToday).then((tasks) => [
-            buildTodayAgenda(tasks, businessToday),
-          ]);
+    const load = loadWidgetAgenda(businessToday).then((data) =>
+      buildWidgetAgenda(data, businessToday, subView === 'seven-day' ? undefined : 1),
+    );
     void load
       .then((days) => {
         if (request === agendaRequest.current) {
@@ -184,24 +174,11 @@ export function DesktopWidgetApp() {
 
   /** Focus the existing main window (never create a second one) and navigate. */
   const openMain = useCallback((target: string) => {
-    void WebviewWindow.getByLabel('main')
-      .then(async (window) => {
-        if (window === null) throw new Error('主窗口当前不可用。');
-        await window.show();
-        await window.setFocus();
-        await emit('projectpilot:navigate', { target });
-      })
+    void navigateFromDesktopWidget(target)
       .catch((caught: unknown) => {
         setError(toAppError(caught).message);
       });
   }, []);
-
-  const openTask = useCallback(
-    (taskId: string) => {
-      openMain(`/tasks/${taskId}`);
-    },
-    [openMain],
-  );
 
   const toggleTask = useCallback(
     (item: CompanionTodayItem) => {
@@ -234,6 +211,7 @@ export function DesktopWidgetApp() {
     void desktopWidgetStatus()
       .then((status) => {
         setLocked(status.locked);
+        setClickThrough(status.click_through);
       })
       .catch(() => undefined);
     reloadToday();
@@ -282,6 +260,7 @@ export function DesktopWidgetApp() {
     let disposed = false;
     void listen<DesktopWidgetStatus>(WIDGET_STATE_EVENT, (event) => {
       setLocked(event.payload.locked);
+      setClickThrough(event.payload.click_through);
     }).then((cleanup) => {
       if (disposed) cleanup();
       else unlisten = cleanup;
@@ -291,6 +270,19 @@ export function DesktopWidgetApp() {
       unlisten?.();
     };
   }, []);
+
+  const startDragging = useCallback(
+    (event: PointerEvent<HTMLElement>) => {
+      if (locked || clickThrough || event.button !== 0) return;
+      event.preventDefault();
+      void getCurrentWindow()
+        .startDragging()
+        .catch((caught: unknown) => {
+          setError(toAppError(caught).message);
+        });
+    },
+    [clickThrough, locked],
+  );
 
   useEffect(() => {
     let unlisten: (() => void) | null = null;
@@ -372,10 +364,14 @@ export function DesktopWidgetApp() {
         {/* Native Tauri drag region; disabled while the position is locked.
             Buttons and content below never trigger a window drag. */}
         <header
-          {...(locked ? {} : { 'data-tauri-drag-region': true })}
-          className={`flex items-center justify-between gap-2 border-b border-border/60 px-3 py-2 ${locked ? '' : 'cursor-move'}`}
+          className="flex items-center justify-between gap-2 border-b border-border/60 px-3 py-2"
         >
-          <span className="pointer-events-none select-none text-sm font-semibold">
+          <span
+            {...(!locked && !clickThrough ? { 'data-tauri-drag-region': true } : {})}
+            className={`select-none text-sm font-semibold ${!locked && !clickThrough ? 'cursor-move' : ''}`}
+            onPointerDown={startDragging}
+            role="presentation"
+          >
             ProjectPilot 小窗{locked ? ' · 已锁定' : ''}
           </span>
           <div role="tablist" aria-label="小窗视图" className="flex gap-1">
@@ -451,7 +447,7 @@ export function DesktopWidgetApp() {
                       className="min-w-0 flex-1 truncate text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                       title={`${item.title} · ${item.subtitle}`}
                       onClick={() => {
-                        openTask(item.taskId ?? '');
+                        openMain(`/tasks/${item.taskId ?? ''}`);
                       }}
                     >
                       {item.completed === true ? <s>{item.title}</s> : item.title}
@@ -510,7 +506,7 @@ export function DesktopWidgetApp() {
                 <p className="text-xs text-muted-foreground">正在加载日历…</p>
               )}
               {agenda?.map((day) => (
-                <AgendaDay key={day.date} day={day} onOpen={openTask} />
+                <AgendaDay key={day.date} day={day} onOpen={openMain} />
               ))}
             </div>
           </section>

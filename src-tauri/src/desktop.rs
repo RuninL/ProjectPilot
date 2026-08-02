@@ -219,6 +219,36 @@ pub async fn set_desktop_widget_click_through(app: AppHandle, enabled: bool) -> 
     set_widget_click_through(&app, enabled)
 }
 
+/// Restore and focus the one main window, then deliver a widget navigation
+/// request. Keeping window control in Rust avoids granting the widget webview
+/// broad cross-window permissions.
+#[tauri::command]
+pub async fn navigate_from_desktop_widget(app: AppHandle, target: String) -> Result<(), String> {
+    let window = app
+        .get_webview_window("main")
+        .ok_or_else(|| "主窗口当前不可用。".to_string())?;
+    if window
+        .is_minimized()
+        .map_err(|error| format!("无法读取主窗口状态：{error}"))?
+    {
+        window
+            .unminimize()
+            .map_err(|error| format!("无法恢复主窗口：{error}"))?;
+    }
+    window
+        .show()
+        .map_err(|error| format!("无法显示主窗口：{error}"))?;
+    window
+        .set_focus()
+        .map_err(|error| format!("无法聚焦主窗口：{error}"))?;
+    app.emit_to(
+        "main",
+        "projectpilot:navigate",
+        serde_json::json!({ "target": target }),
+    )
+    .map_err(|error| format!("无法发送导航请求：{error}"))
+}
+
 #[tauri::command]
 pub fn set_main_close_behavior(exit: bool) {
     EXIT_ON_MAIN_CLOSE.store(exit, Ordering::Relaxed);

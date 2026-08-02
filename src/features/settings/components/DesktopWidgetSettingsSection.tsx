@@ -13,8 +13,6 @@ import {
 import { toAppError } from '@/lib/errors';
 import { listenForDesktopWidgetState } from '@/features/settings/services/desktopWidgetEvents.service';
 
-const WIDGET_STATE_EVENT = 'projectpilot:desktop-widget-state';
-
 /** How long a status query may take before the UI reports failure instead of
  * loading forever. Widget state must never block the settings page. */
 export const WIDGET_STATUS_TIMEOUT_MS = 5000;

@@ -46,6 +46,7 @@ pub fn run() {
             desktop::desktop_widget_status,
             desktop::set_desktop_widget_locked,
             desktop::set_desktop_widget_click_through,
+            desktop::navigate_from_desktop_widget,
             desktop::set_main_close_behavior,
             desktop::set_launch_at_login,
         ])

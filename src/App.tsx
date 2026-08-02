@@ -180,7 +180,8 @@ export function App() {
       else if (
         typeof target === 'string' &&
         (/^\/tasks\/[a-zA-Z0-9-]+$/.test(target) ||
-          /^\/meetings\/[a-zA-Z0-9-]+$/.test(target) ||
+          /^\/meetings(?:\/[a-zA-Z0-9-]+|\?series=[a-zA-Z0-9-]+)?$/.test(target) ||
+          /^\/projects\/[a-zA-Z0-9-]+#project-milestones$/.test(target) ||
           target === '/settings')
       ) {
         void router.navigate(target);

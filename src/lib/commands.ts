@@ -149,6 +149,14 @@ export async function setDesktopWidgetClickThrough(enabled: boolean): Promise<vo
   }
 }
 
+export async function navigateFromDesktopWidget(target: string): Promise<void> {
+  try {
+    await measuredInvoke('navigate_from_desktop_widget', { target });
+  } catch (error) {
+    throw toAppError(error);
+  }
+}
+
 export async function setMainCloseBehavior(exit: boolean): Promise<void> {
   try {
     await measuredInvoke('set_main_close_behavior', { exit });

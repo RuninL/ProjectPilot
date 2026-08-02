@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from '@testing-library/react';
+import { act, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import {
@@ -7,7 +7,7 @@ import {
 } from '@/features/settings/components/DesktopWidgetSettingsSection';
 
 const mocks = vi.hoisted(() => ({
-  listen: vi.fn().mockResolvedValue(() => undefined),
+  subscribe: vi.fn().mockResolvedValue(() => undefined),
   status: vi.fn(),
   open: vi.fn(),
   show: vi.fn().mockResolvedValue(undefined),
@@ -17,7 +17,9 @@ const mocks = vi.hoisted(() => ({
   setClickThrough: vi.fn().mockResolvedValue(undefined),
 }));
 
-vi.mock('@tauri-apps/api/event', () => ({ listen: mocks.listen }));
+vi.mock('@/features/settings/services/desktopWidgetEvents.service', () => ({
+  listenForDesktopWidgetState: mocks.subscribe,
+}));
 vi.mock('@/lib/commands', () => ({
   desktopWidgetStatus: mocks.status,
   openDesktopWidget: mocks.open,
@@ -41,7 +43,7 @@ function statusOf(overrides: Partial<Record<string, boolean>> = {}) {
 describe('DesktopWidgetSettingsSection', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    mocks.listen.mockResolvedValue(() => undefined);
+    mocks.subscribe.mockResolvedValue(() => undefined);
   });
 
   it('未运行时只提供“打开桌面小窗”，没有模式选择器和 WorkerW', async () => {
@@ -141,7 +143,9 @@ describe('DesktopWidgetSettingsSection', () => {
     mocks.status.mockImplementation(() => new Promise(() => undefined));
     render(<DesktopWidgetSettingsSection />);
     expect(screen.getByRole('status')).toHaveTextContent('正在读取状态…');
-    await vi.advanceTimersByTimeAsync(WIDGET_STATUS_TIMEOUT_MS + 1);
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(WIDGET_STATUS_TIMEOUT_MS + 1);
+    });
     vi.useRealTimers();
     expect(screen.getByRole('status')).toHaveTextContent('状态读取失败');
     expect(screen.getByRole('alert')).toHaveTextContent('读取桌面小窗状态超时');
@@ -158,16 +162,39 @@ describe('DesktopWidgetSettingsSection', () => {
   it('运行状态来自真实窗口事件而非持久化标记', async () => {
     mocks.status.mockResolvedValue(statusOf({ exists: true, visible: true }));
     const handlers: ((event: { payload: unknown }) => void)[] = [];
-    mocks.listen.mockImplementation(
-      (event: string, callback: (e: { payload: unknown }) => void) => {
-        if (event === 'projectpilot:desktop-widget-state') handlers.push(callback);
-        return Promise.resolve(() => undefined);
-      },
-    );
+    mocks.subscribe.mockImplementation((callback: (e: { payload: unknown }) => void) => {
+      handlers.push(callback);
+      return Promise.resolve(() => undefined);
+    });
     render(<DesktopWidgetSettingsSection />);
     await screen.findByRole('button', { name: '隐藏' });
-    handlers[0]?.({ payload: statusOf({ exists: false }) });
+    act(() => {
+      handlers[0]?.({ payload: statusOf({ exists: false }) });
+    });
     expect(await screen.findByRole('button', { name: '打开桌面小窗' })).toBeInTheDocument();
     expect(screen.getByRole('status')).toHaveTextContent('未运行');
+  });
+
+  it('订阅失败时显示可处理错误而非产生未处理拒绝', async () => {
+    mocks.status.mockResolvedValue(statusOf());
+    mocks.subscribe.mockRejectedValue(new Error('事件桥不可用'));
+    render(<DesktopWidgetSettingsSection />);
+    expect(await screen.findByRole('alert')).toHaveTextContent('事件桥不可用');
+  });
+
+  it('卸载后延迟订阅成功会立刻清理', async () => {
+    mocks.status.mockResolvedValue(statusOf());
+    let resolve: (unlisten: () => void) => void = () => undefined;
+    const unlisten = vi.fn();
+    mocks.subscribe.mockReturnValue(
+      new Promise<() => void>((next) => {
+        resolve = next;
+      }),
+    );
+    const view = render(<DesktopWidgetSettingsSection />);
+    view.unmount();
+    resolve(unlisten);
+    await Promise.resolve();
+    expect(unlisten).toHaveBeenCalledTimes(1);
   });
 });

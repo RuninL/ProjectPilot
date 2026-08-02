@@ -2,118 +2,145 @@ import {
   readableBarTextColor,
   safeCalendarColor,
   TASK_STATUS_LABELS,
+  type CalendarData,
 } from '@/features/calendar/calendarModel';
 import { addDays, formatDayLabel, todayHK } from '@/lib/date';
 import type { TaskWithProject } from '@/types';
 
-/**
- * Pure view-model for the desktop widget. Date arithmetic reuses the main
- * calendar's date helpers ('YYYY-MM-DD' inclusive ranges in Asia/Hong_Kong)
- * and the colour computation reuses the main calendar's safe colour and
- * readable-text helpers, so the widget never invents its own rules.
- */
-
 export type WidgetView = 'today' | 'calendar';
 export type WidgetCalendarView = 'today' | 'seven-day';
 
-/** 近七天 = today plus the next six days: exactly 7 natural days. */
-export const SEVEN_DAY_COUNT = 7;
+/** Today plus the next seven days, i.e. exactly eight natural dates. */
+export const WIDGET_DAY_COUNT = 8;
 
 export function sevenDayRange(today: string = todayHK()): string[] {
-  return Array.from({ length: SEVEN_DAY_COUNT }, (_, index) => addDays(today, index));
+  return Array.from({ length: WIDGET_DAY_COUNT }, (_, index) => addDays(today, index));
 }
 
-/** One colour bar. Rendered as a focusable button that never drags the window. */
-export interface WidgetTaskBar {
-  readonly taskId: string;
+export type WidgetCalendarItemType = 'task' | 'meeting' | 'milestone';
+
+export interface WidgetCalendarBar {
+  readonly id: string;
+  readonly type: WidgetCalendarItemType;
   readonly title: string;
-  /** Always a safe hex colour; falls back to the calendar default. */
+  readonly date: string;
+  readonly start: string;
+  readonly end: string;
   readonly color: string;
   readonly textColor: string;
-  /** Non-colour status marker, only for完成/延期-like states. */
+  readonly typeLabel: string;
+  readonly navigationTarget: string;
   readonly statusLabel: string | null;
   readonly done: boolean;
-  /** True when this day is the real (unclipped) first/last day of the task. */
-  readonly isStart: boolean;
-  readonly isEnd: boolean;
-  readonly projectName: string;
 }
 
 export interface WidgetCalendarDay {
   readonly date: string;
   readonly label: string;
   readonly isToday: boolean;
-  readonly bars: readonly WidgetTaskBar[];
+  readonly bars: readonly WidgetCalendarBar[];
 }
 
-function effectiveRange(task: TaskWithProject): { start: string; end: string } | null {
+function taskRange(task: TaskWithProject): { start: string; end: string } | null {
   const start = task.start_date ?? task.due_date;
   const end = task.due_date ?? task.start_date;
-  if (start === null || end === null) return null;
-  return start <= end ? { start, end } : { start: end, end: start };
+  if (start === null || end === null || start > end) return null;
+  return { start, end };
 }
 
-/** Does the task's inclusive date range cover `date`? */
 export function taskCoversDate(task: TaskWithProject, date: string): boolean {
-  const range = effectiveRange(task);
+  const range = taskRange(task);
   return range !== null && range.start <= date && date <= range.end;
 }
 
-function toBar(task: TaskWithProject, date: string): WidgetTaskBar {
-  const range = effectiveRange(task);
-  const color = safeCalendarColor(task.project_color);
-  const done = task.status === 'done';
-  const flagged = done || task.status === 'postponed' || task.status === 'cancelled';
-  return {
-    taskId: task.id,
-    title: task.title,
-    color,
-    textColor: readableBarTextColor(color),
-    statusLabel: flagged ? TASK_STATUS_LABELS[task.status] : null,
-    done,
-    isStart: range?.start === date,
-    isEnd: range?.end === date,
-    projectName: task.project_name,
-  };
+function taskBars(data: CalendarData): WidgetCalendarBar[] {
+  return data.tasks.flatMap((task) => {
+    const range = taskRange(task);
+    if (range === null || task.archived_at !== null) return [];
+    const color = safeCalendarColor(task.project_color);
+    return [{
+      id: task.id,
+      type: 'task' as const,
+      title: task.title || '未命名任务',
+      date: range.start,
+      start: range.start,
+      end: range.end,
+      color,
+      textColor: readableBarTextColor(color),
+      typeLabel: '任务',
+      navigationTarget: `/tasks/${encodeURIComponent(task.id)}`,
+      statusLabel: TASK_STATUS_LABELS[task.status],
+      done: task.status === 'done',
+    }];
+  });
 }
 
-/** Tasks covering one day, deduplicated by task id, in stable input order. */
-export function barsForDate(tasks: readonly TaskWithProject[], date: string): WidgetTaskBar[] {
-  const seen = new Set<string>();
-  const bars: WidgetTaskBar[] = [];
-  for (const task of tasks) {
-    if (seen.has(task.id) || !taskCoversDate(task, date)) continue;
-    seen.add(task.id);
-    bars.push(toBar(task, date));
-  }
-  return bars;
+function eventBars(data: CalendarData): WidgetCalendarBar[] {
+  const projects = new Map(data.projects.map((project) => [project.id, project]));
+  const meetings = data.meetings.map((meeting) => {
+    const color = '#0f766e';
+    return {
+      id: meeting.id,
+      type: 'meeting' as const,
+      title: meeting.topic || '未命名会议',
+      date: meeting.date,
+      start: meeting.date,
+      end: meeting.date,
+      color,
+      textColor: readableBarTextColor(color),
+      typeLabel: meeting.source_rule_id === null ? '会议' : '周期会议',
+      navigationTarget:
+        meeting.source_rule_id === null
+          ? `/meetings/${encodeURIComponent(meeting.id)}`
+          : `/meetings?series=${encodeURIComponent(meeting.source_rule_id)}`,
+      statusLabel: null,
+      done: false,
+    };
+  });
+  const milestones = data.milestones.map((milestone) => {
+    const color = safeCalendarColor(projects.get(milestone.project_id)?.color);
+    return {
+      id: milestone.id,
+      type: 'milestone' as const,
+      title: milestone.name || '未命名里程碑',
+      date: milestone.date,
+      start: milestone.date,
+      end: milestone.date,
+      color,
+      textColor: readableBarTextColor(color),
+      typeLabel: '里程碑',
+      navigationTarget: `/projects/${encodeURIComponent(milestone.project_id)}#project-milestones`,
+      statusLabel: null,
+      done: false,
+    };
+  });
+  return [...meetings, ...milestones];
 }
 
-/**
- * The vertical seven-day agenda. Cross-day tasks are clipped to the window
- * without losing their first or last day; each day never repeats a task.
- */
-export function buildSevenDayAgenda(
-  tasks: readonly TaskWithProject[],
+const TYPE_ORDER: Record<WidgetCalendarItemType, number> = { meeting: 0, milestone: 1, task: 2 };
+
+export function buildWidgetAgenda(
+  data: CalendarData,
   today: string = todayHK(),
+  dayCount: number = WIDGET_DAY_COUNT,
 ): WidgetCalendarDay[] {
-  return sevenDayRange(today).map((date) => ({
-    date,
-    label: formatDayLabel(date),
-    isToday: date === today,
-    bars: barsForDate(tasks, date),
-  }));
-}
-
-/** The 今天 sub view: every task whose range covers today. */
-export function buildTodayAgenda(
-  tasks: readonly TaskWithProject[],
-  today: string = todayHK(),
-): WidgetCalendarDay {
-  return {
-    date: today,
-    label: formatDayLabel(today),
-    isToday: true,
-    bars: barsForDate(tasks, today),
-  };
+  const bars = [...eventBars(data), ...taskBars(data)];
+  return Array.from({ length: dayCount }, (_, index) => {
+    const date = addDays(today, index);
+    const seen = new Set<string>();
+    const daily = bars
+      .filter((bar) => {
+        const key = `${bar.type}:${bar.id}`;
+        if (bar.start > date || bar.end < date || seen.has(key)) return false;
+        seen.add(key);
+        return true;
+      })
+      .sort(
+        (a, b) =>
+          TYPE_ORDER[a.type] - TYPE_ORDER[b.type] ||
+          a.title.localeCompare(b.title, 'zh-CN') ||
+          a.id.localeCompare(b.id),
+      );
+    return { date, label: formatDayLabel(date), isToday: index === 0, bars: daily };
+  });
 }
