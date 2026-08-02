@@ -1,6 +1,11 @@
 import '@testing-library/jest-dom/vitest';
 import { cleanup } from '@testing-library/react';
-import { afterEach } from 'vitest';
+import { afterEach, vi } from 'vitest';
+
+vi.mock('@tauri-apps/api/event', () => ({
+  emit: vi.fn().mockResolvedValue(undefined),
+  listen: vi.fn().mockResolvedValue(() => undefined),
+}));
 
 // jsdom implements neither the Pointer Capture API nor scrollIntoView, both of
 // which Radix's menu/dialog primitives call while managing focus.

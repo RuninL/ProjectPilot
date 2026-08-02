@@ -1,4 +1,5 @@
-import { todayHK } from '@/lib/date';
+import { addDays, todayHK } from '@/lib/date';
+import type { CalendarEntry } from '@/features/calendar/calendarModel';
 import {
   getRepositories,
   type MeetingRepository,
@@ -7,6 +8,8 @@ import {
   type TaskRepository,
 } from '@/repositories';
 import { getTaskService } from './task.service';
+import { getCalendarService } from './calendar.service';
+import type { TaskPriority } from '@/types';
 
 export interface CompanionTodayItem {
   id: string;
@@ -15,6 +18,20 @@ export interface CompanionTodayItem {
   subtitle: string;
   taskId?: string;
   startsAt?: string;
+  completed?: boolean;
+}
+
+export interface CompanionDay {
+  date: string;
+  entries: readonly CalendarEntry[];
+}
+
+export interface CompanionQuickTaskInput {
+  title: string;
+  date: string;
+  projectId: string;
+  priority: TaskPriority;
+  description: string;
 }
 
 export interface CompanionServiceDeps {
@@ -87,14 +104,89 @@ export type CompanionService = ReturnType<typeof createCompanionService>;
 
 export async function loadCompanionToday(date = todayHK()): Promise<CompanionTodayItem[]> {
   const repos = await getRepositories();
-  return createCompanionService({
+  const items = await createCompanionService({
     tasks: repos.tasks,
     meetings: repos.meetings,
     milestones: repos.milestones,
     projects: repos.projects,
   }).loadToday(date);
+  const [day, completedTasks] = await Promise.all([
+    loadCompanionWeek(date).then((days) => days[0]),
+    repos.tasks.findInDateRange(date, date),
+  ]);
+  const completed = completedTasks
+    .filter((task) => task.status === 'done')
+    .map((task) => ({
+      id: task.id,
+      kind: 'today-task' as const,
+      title: task.title,
+      subtitle: task.project_name,
+      taskId: task.id,
+      completed: true,
+    }));
+  const recurring =
+    day?.entries
+      .filter((entry) => entry.recurrence !== null)
+      .map((entry) => ({
+        id: entry.sourceId,
+        kind: entry.kind === 'meeting' ? ('meeting' as const) : ('today-task' as const),
+        title: entry.title,
+        subtitle: `${entry.detail}${entry.detail === '' ? '' : ' · '}周期`,
+      })) ?? [];
+  const keys = new Set(items.map((item) => `${item.kind}:${item.id}`));
+  return [
+    ...items,
+    ...recurring.filter((item) => !keys.has(`${item.kind}:${item.id}`)),
+    ...completed,
+  ];
 }
 
 export async function completeCompanionTask(id: string): Promise<void> {
   await (await getTaskService()).bulkUpdateTasks([id], { status: 'done' });
+}
+
+export async function reopenCompanionTask(id: string): Promise<void> {
+  await (await getTaskService()).bulkUpdateTasks([id], { status: 'todo' });
+}
+
+export async function loadCompanionWeek(start = todayHK()): Promise<CompanionDay[]> {
+  const dates = Array.from({ length: 7 }, (_, index) => addDays(start, index));
+  const months = [...new Set(dates.map((date) => date.slice(0, 7)))];
+  const service = await getCalendarService();
+  const calendars = await Promise.all(months.map((month) => service.loadCompactMonth(month)));
+  const entriesByDate = new Map(
+    calendars
+      .flatMap((calendar) => calendar.weeks.flat())
+      .filter((day) => dates.includes(day.date))
+      .map((day) => [day.date, day.entries] as const),
+  );
+  return dates.map((date) => ({ date, entries: entriesByDate.get(date) ?? [] }));
+}
+
+export async function createCompanionTask(input: CompanionQuickTaskInput): Promise<string> {
+  const task = await (
+    await getTaskService()
+  ).createTask({
+    project_id: input.projectId,
+    parent_task_id: null,
+    title: input.title,
+    description: input.description,
+    status: 'todo',
+    priority: input.priority,
+    start_date: input.date,
+    due_date: input.date,
+    progress: 0,
+    estimated_hours: null,
+    actual_hours: null,
+  });
+  return task.id;
+}
+
+export async function loadCompanionProjectOptions(): Promise<
+  readonly { id: string; name: string }[]
+> {
+  const projects = await (await getRepositories()).projects.findAll();
+  return projects
+    .filter((project) => project.archived_at === null)
+    .map((project) => ({ id: project.id, name: project.name }));
 }

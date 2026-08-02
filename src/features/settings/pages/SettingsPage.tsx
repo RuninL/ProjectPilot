@@ -29,6 +29,10 @@ import {
 } from '../services/dataTransfer.service';
 import { saveThemePreference } from '../services/settingsPreference.service';
 import { ReminderSettingsSection } from '../components/ReminderSettingsSection';
+import { ThemeEditor } from '../components/ThemeEditor';
+import { DesktopWidgetSettingsSection } from '../components/DesktopWidgetSettingsSection';
+import { loadThemeProfileBundle, saveThemeProfileBundle } from '../services/themeProfile.service';
+import { applyThemeProfile } from '../theme/themeProfile';
 
 const THEME_OPTIONS: { value: Theme; label: string }[] = [
   { value: 'dark', label: '深色' },
@@ -270,6 +274,9 @@ export function SettingsPage() {
             const nextTheme = event.target.value as Theme;
             setTheme(nextTheme);
             void runOperation(async () => {
+              const bundle = await loadThemeProfileBundle();
+              await saveThemeProfileBundle({ ...bundle, selectedProfileId: null });
+              applyThemeProfile(null);
               await saveThemePreference(nextTheme);
               return '主题设置已保存。';
             });
@@ -282,6 +289,8 @@ export function SettingsPage() {
           ))}
         </select>
       </section>
+      <ThemeEditor theme={theme} onThemeChange={setTheme} />
+      <DesktopWidgetSettingsSection />
       <ReminderSettingsSection />
 
       <section id="data-management" className="mb-6 rounded-lg border bg-card p-4">

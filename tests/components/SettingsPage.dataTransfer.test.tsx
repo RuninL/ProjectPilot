@@ -19,6 +19,15 @@ const mocks = vi.hoisted(() => ({
 vi.mock('@/lib/commands', () => ({
   getDbPath: vi.fn().mockResolvedValue('C:\\ProjectPilot\\projectpilot.db'),
   openDataDir: vi.fn().mockResolvedValue(undefined),
+  desktopWidgetStatus: vi
+    .fn()
+    .mockResolvedValue({ exists: false, visible: false, locked: false, click_through: false }),
+  openDesktopWidget: vi.fn().mockResolvedValue(undefined),
+  showDesktopWidget: vi.fn().mockResolvedValue(undefined),
+  hideDesktopWidget: vi.fn().mockResolvedValue(undefined),
+  closeDesktopWidget: vi.fn().mockResolvedValue(undefined),
+  setDesktopWidgetLocked: vi.fn().mockResolvedValue(undefined),
+  setDesktopWidgetClickThrough: vi.fn().mockResolvedValue(undefined),
 }));
 
 vi.mock('@/services/sampleData.service', () => ({

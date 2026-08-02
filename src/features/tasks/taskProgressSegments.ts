@@ -25,11 +25,20 @@ export const PROGRESS_SEGMENT_COLORS: readonly ProgressSegmentColor[] = [
   { background: '#0891b2', foreground: '#ffffff' },
 ];
 
+let activeSegmentColors: readonly ProgressSegmentColor[] = PROGRESS_SEGMENT_COLORS;
+
+export function setProgressSegmentPalette(colors: readonly string[] | null): void {
+  activeSegmentColors =
+    colors === null || colors.length !== PROGRESS_SEGMENT_COLORS.length
+      ? PROGRESS_SEGMENT_COLORS
+      : colors.map((background) => ({ background, foreground: '#ffffff' }));
+}
+
 export function progressSegmentColor(index: number): ProgressSegmentColor {
   const paletteIndex =
-    ((index % PROGRESS_SEGMENT_COLORS.length) + PROGRESS_SEGMENT_COLORS.length) %
-    PROGRESS_SEGMENT_COLORS.length;
-  return PROGRESS_SEGMENT_COLORS[paletteIndex] ?? DEFAULT_SEGMENT_COLOR;
+    ((index % activeSegmentColors.length) + activeSegmentColors.length) %
+    activeSegmentColors.length;
+  return activeSegmentColors[paletteIndex] ?? DEFAULT_SEGMENT_COLOR;
 }
 
 export function sortProgressSegments(updates: readonly TaskProgressUpdate[]): TaskProgressUpdate[] {

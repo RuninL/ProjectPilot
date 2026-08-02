@@ -181,16 +181,6 @@ export function ReminderSettingsSection() {
             onChange={(event) => void save({ ...settings, dailySummaryTime: event.target.value })}
           />
         </Label>
-        <Label className="flex items-center gap-2">
-          <input
-            type="checkbox"
-            checked={settings.companionAlwaysOnTop}
-            onChange={(event) =>
-              void save({ ...settings, companionAlwaysOnTop: event.target.checked })
-            }
-          />{' '}
-          桌面小窗保持置顶
-        </Label>
       </div>
       <p className="mt-3 text-sm text-muted-foreground" aria-live="polite">
         {settings.enabled ? '提醒已启用。' : '提醒已暂停。'}

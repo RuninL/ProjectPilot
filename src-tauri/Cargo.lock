@@ -3027,6 +3027,8 @@ dependencies = [
  "tauri-plugin-single-instance",
  "tauri-plugin-sql",
  "thiserror 2.0.19",
+ "windows",
+ "winreg",
 ]
 
 [[package]]

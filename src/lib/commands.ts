@@ -82,3 +82,93 @@ export async function openLocalPath(path: string): Promise<void> {
     throw toAppError(error);
   }
 }
+
+export interface DesktopWidgetStatus {
+  exists: boolean;
+  visible: boolean;
+  locked: boolean;
+  click_through: boolean;
+}
+
+/** Create the desktop widget window if missing, otherwise show it. */
+export async function openDesktopWidget(): Promise<void> {
+  try {
+    await measuredInvoke('open_desktop_widget');
+  } catch (error) {
+    throw toAppError(error);
+  }
+}
+
+export async function showDesktopWidget(): Promise<void> {
+  try {
+    await measuredInvoke('show_desktop_widget');
+  } catch (error) {
+    throw toAppError(error);
+  }
+}
+
+export async function hideDesktopWidget(): Promise<void> {
+  try {
+    await measuredInvoke('hide_desktop_widget');
+  } catch (error) {
+    throw toAppError(error);
+  }
+}
+
+/** Destroy the widget window for real; the main app keeps running. */
+export async function closeDesktopWidget(): Promise<void> {
+  try {
+    await measuredInvoke('close_desktop_widget');
+  } catch (error) {
+    throw toAppError(error);
+  }
+}
+
+/** Live window state — never a persisted "running" flag. */
+export async function desktopWidgetStatus(): Promise<DesktopWidgetStatus> {
+  try {
+    return await measuredInvoke<DesktopWidgetStatus>('desktop_widget_status');
+  } catch (error) {
+    throw toAppError(error);
+  }
+}
+
+export async function setDesktopWidgetLocked(locked: boolean): Promise<void> {
+  try {
+    await measuredInvoke('set_desktop_widget_locked', { locked });
+  } catch (error) {
+    throw toAppError(error);
+  }
+}
+
+export async function setDesktopWidgetClickThrough(enabled: boolean): Promise<void> {
+  try {
+    await measuredInvoke('set_desktop_widget_click_through', { enabled });
+  } catch (error) {
+    throw toAppError(error);
+  }
+}
+
+export async function navigateFromDesktopWidget(target: string): Promise<void> {
+  try {
+    await measuredInvoke('navigate_from_desktop_widget', { target });
+  } catch (error) {
+    throw toAppError(error);
+  }
+}
+
+export async function setMainCloseBehavior(exit: boolean): Promise<void> {
+  try {
+    await measuredInvoke('set_main_close_behavior', { exit });
+  } catch (error) {
+    throw toAppError(error);
+  }
+}
+
+export async function setLaunchAtLogin(enabled: boolean): Promise<void> {
+  try {
+    await measuredInvoke('set_launch_at_login', { enabled });
+  } catch (error) {
+    throw toAppError(error);
+  }
+}

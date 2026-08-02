@@ -12,6 +12,7 @@ import {
   buildCompactCalendarMonth,
   buildCalendarMonth,
   monthGridRange,
+  type CalendarData,
   type CompactCalendarMonth,
   type CalendarMonth,
 } from '@/features/calendar/calendarModel';
@@ -30,12 +31,12 @@ export interface CalendarAttentionTask {
   readonly labels: readonly string[];
 }
 
-async function loadMonthData(
+async function loadCalendarData(
   deps: CalendarServiceDeps,
-  month: string,
+  from: string,
+  to: string,
   includeUndatedTasks: boolean,
-) {
-  const { from, to } = monthGridRange(month);
+): Promise<CalendarData> {
   const [tasks, unscheduledTasks, meetings, milestones, projects] = await Promise.all([
     deps.tasks.findInDateRange(from, to),
     includeUndatedTasks ? deps.tasks.findUndated() : Promise.resolve([]),
@@ -163,13 +164,18 @@ function attentionOrder(item: CalendarAttentionTask): readonly number[] {
 export function createCalendarService(deps: CalendarServiceDeps) {
   return {
     async loadMonth(month: string, today: string = todayHK()): Promise<CalendarMonth> {
-      return buildCalendarMonth(month, await loadMonthData(deps, month, true), today);
+      const { from, to } = monthGridRange(month);
+      return buildCalendarMonth(month, await loadCalendarData(deps, from, to, true), today);
     },
     async loadCompactMonth(
       month: string,
       today: string = todayHK(),
     ): Promise<CompactCalendarMonth> {
-      return buildCompactCalendarMonth(month, await loadMonthData(deps, month, false), today);
+      const { from, to } = monthGridRange(month);
+      return buildCompactCalendarMonth(month, await loadCalendarData(deps, from, to, false), today);
+    },
+    async loadRange(from: string, to: string): Promise<CalendarData> {
+      return loadCalendarData(deps, from, to, false);
     },
     async loadAttentionTasks(date: string): Promise<readonly CalendarAttentionTask[]> {
       return (await deps.tasks.findByQuery())
