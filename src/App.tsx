@@ -5,6 +5,11 @@ import { LoadingState } from '@/components/common/LoadingState';
 import { getDb, takeDatabaseRecoveryNotice } from '@/lib/db';
 import { toAppError } from '@/lib/errors';
 import { applyTheme, subscribeToSystemTheme } from '@/lib/theme';
+import {
+  activeThemeProfile,
+  loadThemeProfileBundle,
+} from '@/features/settings/services/themeProfile.service';
+import { applyThemeProfile, normalizeThemeProfile } from '@/features/settings/theme/themeProfile';
 import { router } from '@/router';
 import {
   ensureSampleDataSeeded,
@@ -66,6 +71,11 @@ export function App() {
         if (savedTheme !== null && !controller.signal.aborted) {
           setTheme(savedTheme);
         }
+        const profile = activeThemeProfile(await loadThemeProfileBundle());
+        if (profile !== null && !controller.signal.aborted) {
+          setTheme(profile.baseTheme);
+          applyThemeProfile(profile);
+        }
       } catch (caught) {
         if (!controller.signal.aborted) {
           setError(toAppError(caught).message);
@@ -95,6 +105,24 @@ export function App() {
       controller.abort();
     };
   }, [setDbReady, setGlobalError, setTheme]);
+
+  useEffect(() => {
+    let unlisten: (() => void) | null = null;
+    void listen<unknown>('projectpilot:theme-profile-changed', (event) => {
+      try {
+        const profile = normalizeThemeProfile(event.payload);
+        setTheme(profile.baseTheme);
+        applyThemeProfile(profile);
+      } catch {
+        applyThemeProfile(null);
+      }
+    }).then((cleanup) => {
+      unlisten = cleanup;
+    });
+    return () => {
+      unlisten?.();
+    };
+  }, [setTheme]);
 
   useEffect(() => {
     let unlisten: (() => void) | null = null;
