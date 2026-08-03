@@ -14,8 +14,16 @@ function checksum(sql: string): Buffer {
   return createHash('sha384').update(sql).digest();
 }
 
+function migrationFile(version: number): string {
+  const file = migrationFiles[version - 1];
+  if (file === undefined) {
+    throw new Error(`missing migration ${String(version)}`);
+  }
+  return file;
+}
+
 function canonicalSql(version: number): string {
-  return readFileSync(join(migrationDirectory, migrationFiles[version - 1]), 'utf8');
+  return readFileSync(join(migrationDirectory, migrationFile(version)), 'utf8');
 }
 
 function v12Sql(version: number): string {
@@ -70,7 +78,7 @@ function migrate(database: Database, through = migrationFiles.length): void {
              (version, description, success, checksum, execution_time)
            VALUES (?, ?, 1, ?, 0)`,
         )
-        .run(version, migrationFiles[version - 1], expectedChecksum);
+        .run(version, migrationFile(version), expectedChecksum);
     })();
   }
 }
@@ -261,7 +269,7 @@ describe('released database migration upgrades', () => {
                (version, description, success, checksum, execution_time)
              VALUES (?, ?, 1, ?, 0)`,
           )
-          .run(version, migrationFiles[version - 1], checksum(sql));
+          .run(version, migrationFile(version), checksum(sql));
       })();
     }
     seedV1Data(database);
