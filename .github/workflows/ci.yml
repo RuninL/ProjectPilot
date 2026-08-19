@@ -17,6 +17,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4.2.2
+        with:
+          fetch-depth: 0
 
       - uses: actions/setup-node@v4.4.0
         with:
@@ -25,6 +27,11 @@ jobs:
 
       - name: Install dependencies
         run: npm ci
+
+      - name: Protect published migrations
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: npm run migrations:check -- --base-ref "$BASE_SHA"
 
       - name: Validate frontend
         run: |

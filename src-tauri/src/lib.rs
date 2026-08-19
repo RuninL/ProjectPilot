@@ -25,12 +25,17 @@ pub fn run() {
         .plugin(tauri_plugin_notification::init())
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_fs::init())
-        .plugin(
-            tauri_plugin_sql::Builder::default()
-                .add_migrations("sqlite:projectpilot.db", migrations::migrations())
-                .build(),
-        )
-        .setup(|app| Ok(desktop::setup_desktop(app.handle())?))
+        .setup(|app| {
+            app.handle().plugin(
+                tauri_plugin_sql::Builder::default()
+                    .add_migrations(
+                        "sqlite:projectpilot.db",
+                        migrations::migrations(&atomic::db_path(app.handle())?),
+                    )
+                    .build(),
+            )?;
+            Ok(desktop::setup_desktop(app.handle())?)
+        })
         .invoke_handler(tauri::generate_handler![
             atomic::execute_batch,
             backup::get_db_path,
