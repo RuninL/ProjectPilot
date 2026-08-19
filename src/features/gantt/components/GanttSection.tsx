@@ -47,6 +47,7 @@ export function GanttSection({
   const [milestones, setMilestones] = useState<readonly Milestone[] | null>(null);
   const [milestoneError, setMilestoneError] = useState<string | null>(null);
   const [editingMilestone, setEditingMilestone] = useState<Milestone | null>(null);
+  const [focusRequest, setFocusRequest] = useState(0);
 
   const loadMilestones = useCallback((): void => {
     if (projectId === '') {
@@ -113,20 +114,31 @@ export function GanttSection({
   return (
     <div className="space-y-3">
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <div className="flex items-center gap-1" role="group" aria-label="甘特图时间刻度">
-          {SCALES.map((option) => (
-            <Button
-              key={option}
-              size="sm"
-              variant={option === scale ? 'default' : 'outline'}
-              aria-pressed={option === scale}
-              onClick={() => {
-                setScale(option);
-              }}
-            >
-              {GANTT_SCALE_LABELS[option]}
-            </Button>
-          ))}
+        <div className="flex items-center gap-2">
+          <div className="flex items-center gap-1" role="group" aria-label="甘特图时间刻度">
+            {SCALES.map((option) => (
+              <Button
+                key={option}
+                size="sm"
+                variant={option === scale ? 'default' : 'outline'}
+                aria-pressed={option === scale}
+                onClick={() => {
+                  setScale(option);
+                }}
+              >
+                {GANTT_SCALE_LABELS[option]}
+              </Button>
+            ))}
+          </div>
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={() => {
+              setFocusRequest((value) => value + 1);
+            }}
+          >
+            回到今天
+          </Button>
         </div>
         <label className="flex h-8 items-center gap-2 text-sm">
           <input
@@ -155,6 +167,7 @@ export function GanttSection({
               setEditingMilestone(milestone);
             }
           }}
+          focusRequest={focusRequest}
         />
       )}
 

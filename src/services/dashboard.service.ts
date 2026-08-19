@@ -49,29 +49,43 @@ export interface DashboardMilestone {
   readonly project: Project | null;
 }
 
+/**
+ * Task-shaped dashboard DTO. `taskId` is deliberately explicit so view code
+ * can never confuse a project id, list index, title, or filter with the
+ * persisted task identity used by task-detail navigation.
+ */
+export interface DashboardTaskItem {
+  readonly taskId: string;
+  readonly title: string;
+  readonly projectName: string;
+  readonly projectColor: string | null;
+  readonly dueDate: string | null;
+  readonly progress: number;
+}
+
 export interface BlockedPropagationRisk {
-  readonly task: TaskWithProject;
-  readonly blockedBy: readonly TaskWithProject[];
+  readonly task: DashboardTaskItem;
+  readonly blockedBy: readonly DashboardTaskItem[];
 }
 
 export interface MilestonePredecessorRisk {
   readonly milestone: Milestone;
   readonly project: Project | null;
-  readonly blockingTasks: readonly TaskWithProject[];
+  readonly blockingTasks: readonly DashboardTaskItem[];
 }
 
 export interface DashboardData {
   readonly today: string;
   readonly projects: readonly DashboardProject[];
-  readonly todayTasks: readonly TaskWithProject[];
-  readonly upcomingTasks: readonly TaskWithProject[];
-  readonly overdueTasks: readonly TaskWithProject[];
+  readonly todayTasks: readonly DashboardTaskItem[];
+  readonly upcomingTasks: readonly DashboardTaskItem[];
+  readonly overdueTasks: readonly DashboardTaskItem[];
   readonly upcomingMeetings: readonly DashboardMeeting[];
   readonly todayMilestones: readonly DashboardMilestone[];
   readonly overdueMilestones: readonly DashboardMilestone[];
   readonly futureMilestones: readonly DashboardMilestone[];
-  readonly overdueRisks: readonly TaskWithProject[];
-  readonly lowProgressRisks: readonly TaskWithProject[];
+  readonly overdueRisks: readonly DashboardTaskItem[];
+  readonly lowProgressRisks: readonly DashboardTaskItem[];
   readonly blockedPropagationRisks: readonly BlockedPropagationRisk[];
   readonly milestonePredecessorRisks: readonly MilestonePredecessorRisk[];
   readonly openRisks: readonly RiskWithProject[];
@@ -83,6 +97,17 @@ function isReminderEligible(task: TaskWithProject): boolean {
     task.project_status !== 'postponed' &&
     !REMINDER_EXCLUDED_TASK_STATUSES.has(task.status)
   );
+}
+
+function toDashboardTask(task: TaskWithProject): DashboardTaskItem {
+  return {
+    taskId: task.id,
+    title: task.title,
+    projectName: task.project_name,
+    projectColor: task.project_color,
+    dueDate: task.due_date,
+    progress: task.progress,
+  };
 }
 
 function unfinishedPredecessors(
@@ -160,10 +185,10 @@ export function createDashboardService(deps: DashboardServiceDeps) {
         }
         return [
           {
-            task,
+            task: toDashboardTask(task),
             blockedBy: risk.blockedBy.flatMap((taskId) => {
               const blocker = tasksById.get(taskId);
-              return blocker === undefined ? [] : [blocker];
+              return blocker === undefined ? [] : [toDashboardTask(blocker)];
             }),
           },
         ];
@@ -181,7 +206,7 @@ export function createDashboardService(deps: DashboardServiceDeps) {
         const blockingTasks = unfinishedPredecessors(graph, milestone.linked_task_id).flatMap(
           (taskId) => {
             const task = tasksById.get(taskId);
-            return task === undefined ? [] : [task];
+            return task === undefined ? [] : [toDashboardTask(task)];
           },
         );
         if (blockingTasks.length === 0) {
@@ -206,11 +231,13 @@ export function createDashboardService(deps: DashboardServiceDeps) {
               tasks.filter((task) => task.project_id === project.id),
             ),
           })),
-        todayTasks: openTasks.filter((task) => task.due_date === today),
-        upcomingTasks: openTasks.filter(
-          (task) => task.due_date !== null && task.due_date > today && task.due_date <= sevenDays,
-        ),
-        overdueTasks,
+        todayTasks: openTasks.filter((task) => task.due_date === today).map(toDashboardTask),
+        upcomingTasks: openTasks
+          .filter(
+            (task) => task.due_date !== null && task.due_date > today && task.due_date <= sevenDays,
+          )
+          .map(toDashboardTask),
+        overdueTasks: overdueTasks.map(toDashboardTask),
         upcomingMeetings: meetings.map((meeting) => ({
           meeting,
           project:
@@ -226,8 +253,8 @@ export function createDashboardService(deps: DashboardServiceDeps) {
         futureMilestones: milestones
           .filter((milestone) => milestone.date > today && milestone.date <= thirtyDays)
           .map(toDashboardMilestone),
-        overdueRisks,
-        lowProgressRisks,
+        overdueRisks: overdueRisks.map(toDashboardTask),
+        lowProgressRisks: lowProgressRisks.map(toDashboardTask),
         blockedPropagationRisks,
         milestonePredecessorRisks,
         openRisks: risks.filter((risk) => risk.status === 'open' || risk.status === 'monitoring'),

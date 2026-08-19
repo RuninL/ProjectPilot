@@ -15,13 +15,15 @@ import { ErrorState } from '@/components/common/ErrorState';
 import { LoadingState } from '@/components/common/LoadingState';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { toAppError } from '@/lib/errors';
 import { RISK_LEVEL_LABELS, RISK_STATUS_LABELS } from '@/lib/labels';
 import {
   getDashboardService,
   type DashboardData,
   type DashboardMilestone,
+  type DashboardTaskItem,
 } from '@/services/dashboard.service';
-import type { TaskWithProject } from '@/types';
+import { DashboardTaskLink } from '../components/DashboardTaskLink';
 
 /**
  * Design conventions on this page:
@@ -70,7 +72,12 @@ function SectionTitle({
   );
 }
 
-function taskList(title: string, tasks: readonly TaskWithProject[], empty: string) {
+function taskList(
+  title: string,
+  tasks: readonly DashboardTaskItem[],
+  empty: string,
+  onNavigationError: (error: unknown) => void,
+) {
   return (
     <section className="rounded-lg border bg-card p-4 shadow-sm">
       <div className="mb-3">
@@ -81,17 +88,18 @@ function taskList(title: string, tasks: readonly TaskWithProject[], empty: strin
       ) : (
         <ul className="space-y-1">
           {tasks.map((task) => (
-            <li key={task.id}>
-              <Link
+            <li key={task.taskId}>
+              <DashboardTaskLink
+                taskId={task.taskId}
+                onNavigationError={onNavigationError}
                 className="flex items-center justify-between gap-2 rounded-md px-2 py-1.5 text-sm transition-colors hover:bg-accent"
-                to={`/tasks?taskId=${encodeURIComponent(task.id)}`}
               >
                 <span className="flex min-w-0 items-center gap-2">
                   <span className="truncate">{task.title}</span>
-                  <ProjectName name={task.project_name} color={task.project_color} />
+                  <ProjectName name={task.projectName} color={task.projectColor} />
                 </span>
-                <span className="shrink-0 text-xs text-muted-foreground">{task.due_date}</span>
-              </Link>
+                <span className="shrink-0 text-xs text-muted-foreground">{task.dueDate}</span>
+              </DashboardTaskLink>
             </li>
           ))}
         </ul>
@@ -147,6 +155,11 @@ const STAT_STYLES = [
 export function DashboardPage() {
   const [data, setData] = useState<DashboardData | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [navigationError, setNavigationError] = useState<string | null>(null);
+
+  const reportNavigationError = useCallback((caught: unknown) => {
+    setNavigationError(toAppError(caught).message);
+  }, []);
 
   const load = useCallback(async () => {
     setError(null);
@@ -200,6 +213,15 @@ export function DashboardPage() {
         <p className="text-sm text-muted-foreground">今天是 {data.today}（香港时区）</p>
       </header>
 
+      {navigationError !== null && (
+        <div
+          className="rounded-md border border-destructive/40 bg-destructive/5 px-3 py-2 text-sm text-destructive"
+          role="alert"
+        >
+          无法打开任务：{navigationError}
+        </div>
+      )}
+
       <dl className="grid grid-cols-2 gap-3 sm:grid-cols-4">
         {cards.map(([label, value, to, Icon], index) => (
           <Link
@@ -219,9 +241,14 @@ export function DashboardPage() {
       </dl>
 
       <div className="grid gap-4 lg:grid-cols-3">
-        {taskList('今日到期', data.todayTasks, '今天没有到期的未完成任务。')}
-        {taskList('即将到期（7 天内）', data.upcomingTasks, '未来 7 天没有到期的未完成任务。')}
-        {taskList('已逾期', data.overdueTasks, '没有已逾期的未完成任务。')}
+        {taskList('今日到期', data.todayTasks, '今天没有到期的未完成任务。', reportNavigationError)}
+        {taskList(
+          '即将到期（7 天内）',
+          data.upcomingTasks,
+          '未来 7 天没有到期的未完成任务。',
+          reportNavigationError,
+        )}
+        {taskList('已逾期', data.overdueTasks, '没有已逾期的未完成任务。', reportNavigationError)}
       </div>
 
       <section className="rounded-lg border bg-card p-4 shadow-sm">
@@ -244,17 +271,16 @@ export function DashboardPage() {
             ) : (
               <ul className="mt-2 space-y-1">
                 {data.overdueRisks.map((task) => (
-                  <li key={task.id}>
-                    <Link
+                  <li key={task.taskId}>
+                    <DashboardTaskLink
+                      taskId={task.taskId}
+                      onNavigationError={reportNavigationError}
                       className="flex items-center gap-2 rounded-md px-2 py-1 text-sm transition-colors hover:bg-accent"
-                      to={`/tasks?taskId=${task.id}`}
                     >
                       <span className="truncate">{task.title}</span>
-                      <ProjectName name={task.project_name} color={task.project_color} />
-                      <span className="shrink-0 text-xs text-muted-foreground">
-                        {task.due_date}
-                      </span>
-                    </Link>
+                      <ProjectName name={task.projectName} color={task.projectColor} />
+                      <span className="shrink-0 text-xs text-muted-foreground">{task.dueDate}</span>
+                    </DashboardTaskLink>
                   </li>
                 ))}
               </ul>
@@ -271,17 +297,18 @@ export function DashboardPage() {
             ) : (
               <ul className="mt-2 space-y-1">
                 {data.lowProgressRisks.map((task) => (
-                  <li key={task.id}>
-                    <Link
+                  <li key={task.taskId}>
+                    <DashboardTaskLink
+                      taskId={task.taskId}
+                      onNavigationError={reportNavigationError}
                       className="flex items-center gap-2 rounded-md px-2 py-1 text-sm transition-colors hover:bg-accent"
-                      to={`/tasks?taskId=${task.id}`}
                     >
                       <span className="truncate">{task.title}</span>
-                      <ProjectName name={task.project_name} color={task.project_color} />
+                      <ProjectName name={task.projectName} color={task.projectColor} />
                       <span className="shrink-0 text-xs text-muted-foreground">
-                        {task.progress}% · {task.due_date}
+                        {task.progress}% · {task.dueDate}
                       </span>
-                    </Link>
+                    </DashboardTaskLink>
                   </li>
                 ))}
               </ul>
@@ -298,17 +325,18 @@ export function DashboardPage() {
             ) : (
               <ul className="mt-2 space-y-1">
                 {data.blockedPropagationRisks.map(({ task, blockedBy }) => (
-                  <li key={task.id}>
-                    <Link
+                  <li key={task.taskId}>
+                    <DashboardTaskLink
+                      taskId={task.taskId}
+                      onNavigationError={reportNavigationError}
                       className="flex items-center gap-2 rounded-md px-2 py-1 text-sm transition-colors hover:bg-accent"
-                      to={`/tasks?taskId=${task.id}`}
                     >
                       <span className="truncate">
                         {task.title} · 受 {blockedBy.map((blocker) => blocker.title).join('、')}{' '}
                         影响
                       </span>
-                      <ProjectName name={task.project_name} color={task.project_color} />
-                    </Link>
+                      <ProjectName name={task.projectName} color={task.projectColor} />
+                    </DashboardTaskLink>
                   </li>
                 ))}
               </ul>
@@ -323,19 +351,30 @@ export function DashboardPage() {
             ) : (
               <ul className="mt-2 space-y-1">
                 {data.milestonePredecessorRisks.map(({ milestone, project, blockingTasks }) => (
-                  <li key={milestone.id}>
+                  <li
+                    key={milestone.id}
+                    className="flex flex-wrap items-center gap-2 px-2 py-1 text-sm"
+                  >
                     <Link
-                      className="flex items-center gap-2 rounded-md px-2 py-1 text-sm transition-colors hover:bg-accent"
+                      className="flex min-w-0 items-center gap-2 hover:underline"
                       to={`/projects/${milestone.project_id}#project-milestones`}
                     >
-                      <span className="truncate">
-                        {milestone.name} · 前置：
-                        {blockingTasks.map((task) => task.title).join('、')}
-                      </span>
+                      <span className="truncate">{milestone.name}</span>
                       {project !== null && (
                         <ProjectName name={project.name} color={project.color} />
                       )}
                     </Link>
+                    <span className="text-muted-foreground">前置：</span>
+                    {blockingTasks.map((task) => (
+                      <DashboardTaskLink
+                        key={task.taskId}
+                        taskId={task.taskId}
+                        onNavigationError={reportNavigationError}
+                        className="rounded px-1 text-primary hover:bg-accent hover:underline"
+                      >
+                        {task.title}
+                      </DashboardTaskLink>
+                    ))}
                   </li>
                 ))}
               </ul>

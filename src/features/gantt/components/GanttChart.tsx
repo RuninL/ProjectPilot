@@ -1,7 +1,9 @@
+import { useRef } from 'react';
 import { MILESTONE_STATUS_LABELS, TASK_STATUS_LABELS } from '@/lib/labels';
 import type { MilestoneStatus } from '@/types';
 import type { TaskStatus } from '@/types';
 import type { GanttLink, GanttRow, GanttViewModel } from '../ganttViewModel';
+import { useGanttTodayFocus } from '../ganttScroll';
 
 /**
  * Hand-written SVG Gantt renderer. It draws exactly what the view model already
@@ -18,6 +20,7 @@ interface GanttChartProps {
   selectedTaskId: string | null;
   onSelectTask: (taskId: string | null) => void;
   onSelectMilestone: (milestoneId: string) => void;
+  focusRequest?: number;
 }
 
 const STATUS_FILL: Record<TaskStatus, string> = {
@@ -65,8 +68,17 @@ export function GanttChart({
   selectedTaskId,
   onSelectTask,
   onSelectMilestone,
+  focusRequest = 0,
 }: GanttChartProps) {
+  const timelineRef = useRef<HTMLDivElement>(null);
   const chartHeight = model.headerHeight + Math.max(model.height, model.rowHeight);
+  useGanttTodayFocus({
+    containerRef: timelineRef,
+    focusX: model.focusX,
+    modelWidth: model.width,
+    layoutKey: `${model.rangeStart}:${model.rangeEnd}:${String(model.dayWidth)}`,
+    request: focusRequest,
+  });
 
   return (
     <div className="flex rounded-lg border bg-card">
@@ -112,7 +124,12 @@ export function GanttChart({
         </ul>
       </div>
 
-      <div className="min-w-0 flex-1 overflow-x-auto">
+      <div
+        ref={timelineRef}
+        className="min-w-0 flex-1 overflow-x-auto"
+        tabIndex={0}
+        aria-label="可横向滚动的甘特图时间轴"
+      >
         <svg
           width={model.width}
           height={chartHeight}

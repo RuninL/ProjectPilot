@@ -116,6 +116,8 @@ export interface GanttViewModel {
   readonly links: readonly GanttLink[];
   /** x of the today marker, or null when today falls outside the range. */
   readonly todayX: number | null;
+  /** x to center initially; clamped to the nearest data boundary when today is outside. */
+  readonly focusX: number;
   readonly undated: readonly GanttUndatedTask[];
   /** True when no task could be drawn — the renderer shows an empty state. */
   readonly isEmpty: boolean;
@@ -209,8 +211,8 @@ function buildTicks(
  *
  * Tasks without a `start_date` — and archived tasks — are not drawn; they are
  * returned in `undated` so the UI can say so in words instead of silently
- * hiding rows. `today` is always inside the range, which keeps the today line
- * meaningful for a project scheduled entirely in the past or future.
+ * hiding rows. The drawn range follows the project data; `focusX` identifies
+ * today when it is inside that range and the nearest edge otherwise.
  */
 export function buildGanttViewModel(params: {
   readonly tasks: readonly GanttTask[];
@@ -238,6 +240,8 @@ export function buildGanttViewModel(params: {
     const rangeStart = periodStart(today, scale);
     const rangeEnd = addDays(nextPeriodStart(today, scale), -1);
     const ticks = buildTicks(rangeStart, rangeEnd, scale, dayWidth);
+    const width = inclusiveDays(rangeStart, rangeEnd) * dayWidth;
+    const todayX = (inclusiveDays(rangeStart, today) - 1) * dayWidth;
     return {
       scale,
       rangeStart,
@@ -246,12 +250,13 @@ export function buildGanttViewModel(params: {
       rowHeight: GANTT_ROW_HEIGHT,
       labelWidth: GANTT_LABEL_WIDTH,
       headerHeight: GANTT_HEADER_HEIGHT,
-      width: inclusiveDays(rangeStart, rangeEnd) * dayWidth,
+      width,
       height: 0,
       ticks,
       rows: [],
       links: [],
-      todayX: (inclusiveDays(rangeStart, today) - 1) * dayWidth,
+      todayX,
+      focusX: todayX,
       undated,
       isEmpty: true,
     };
@@ -265,26 +270,18 @@ export function buildGanttViewModel(params: {
     if (start < earliest) {
       earliest = start;
     }
-    for (const milestone of visibleMilestones) {
-      if (milestone.date < earliest) {
-        earliest = milestone.date;
-      }
-      if (milestone.date > latest) {
-        latest = milestone.date;
-      }
-    }
     if (end > latest) {
       latest = end;
     }
   }
-  // Today stays inside the range so its marker is always reachable by scrolling.
-  if (today < earliest) {
-    earliest = today;
+  for (const milestone of visibleMilestones) {
+    if (milestone.date < earliest) {
+      earliest = milestone.date;
+    }
+    if (milestone.date > latest) {
+      latest = milestone.date;
+    }
   }
-  if (today > latest) {
-    latest = today;
-  }
-
   const rangeStart = periodStart(addDays(earliest, -RANGE_PADDING_DAYS), scale);
   const rangeEnd = addDays(nextPeriodStart(addDays(latest, RANGE_PADDING_DAYS), scale), -1);
   const xOf = (date: string): number => (inclusiveDays(rangeStart, date) - 1) * dayWidth;
@@ -440,6 +437,10 @@ export function buildGanttViewModel(params: {
     });
   }
 
+  const width = inclusiveDays(rangeStart, rangeEnd) * dayWidth;
+  const todayX = today >= rangeStart && today <= rangeEnd ? xOf(today) : null;
+  const focusX = today < rangeStart ? 0 : today > rangeEnd ? width : (todayX ?? 0);
+
   return {
     scale,
     rangeStart,
@@ -448,12 +449,13 @@ export function buildGanttViewModel(params: {
     rowHeight: GANTT_ROW_HEIGHT,
     labelWidth: GANTT_LABEL_WIDTH,
     headerHeight: GANTT_HEADER_HEIGHT,
-    width: inclusiveDays(rangeStart, rangeEnd) * dayWidth,
+    width,
     height: positionedRows.length * GANTT_ROW_HEIGHT,
     ticks: buildTicks(rangeStart, rangeEnd, scale, dayWidth),
     rows: positionedRows,
     links,
-    todayX: today >= rangeStart && today <= rangeEnd ? xOf(today) : null,
+    todayX,
+    focusX,
     undated,
     isEmpty: false,
   };

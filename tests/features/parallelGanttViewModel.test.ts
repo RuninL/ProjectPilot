@@ -129,4 +129,46 @@ describe('buildParallelGanttViewModel', () => {
     expect(model.rows[0]?.width).toBe(model.dayWidth);
     expect(model.rows[1]?.width).toBeGreaterThan(model.rows[0]?.width ?? 0);
   });
+
+  it.each(['week', 'month', 'quarter'] as const)(
+    'focuses today inside the %s timeline using local date-only coordinates',
+    (scale) => {
+      const model = buildParallelGanttViewModel({
+        projects: [
+          makeProject({ id: scale, start_date: '2026-08-01', target_end_date: '2026-09-30' }),
+        ],
+        tasks: [],
+        today: '2026-08-19',
+        filters,
+        scale,
+      });
+
+      expect(model.todayX).not.toBeNull();
+      expect(model.focusX).toBe(model.todayX);
+    },
+  );
+
+  it('clamps focus to the nearest project-data edge when today is outside the range', () => {
+    const past = buildParallelGanttViewModel({
+      projects: [
+        makeProject({ id: 'past', start_date: '2026-01-01', target_end_date: '2026-01-31' }),
+      ],
+      tasks: [],
+      today: '2026-08-19',
+      filters,
+    });
+    const future = buildParallelGanttViewModel({
+      projects: [
+        makeProject({ id: 'future', start_date: '2027-01-01', target_end_date: '2027-01-31' }),
+      ],
+      tasks: [],
+      today: '2026-08-19',
+      filters,
+    });
+
+    expect(past.todayX).toBeNull();
+    expect(past.focusX).toBe(past.width);
+    expect(future.todayX).toBeNull();
+    expect(future.focusX).toBe(0);
+  });
 });

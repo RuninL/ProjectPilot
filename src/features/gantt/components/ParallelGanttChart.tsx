@@ -1,16 +1,28 @@
+import { useRef } from 'react';
 import { Link } from 'react-router-dom';
 import { PROJECT_STATUS_LABELS } from '@/lib/labels';
+import { useGanttTodayFocus } from '../ganttScroll';
 import type { ParallelGanttViewModel } from '../parallelGanttViewModel';
 
 interface ParallelGanttChartProps {
   model: ParallelGanttViewModel;
+  focusRequest?: number;
 }
 
 const LABEL_WIDTH = 220;
 const HEADER_HEIGHT = 30;
 const BAR_HEIGHT = 20;
 
-export function ParallelGanttChart({ model }: ParallelGanttChartProps) {
+export function ParallelGanttChart({ model, focusRequest = 0 }: ParallelGanttChartProps) {
+  const timelineRef = useRef<HTMLDivElement>(null);
+  useGanttTodayFocus({
+    containerRef: timelineRef,
+    focusX: model.focusX,
+    modelWidth: model.width,
+    layoutKey: `${model.rangeStart}:${model.rangeEnd}:${String(model.dayWidth)}`,
+    request: focusRequest,
+  });
+
   if (model.rows.length === 0) {
     return (
       <p className="rounded-md border border-dashed p-6 text-center text-sm text-muted-foreground">
@@ -50,6 +62,7 @@ export function ParallelGanttChart({ model }: ParallelGanttChartProps) {
           ))}
         </div>
         <div
+          ref={timelineRef}
           className="min-w-0 flex-1 overflow-x-auto"
           tabIndex={0}
           aria-label="可横向滚动的并行甘特图时间轴"
@@ -119,18 +132,22 @@ export function ParallelGanttChart({ model }: ParallelGanttChartProps) {
                 </g>
               ))}
             </g>
-            <line
-              x1={model.todayX}
-              y1={0}
-              x2={model.todayX}
-              y2={HEADER_HEIGHT + model.height}
-              stroke="#F59E0B"
-              strokeWidth={1.5}
-              strokeDasharray="4 3"
-            />
-            <text x={model.todayX + 3} y={10} fontSize={10} fill="#B45309">
-              今天
-            </text>
+            {model.todayX !== null && (
+              <>
+                <line
+                  x1={model.todayX}
+                  y1={0}
+                  x2={model.todayX}
+                  y2={HEADER_HEIGHT + model.height}
+                  stroke="#F59E0B"
+                  strokeWidth={1.5}
+                  strokeDasharray="4 3"
+                />
+                <text x={model.todayX + 3} y={10} fontSize={10} fill="#B45309">
+                  今天
+                </text>
+              </>
+            )}
           </svg>
         </div>
       </div>

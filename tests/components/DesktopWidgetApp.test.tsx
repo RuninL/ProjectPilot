@@ -14,6 +14,7 @@ const mocks = vi.hoisted(() => ({
   listenForInvalidation: vi.fn(),
   desktopWidgetStatus: vi.fn(),
   navigateFromDesktopWidget: vi.fn(),
+  openTask: vi.fn(),
   loadDesktopWidgetSettings: vi.fn(),
   saveDesktopWidgetSettings: vi.fn(),
   listen: vi.fn(),
@@ -59,6 +60,10 @@ vi.mock('@tauri-apps/api/window', () => ({
 vi.mock('@/lib/commands', () => ({
   desktopWidgetStatus: mocks.desktopWidgetStatus,
   navigateFromDesktopWidget: mocks.navigateFromDesktopWidget,
+}));
+
+vi.mock('@/lib/taskNavigation', () => ({
+  openTask: mocks.openTask,
 }));
 
 vi.mock('@/lib/invalidation', () => ({
@@ -146,6 +151,7 @@ describe('DesktopWidgetApp task confirmation and refresh', () => {
       click_through: true,
     });
     mocks.navigateFromDesktopWidget.mockResolvedValue(undefined);
+    mocks.openTask.mockResolvedValue(undefined);
     mocks.loadDesktopWidgetSettings.mockResolvedValue({
       lastView: 'today',
       calendarView: 'today',
@@ -237,6 +243,16 @@ describe('DesktopWidgetApp task confirmation and refresh', () => {
 
     expect(await screen.findByRole('alert')).toHaveTextContent('刷新桌面小窗失败：读取失败');
     expect(screen.getByText(pending.title)).toBeInTheDocument();
+  });
+
+  it('opens a task through the shared task navigation adapter', async () => {
+    const user = userEvent.setup();
+    await renderLoaded();
+
+    await user.click(screen.getByRole('button', { name: /待完成任务/ }));
+
+    expect(mocks.openTask).toHaveBeenCalledWith('task-1');
+    expect(mocks.navigateFromDesktopWidget).not.toHaveBeenCalled();
   });
 
   it('does not start concurrent refreshes on repeated clicks', async () => {

@@ -12,6 +12,7 @@ import { Button } from '@/components/ui/button';
 import { ConfirmDialog } from '@/components/common/ConfirmDialog';
 import { todayHK } from '@/lib/date';
 import { toAppError } from '@/lib/errors';
+import { openTask } from '@/lib/taskNavigation';
 import { emitInvalidation, listenForInvalidation } from '@/lib/invalidation';
 import { applyTheme, type Theme } from '@/lib/theme';
 import {
@@ -206,6 +207,12 @@ export function DesktopWidgetApp() {
   /** Focus the existing main window (never create a second one) and navigate. */
   const openMain = useCallback((target: string) => {
     void navigateFromDesktopWidget(target).catch((caught: unknown) => {
+      setError(toAppError(caught).message);
+    });
+  }, []);
+
+  const openTaskInMain = useCallback((taskId: string) => {
+    void openTask(taskId).catch((caught: unknown) => {
       setError(toAppError(caught).message);
     });
   }, []);
@@ -514,7 +521,7 @@ export function DesktopWidgetApp() {
                       className="min-w-0 flex-1 truncate text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                       title={`${item.title} · ${item.subtitle}`}
                       onClick={() => {
-                        openMain(`/tasks/${item.taskId ?? ''}`);
+                        openTaskInMain(item.taskId ?? '');
                       }}
                     >
                       {item.completed === true ? <s>{item.title}</s> : item.title}
