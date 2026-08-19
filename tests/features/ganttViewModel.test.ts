@@ -290,15 +290,27 @@ describe('buildGanttViewModel — today line', () => {
     expect(model.todayX).toBe(14 * model.dayWidth);
   });
 
-  it('extends the range so a project entirely in the past still shows today', () => {
+  it('focuses the latest data boundary when today is later than the project range', () => {
     const model = build({
       tasks: [task('a', { start_date: '2026-05-04', due_date: '2026-05-08' })],
       today: '2026-08-12',
     });
 
     expect(model.rangeStart).toBe('2026-05-01');
-    expect(model.rangeEnd).toBe('2026-08-31');
-    expect(model.todayX).not.toBeNull();
+    expect(model.rangeEnd).toBe('2026-05-31');
+    expect(model.todayX).toBeNull();
+    expect(model.focusX).toBe(model.width);
+  });
+
+  it('focuses the earliest data boundary when today is earlier than the project range', () => {
+    const model = build({
+      tasks: [task('a', { start_date: '2026-11-04', due_date: '2026-11-08' })],
+      today: '2026-08-12',
+    });
+
+    expect(model.rangeStart).toBe('2026-11-01');
+    expect(model.todayX).toBeNull();
+    expect(model.focusX).toBe(0);
   });
 });
 

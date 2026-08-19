@@ -52,7 +52,8 @@ export interface ParallelGanttViewModel {
   readonly height: number;
   readonly rowHeight: number;
   readonly dayWidth: number;
-  readonly todayX: number;
+  readonly todayX: number | null;
+  readonly focusX: number;
   readonly ticks: readonly ParallelGanttTick[];
   readonly rows: readonly ParallelGanttRow[];
 }
@@ -175,11 +176,11 @@ export function buildParallelGanttViewModel(params: {
     });
   const earliest = ranges.reduce(
     (date, range) => (range.start < date ? range.start : date),
-    params.today,
+    ranges[0]?.start ?? params.today,
   );
   const latest = ranges.reduce(
     (date, range) => (range.end > date ? range.end : date),
-    params.today,
+    ranges[0]?.end ?? params.today,
   );
   const rangeStart = periodStart(addDays(earliest, -RANGE_PADDING_DAYS), scale);
   const rangeEnd = addDays(nextPeriodStart(addDays(latest, RANGE_PADDING_DAYS), scale), -1);
@@ -212,15 +213,20 @@ export function buildParallelGanttViewModel(params: {
     fallback,
   }));
 
+  const width = inclusiveDays(rangeStart, rangeEnd) * dayWidth;
+  const todayX = params.today >= rangeStart && params.today <= rangeEnd ? xOf(params.today) : null;
+  const focusX = params.today < rangeStart ? 0 : params.today > rangeEnd ? width : (todayX ?? 0);
+
   return {
     scale,
     rangeStart,
     rangeEnd,
-    width: inclusiveDays(rangeStart, rangeEnd) * dayWidth,
+    width,
     height: rows.length * PARALLEL_GANTT_ROW_HEIGHT,
     rowHeight: PARALLEL_GANTT_ROW_HEIGHT,
     dayWidth,
-    todayX: xOf(params.today),
+    todayX,
+    focusX,
     ticks,
     rows,
   };

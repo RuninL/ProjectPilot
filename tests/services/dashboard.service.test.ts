@@ -198,11 +198,11 @@ describe('dashboard aggregation', () => {
 
     const dashboard = await service.load(today);
 
-    expect(dashboard.todayTasks.map((task) => task.id)).toEqual(['today-low']);
-    expect(dashboard.upcomingTasks.map((task) => task.id)).toContain('boundary-low');
-    expect(dashboard.upcomingTasks.map((task) => task.id)).not.toContain('after-window');
-    expect(dashboard.overdueTasks.map((task) => task.id)).toEqual(['overdue']);
-    expect(dashboard.lowProgressRisks.map((task) => task.id)).toEqual([
+    expect(dashboard.todayTasks.map((task) => task.taskId)).toEqual(['today-low']);
+    expect(dashboard.upcomingTasks.map((task) => task.taskId)).toContain('boundary-low');
+    expect(dashboard.upcomingTasks.map((task) => task.taskId)).not.toContain('after-window');
+    expect(dashboard.overdueTasks.map((task) => task.taskId)).toEqual(['overdue']);
+    expect(dashboard.lowProgressRisks.map((task) => task.taskId)).toEqual([
       'today-low',
       'boundary-low',
     ]);
@@ -211,16 +211,18 @@ describe('dashboard aggregation', () => {
       ...dashboard.upcomingTasks,
       ...dashboard.overdueTasks,
       ...dashboard.lowProgressRisks,
-    ].map((task) => task.id);
+    ].map((task) => task.taskId);
     expect(reminderIds).not.toContain('postponed-overdue');
     expect(reminderIds).not.toContain('postponed-today');
     expect(reminderIds).not.toContain('postponed-upcoming');
     expect(reminderIds).not.toContain('postponed-project-task');
-    expect(dashboard.blockedPropagationRisks.map((risk) => risk.task.id)).toEqual(['downstream']);
+    expect(dashboard.blockedPropagationRisks.map((risk) => risk.task.taskId)).toEqual([
+      'downstream',
+    ]);
     expect(dashboard.milestonePredecessorRisks).toHaveLength(1);
     expect(dashboard.milestonePredecessorRisks[0]).toMatchObject({
       milestone: { id: 'milestone-risk' },
-      blockingTasks: [{ id: 'milestone-predecessor' }],
+      blockingTasks: [{ taskId: 'milestone-predecessor' }],
     });
     expect(dashboard.upcomingMeetings.map(({ meeting }) => meeting.id)).toEqual([
       'meeting-today',
@@ -258,7 +260,7 @@ describe('dashboard aggregation', () => {
 
     const dashboard = await service.load(today);
 
-    expect(dashboard.upcomingTasks.map((task) => task.id)).toEqual(['year-boundary']);
+    expect(dashboard.upcomingTasks.map((task) => task.taskId)).toEqual(['year-boundary']);
     expect(dashboard.futureMilestones.map(({ milestone }) => milestone.id)).toEqual([
       'year-milestone',
     ]);

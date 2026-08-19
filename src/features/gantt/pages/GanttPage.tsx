@@ -45,6 +45,7 @@ export function GanttPage() {
   const [status, setStatus] = useState<ProjectStatus | ''>('');
   const [hideCompleted, setHideCompleted] = useState(false);
   const [hidePostponed, setHidePostponed] = useState(false);
+  const [parallelFocusRequest, setParallelFocusRequest] = useState(0);
 
   const load = useCallback(async () => {
     setError(null);
@@ -146,6 +147,16 @@ export function GanttPage() {
               ))}
             </div>
           </div>
+          <Button
+            size="sm"
+            variant="outline"
+            className="h-10"
+            onClick={() => {
+              setParallelFocusRequest((value) => value + 1);
+            }}
+          >
+            回到今天
+          </Button>
           <div className="grid gap-1.5">
             <Label htmlFor="parallel-gantt-status">项目状态</Label>
             <select
@@ -185,7 +196,7 @@ export function GanttPage() {
             隐藏已推迟
           </label>
         </div>
-        <ParallelGanttChart model={parallelModel} />
+        <ParallelGanttChart model={parallelModel} focusRequest={parallelFocusRequest} />
       </section>
 
       <h2 className="text-lg font-semibold">逐项目甘特图</h2>
