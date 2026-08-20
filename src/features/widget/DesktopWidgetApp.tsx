@@ -1,6 +1,6 @@
 import { type PointerEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { listen } from '@tauri-apps/api/event';
-import { PhysicalPosition, PhysicalSize } from '@tauri-apps/api/dpi';
+import { PhysicalSize } from '@tauri-apps/api/dpi';
 import {
   availableMonitors,
   currentMonitor,
@@ -16,7 +16,9 @@ import { emitInvalidation, listenForInvalidation } from '@/lib/invalidation';
 import { applyTheme, type Theme } from '@/lib/theme';
 import {
   desktopWidgetStatus,
+  desktopWidgetScreenPosition,
   navigateFromDesktopWidget,
+  setDesktopWidgetScreenPosition,
   type DesktopWidgetStatus,
 } from '@/lib/commands';
 import {
@@ -104,6 +106,8 @@ export function DesktopWidgetApp() {
   const [error, setError] = useState<string | null>(null);
   const [locked, setLocked] = useState(false);
   const [clickThrough, setClickThrough] = useState(false);
+  const [desktopHost, setDesktopHost] =
+    useState<DesktopWidgetStatus['desktop_host']>('unsupported');
   const [refreshing, setRefreshing] = useState(false);
   const [pendingCompletion, setPendingCompletion] = useState<CompanionTodayItem | null>(null);
   const [taskSubmitting, setTaskSubmitting] = useState(false);
@@ -264,6 +268,7 @@ export function DesktopWidgetApp() {
       .then((status) => {
         setLocked(status.locked);
         setClickThrough(status.click_through);
+        setDesktopHost(status.desktop_host);
       })
       .catch(() => undefined);
     void refreshAll();
@@ -313,6 +318,7 @@ export function DesktopWidgetApp() {
     void listen<DesktopWidgetStatus>(WIDGET_STATE_EVENT, (event) => {
       setLocked(event.payload.locked);
       setClickThrough(event.payload.click_through);
+      setDesktopHost(event.payload.desktop_host);
     }).then((cleanup) => {
       if (disposed) cleanup();
       else unlisten = cleanup;
@@ -361,7 +367,7 @@ export function DesktopWidgetApp() {
     const persist = () => {
       if (timer !== null) clearTimeout(timer);
       timer = setTimeout(() => {
-        void Promise.all([window.outerPosition(), window.outerSize(), currentMonitor()])
+        void Promise.all([desktopWidgetScreenPosition(), window.outerSize(), currentMonitor()])
           .then(([position, size, monitor]) => {
             if (monitor === null) return;
             const id = monitorId(monitor);
@@ -391,7 +397,7 @@ export function DesktopWidgetApp() {
             height: monitor.workArea.size.height,
           });
           await window.setSize(new PhysicalSize(geometry.width, geometry.height));
-          await window.setPosition(new PhysicalPosition(geometry.x, geometry.y));
+          await setDesktopWidgetScreenPosition(geometry.x, geometry.y);
         }
         const registered = await Promise.all([window.onResized(persist), window.onMoved(persist)]);
         if (disposed) {
@@ -465,6 +471,11 @@ export function DesktopWidgetApp() {
             </div>
           </div>
         </header>
+        {desktopHost === 'degraded' && (
+          <p className="border-b border-border/60 px-3 py-1 text-xs text-muted-foreground">
+            桌面宿主不可用，当前为普通小窗；显示桌面时会暂时隐藏。
+          </p>
+        )}
 
         {error !== null && (
           <div

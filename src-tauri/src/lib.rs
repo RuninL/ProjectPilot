@@ -6,15 +6,11 @@ mod desktop;
 mod error;
 mod migrations;
 mod project_links;
-// WorkerW is fully disabled this round: the module is kept only for source
-// isolation. Nothing may call into it — no entry point, no timer, no
-// auto-start and no health check.
-#[allow(unused)]
 mod workerw;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
-    tauri::Builder::default()
+    let app = tauri::Builder::default()
         .plugin(tauri_plugin_single_instance::init(|app, _argv, _cwd| {
             use tauri::Manager;
             if let Some(window) = app.get_webview_window("main") {
@@ -51,10 +47,17 @@ pub fn run() {
             desktop::desktop_widget_status,
             desktop::set_desktop_widget_locked,
             desktop::set_desktop_widget_click_through,
+            desktop::desktop_widget_screen_position,
+            desktop::set_desktop_widget_screen_position,
             desktop::navigate_from_desktop_widget,
             desktop::set_main_close_behavior,
             desktop::set_launch_at_login,
         ])
-        .run(tauri::generate_context!())
-        .expect("error while running tauri application");
+        .build(tauri::generate_context!())
+        .expect("error while building tauri application");
+    app.run(|_, event| {
+        if matches!(event, tauri::RunEvent::ExitRequested { .. }) {
+            let _ = workerw::detach();
+        }
+    });
 }
